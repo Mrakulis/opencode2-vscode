@@ -395,10 +395,11 @@ export function App() {
   const questionPerm = useMemo(() => permissions.find((p) => p.action.toLowerCase() === "question"), [permissions]);
   const isQuestion = useMemo(() => {
     if (questionPerm) return true;
+    if (busy) return false;
     if (!lastAssistantText) return false;
     const t = lastAssistantText.trim();
     return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
-  }, [lastAssistantText, questionPerm]);
+  }, [lastAssistantText, questionPerm, busy]);
 
   const questionOptions = useMemo(() => {
     if (!isQuestion || !lastAssistantText) return null;
