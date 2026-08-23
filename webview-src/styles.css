@@ -1211,6 +1211,22 @@ button:focus-visible {
   color: var(--oc2-success);
 }
 
+/* meta / status messages (system, compaction, skill, …) */
+.msg.meta {
+  display: flex;
+  justify-content: center;
+  margin: var(--oc2-space-1) 0;
+}
+.meta-label {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-muted);
+  background: var(--oc2-bg-surface);
+  border: 1px solid var(--oc2-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
 /* tool/user file outputs */
 .user-files {
   display: flex;

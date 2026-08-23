@@ -44,6 +44,8 @@ export function App() {
   const [instructionsTick, setInstructionsTick] = useState(0);
   const [slashTick, setSlashTick] = useState(0);
   const [vcsBranch, setVcsBranch] = useState<string | undefined>(undefined);
+  /** Transient error from overflow-menu actions (import/export/undo…). */
+  const [actionError, setActionError] = useState<string | undefined>(undefined);
   /** Mirror of `messages` so event handlers can merge deltas without stale closures. */
   const messagesRef = useRef<AnyMessage[]>([]);
   /** Last message reverted from (so Redo can distinguish itself from Undo). */
@@ -464,6 +466,33 @@ export function App() {
     }
   }, [activeId]);
 
+  /** Import a previously exported V2 session transfer file (JSON). */
+  const importSessionFile = useCallback(async () => {
+    try {
+      const text = await rpc.call<string | undefined>("dialog.openText", {
+        filters: { "OpenCode session export": ["json"] },
+      });
+      if (!text) return; // cancelled
+      const payload = JSON.parse(text) as unknown;
+      const created = await rpc.call<{ id: string }>("session.import", { payload });
+      await refreshSessions();
+      if (created?.id) selectSession(created.id);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+      setTimeout(() => setActionError(undefined), 5000);
+    }
+  }, [refreshSessions, selectSession]);
+
+  /** Open the VCS working-tree diff (from the OpenCode server, not just git). */
+  const openWorkingDiff = useCallback(async () => {
+    try {
+      const diff = await rpc.call<string>("vcs.diff", { mode: "working" });
+      await rpc.call("diff.open", { file: "working-tree", diff: diff || "(no changes)" });
+    } catch {
+      /* surfaced by state */
+    }
+  }, []);
+
   const updateSettings = useCallback(async (updates: Array<{ key: SettingKey; value: unknown }>) => {
     try {
       await rpc.call("settings.update", { updates });
@@ -589,8 +618,10 @@ export function App() {
         }}
         onOpenWorktrees={() => setWorktreesOpen(true)}
         onExport={() => void exportSession()}
+        onImport={() => void importSessionFile()}
         onUndo={() => void undoLastTurn()}
         onRedo={() => void redoRevert()}
+        onOpenWorkingDiff={() => void openWorkingDiff()}
         onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
         theme={cfg?.ui.theme ?? "dark"}
         onToggleTheme={() => {
@@ -698,6 +729,12 @@ export function App() {
         )}
         {worktreesOpen && <WorktreesDrawer onClose={() => setWorktreesOpen(false)} />}
       </main>
+
+      {actionError && (
+        <div className="permissions">
+          <div className="composer-error">{actionError}</div>
+        </div>
+      )}
 
       {forms.length > 0 && (
         <div className="permissions">

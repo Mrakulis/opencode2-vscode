@@ -131,7 +131,27 @@ function MessageGroup({
       </article>
     );
   }
-  if (!isAssistant(message)) return null;
+  if (!isAssistant(message)) {
+    // Deliberate rendering for V2 meta message types (system, compaction,
+    // skill, shell, agent/model selected, location switched) — shown as a
+    // quiet status line instead of being dropped.
+    const label: Record<string, string> = {
+      system: "system",
+      compaction: "context compacted",
+      skill: "skill ran",
+      shell: "shell command",
+      "agent-selected": "agent switched",
+      "model-selected": "model switched",
+      synthetic: "note",
+    };
+    const type = typeof (message as { type?: string }).type === "string" ? (message as { type: string }).type : "";
+    if (type.length === 0) return null;
+    return (
+      <article className="msg meta" title={type}>
+        <span className="meta-label">{label[type] ?? type}</span>
+      </article>
+    );
+  }
 
   return (
     <article className="msg assistant">

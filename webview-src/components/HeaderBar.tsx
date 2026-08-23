@@ -14,8 +14,10 @@ interface Props {
   onFork(): Promise<void>;
   onCompact(): Promise<void>;
   onExport(): void;
+  onImport(): void;
   onUndo(): void;
   onRedo(): void;
+  onOpenWorkingDiff(): void;
   onOpenSavedPermissions(): void;
   onOpenInstructions(): void;
   onOpenWorktrees(): void;
@@ -135,6 +137,12 @@ export function HeaderBar(props: Props) {
               </button>
               <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onExport(); }}>
                 ⤓ Export session…
+              </button>
+              <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); props.onImport(); }}>
+                ⤒ Import session…
+              </button>
+              <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); props.onOpenWorkingDiff(); }} title="Show the current working-tree diff from OpenCode VCS">
+                ↔ Working diff
               </button>
               <div className="menu-sep" />
               <button
