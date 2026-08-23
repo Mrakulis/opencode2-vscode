@@ -37,6 +37,7 @@ export function Composer(props: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<Array<{ id: string; name: string; preview: string; uri: string }>>([]);
+  const [modelFilter, setModelFilter] = useState("");
 
   // auto-grow up to ~40vh
   useEffect(() => {
@@ -53,7 +54,6 @@ export function Composer(props: Props) {
       // don't close if clicking inside composer selectors
       const composer = document.querySelector(".composer-selectors");
       if (composer?.contains(target)) return;
-      // use menuRef for precise check if available
       if (menuRef.current?.contains(target)) return;
       setMenu(undefined);
     };
@@ -66,6 +66,10 @@ export function Composer(props: Props) {
       window.removeEventListener("mousedown", close);
       window.removeEventListener("keydown", onKey);
     };
+  }, [menu]);
+
+  useEffect(() => {
+    if (menu !== "model") setModelFilter("");
   }, [menu]);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
@@ -127,7 +131,14 @@ export function Composer(props: Props) {
 
   // derived for selectors
   const visibleModels = useMemo(() => filterVisibleModels(props.models, props.hidden), [props.models, props.hidden]);
-  const groups = useMemo(() => groupByProvider(visibleModels), [visibleModels]);
+  const filteredModels = useMemo(() => {
+    const q = modelFilter.trim().toLowerCase();
+    if (!q) return visibleModels;
+    return visibleModels.filter(
+      (m) => m.providerID.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || (m.name ?? "").toLowerCase().includes(q),
+    );
+  }, [visibleModels, modelFilter]);
+  const groups = useMemo(() => groupByProvider(filteredModels), [filteredModels]);
   const favoriteRows = useMemo(() => {
     const byKey = new Map(props.models.map((m) => [modelKey(m), m] as const));
     return props.favorites.map((k) => byKey.get(k)).filter((m): m is PickerModel => Boolean(m));
@@ -288,27 +299,41 @@ export function Composer(props: Props) {
             <span className="selector-label">{activeModelLabel}</span> <span className="chevron">▾</span>
           </button>
           {menu === "model" && (
-            <div className="menu">
-              {favoriteRows.length > 0 && (
+            <div className="menu" style={{ minWidth: "280px" }}>
+              <input
+                className="filter"
+                placeholder="Search models..."
+                value={modelFilter}
+                onChange={(e) => setModelFilter(e.target.value)}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+              <div className="menu-sep" />
+              {!modelFilter.trim() && favoriteRows.length > 0 && (
                 <>
                   <div className="menu-section">★ favorites</div>
                   {favoriteRows.map((m) => renderModelRow(m))}
                   <div className="menu-sep" />
                 </>
               )}
-              {recentRows.length > 0 && (
+              {!modelFilter.trim() && recentRows.length > 0 && (
                 <>
                   <div className="menu-section">recent</div>
                   {recentRows.map((m) => renderModelRow(m, { compact: true }))}
                   <div className="menu-sep" />
                 </>
               )}
-              {groups.map((g) => (
-                <div key={g.providerID}>
-                  <div className="menu-section">{g.providerID}</div>
-                  {g.models.map((m) => renderModelRow(m))}
-                </div>
-              ))}
+              {groups.length === 0 ? (
+                <div className="menu-empty">No matching models</div>
+              ) : (
+                groups.map((g) => (
+                  <div key={g.providerID}>
+                    <div className="menu-section">{g.providerID}</div>
+                    {g.models.map((m) => renderModelRow(m))}
+                  </div>
+                ))
+              )}
               <div className="menu-sep" />
               <button type="button" className="menu-item manage" onClick={() => { setMenu(undefined); props.onOpenManager(); }}>
                 ⚙ Manage models…
