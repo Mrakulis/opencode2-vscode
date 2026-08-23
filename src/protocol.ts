@@ -62,6 +62,7 @@ export type InboundMessage =
   | { type: "resync" }
   | { type: "event"; event: unknown }
   | { type: "selectSession"; id: string }
+  | { type: "question"; text: string; options: string[]; recommended?: string; hasOther?: boolean }
   | { type: "error"; message: string };
 
 export interface RpcRequest {

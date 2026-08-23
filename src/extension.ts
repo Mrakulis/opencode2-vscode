@@ -94,6 +94,15 @@ export function activate(context: vscode.ExtensionContext): void {
       await provider.reveal();
       await provider.createAndSelectSession();
     }),
+    vscode.commands.registerCommand("opencode2.showTestQuestion", async () => {
+      await provider.reveal();
+      provider.showQuestion(
+        "What should we tackle next?",
+        ["Polish question picker to match Desktop pixel-perfect", "Add test harness for permissions/questions", "Other"],
+        "Polish question picker to match Desktop pixel-perfect",
+        true,
+      );
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("opencode2")) return;
       if (

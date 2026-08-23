@@ -57,6 +57,12 @@ export function App() {
     undefined,
   );
   const [otherText, setOtherText] = useState("");
+  const [activeQuestion, setActiveQuestion] = useState<{
+    text: string;
+    options: string[];
+    recommended?: string;
+    hasOther?: boolean;
+  } | null>(null);
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -206,6 +212,15 @@ export function App() {
         case "selectSession": {
           selectSession(msg.id);
           setDrawerOpen(false);
+          break;
+        }
+        case "question": {
+          setActiveQuestion({
+            text: msg.text,
+            options: msg.options,
+            recommended: (msg as { recommended?: string }).recommended,
+            hasOther: (msg as { hasOther?: boolean }).hasOther,
+          });
           break;
         }
         case "event": {
@@ -447,6 +462,7 @@ export function App() {
   const handleQuestionAnswer = useCallback(
     (text: string) => {
       if (!activeId || !text.trim()) return;
+      setActiveQuestion(null);
       void sendMessage(text.trim());
     },
     [activeId, sendMessage],
@@ -595,6 +611,73 @@ export function App() {
             .map((p) => (
               <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
             ))}
+        </div>
+      )}
+
+      {activeQuestion && activeId && (
+        <div className="permissions">
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+            <div className="perm-header">
+              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+                question
+              </span>
+              <span>{activeQuestion.text}</span>
+            </div>
+            <div className="perm-resources" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {activeQuestion.options.map((opt, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className="perm-res"
+                  style={{
+                    textAlign: "left",
+                    cursor: opt.toLowerCase().startsWith("other") ? "default" : "pointer",
+                    border: opt === activeQuestion.recommended ? "1px solid #c084fc" : undefined,
+                    background: opt === activeQuestion.recommended ? "rgba(192,132,252,0.12)" : undefined,
+                  }}
+                  onClick={() => {
+                    if (opt.toLowerCase().startsWith("other")) return;
+                    setActiveQuestion(null);
+                    void handleQuestionAnswer(opt);
+                  }}
+                >
+                  {opt} {opt === activeQuestion.recommended ? "★ Recommended" : ""}{" "}
+                  {opt.toLowerCase().startsWith("other") ? "— type below" : ""}
+                </button>
+              ))}
+              {activeQuestion.hasOther && (
+                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                  <input
+                    className="search"
+                    placeholder="Other — type your response..."
+                    value={otherText}
+                    onChange={(e) => setOtherText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && otherText.trim()) {
+                        const t = otherText;
+                        setOtherText("");
+                        setActiveQuestion(null);
+                        void handleQuestionAnswer(t);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!otherText.trim()}
+                    onClick={() => {
+                      const t = otherText;
+                      setOtherText("");
+                      setActiveQuestion(null);
+                      void handleQuestionAnswer(t);
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

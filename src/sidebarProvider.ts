@@ -126,6 +126,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.post({ type: "resync" });
   }
 
+  showQuestion(text: string, options: string[], recommended?: string, hasOther?: boolean): void {
+    this.post({ type: "question", text, options, recommended, hasOther } satisfies InboundMessage);
+  }
+
   /** Create a session in the active workspace and tell the UI to select it. */
   async createAndSelectSession(): Promise<void> {
     try {

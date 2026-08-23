@@ -75,6 +75,10 @@
       {
         "command": "opencode2.installCli",
         "title": "OpenCode 2: Install CLI"
+      },
+      {
+        "command": "opencode2.showTestQuestion",
+        "title": "OpenCode 2: Show Test Question"
       }
     ],
     "keybindings": [
