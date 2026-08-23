@@ -49,12 +49,6 @@ There is no test suite until M4; `npm run typecheck` is the gate.
 - Match surrounding style; prettier owns formatting (`npm run format`).
 - Errors: catch specific expected failures; rethrow or surface unexpected ones — no silent catches.
 
-## Git conventions
-
-- Conventional commits: `feat(scope): ...`, `fix(scope): ...`, `chore: ...`
-- One commit per milestone minimum; include todo.md + MEMORY.md updates in the milestone commit.
-- Never commit: secrets, `.env`, `node_modules/`, `dist/`, `out/`, `*.vsix`.
-
 ## Boundaries
 
 **Always**

@@ -161,8 +161,16 @@ export function Composer(props: Props) {
   const activeVariantLabel = props.activeModel?.variant ?? "Default";
   const activeModelVariants = useMemo(() => {
     const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
-    return m?.variants ?? [];
+    // filter out synthetic "none" variant — it maps to Default (no reasoning)
+    const all = m?.variants ?? [];
+    return all.filter((v) => v.id !== "none");
   }, [props.models, props.activeModel]);
+  const activeModelContext = useMemo(() => {
+    const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
+    return (m as unknown as { context?: number; limit?: { context?: number } })?.context ??
+      (m as unknown as { limit?: { context?: number } })?.limit?.context;
+  }, [props.models, props.activeModel]);
+  const hasVariants = activeModelVariants.length > 0;
 
   const renderModelRow = (m: PickerModel, opts?: { compact?: boolean }) => (
     <button
@@ -347,10 +355,16 @@ export function Composer(props: Props) {
           <button
             type="button"
             className="selector"
-            onClick={() => setMenu(menu === "variant" ? undefined : "variant")}
-            title={activeModelVariants.length === 0 ? `No variants for this model — ${activeVariantLabel}` : activeVariantLabel}
+            disabled={!hasVariants}
+            style={!hasVariants ? { opacity: 0.45, cursor: "default" } : undefined}
+            onClick={() => hasVariants && setMenu(menu === "variant" ? undefined : "variant")}
+            title={
+              !hasVariants
+                ? `No reasoning levels — model ${activeModelLabel} does not expose variants${activeModelContext ? ` (context ${Math.round(activeModelContext / 1000)}k)` : ""}`
+                : `${activeVariantLabel}${activeModelContext ? ` · ${Math.round(activeModelContext / 1000)}k ctx` : ""}`
+            }
           >
-            <span className="selector-label">{activeVariantLabel}</span> <span className="chevron">▾</span>
+            <span className="selector-label">{hasVariants ? activeVariantLabel : "Default"}</span> <span className="chevron">▾</span>
           </button>
           {menu === "variant" && (
             <div className="menu">

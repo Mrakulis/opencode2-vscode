@@ -12,10 +12,11 @@ interface Props {
   cost?: number;
   tokens?: TokenUsage;
   ctxPct: number | null;
+  ctxLimit?: number;
 }
 
 /** Full token counter: input / output / reasoning / cache, plus cost + context. */
-export function StatusStrip({ connected, cost, tokens, ctxPct }: Props) {
+export function StatusStrip({ connected, cost, tokens, ctxPct, ctxLimit }: Props) {
   const total =
     tokens &&
     formatTokens(tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write);
@@ -46,13 +47,15 @@ export function StatusStrip({ connected, cost, tokens, ctxPct }: Props) {
       {cost !== undefined && <span className="micro" title="session cost">{formatCost(cost)}</span>}
       {ctxPct !== null && (
         <>
-          <span className="meter" title={`context ${ctxPct}%`}>
+          <span className="meter" title={ctxLimit ? `context ${ctxPct}% of ${ctxLimit.toLocaleString()} tokens` : `context ${ctxPct}%`}>
             <span
               className={`fill${(ctxPct ?? 0) >= 80 ? " hot" : ""}`}
               style={{ width: `${Math.max(ctxPct, 3)}%` }}
             />
           </span>
-          <span className="micro">{ctxPct}%</span>
+          <span className="micro" title={ctxLimit ? `${ctxLimit.toLocaleString()} context window` : undefined}>
+            {ctxPct}%{ctxLimit ? ` · ${Math.round(ctxLimit / 1000)}k` : ""}
+          </span>
         </>
       )}
       <span className="spacer" />

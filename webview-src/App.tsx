@@ -369,7 +369,10 @@ export function App() {
   const ctxLimit = useMemo(() => {
     const ref = lastAssistant?.model ?? undefined;
     if (!ref) return undefined;
-    return models.find((m) => m.id === ref.id && m.providerID === ref.providerID)?.context;
+    const hit = models.find((m) => m.id === ref.id && m.providerID === ref.providerID) as unknown as
+      | { context?: number; limit?: { context?: number } }
+      | undefined;
+    return hit?.context ?? hit?.limit?.context;
   }, [lastAssistant, models]);
   const ctxPct = useMemo(
     () => contextPercent(lastAssistant?.tokens ?? active?.tokens, ctxLimit),
@@ -546,7 +549,7 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
       />
 
-      {conn === "connected" && <StatusStrip connected cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} />}
+      {conn === "connected" && <StatusStrip connected cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} ctxLimit={ctxLimit} />}
     </div>
   );
 }

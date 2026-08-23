@@ -82,9 +82,17 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       getClient().session.fork({ sessionID, boundary: { type: "through" } }),
 
     // -- pickers -------------------------------------------------------------
-    models: async (): Promise<ModelInfo[]> => {
+    models: async (): Promise<Array<ModelInfo & { context: number }>> => {
       const res = await getClient().model.list();
-      return res.data.filter((m) => m.enabled);
+      return res.data
+        .filter((m) => m.enabled)
+        .map((m) => ({
+          ...m,
+          // normalize: downstream expects top-level `context` = limit.context
+          // and `id` consistent with ModelRef (modelID is canonical)
+          id: (m as unknown as { modelID?: string }).modelID ?? m.id,
+          context: m.limit.context,
+        })) as Array<ModelInfo & { context: number }>;
     },
     agents: async (): Promise<AgentInfo[]> => {
       const res = await getClient().agent.list();
