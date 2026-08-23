@@ -3,7 +3,9 @@
 > **Date:** 2026-08-23. **Scope:** v0.2.37. **Status:** audit complete; implementation pending your review of the Open Questions section.
 > **Direction (confirmed):** GUI-first extension UX (not a TUI/CLI clone). **Our own theme now**; official OpenCode themes added later for authenticity.
 > **How to use this doc:** §1–§4 are the audit. **§5 is the Open Questions & Decisions log** — read it and write your answers on the `ANSWER:` lines (or as comments). §6 is the milestone plan (defaults already applied from recommendations). Once you've annotated §5, we commit the review and start implementing.
-> **Sources:** full source (`src/`, `webview-src/`), pinned client `@opencode-ai/client@0.0.0-beta-17927` type defs, V2 OpenAPI spec (`%TEMP%\opencode-v2-openapi.json`, 100 paths / 231 schemas), V2 docs via Context7, and the upstream **OpenCode desktop/GUI app as reference only** (feature parity + official themes; *not* visual/TUI treatment).
+> **Sources:** full source (`src/`, `webview-src/`), pinned client `@opencode-ai/client@0.0.0-beta-17927` type defs, V2 OpenAPI spec (`%TEMP%\opencode-v2-openapi.json`, 100 paths / 231 schemas), V2 docs via Context7.
+>
+> **V1 vs V2 boundary (critical):** We implement **V2 only**. Every API call, endpoint, event, config key, and command is V2 (`@opencode-ai/client` + the V2 OpenAPI). The **OpenCode V1 desktop app is referenced SOLELY for UX inspiration** — i.e., *how* features like slash menus, forms, and permission prompts are *presented* — never for API/config/command semantics. Do **not** adopt any V1 TUI command names, V1 config shapes (`permission.bash`, `command:`→`commands:`, etc.), or V1 event behavior. When in doubt, the V2 OpenAPI spec + V2 client types are the only source of truth.
 
 ---
 
@@ -46,32 +48,34 @@ The extension is **solid and works** for its core loop: auto-connect → chat �
 
 ## 3. Audit findings (detailed)
 
-### 3.1 Missing slash commands & skills — THE headline gap
-The OpenCode desktop/GUI (reference) builds its slash popover from `command.list()` + built-ins + skills, with `source: "command" | "mcp" | "skill"`. The extension has **none of this in the composer** (`Composer.tsx` only has agent/model/variant/permission pickers). As a **GUI-first** app these become native affordances (command popover, fuzzy file picker, skill chips, native forms), not a terminal line.
+### 3.1 Missing slash commands & skills — THE headline gap (V2-only)
+**V2 mechanism (authoritative):** V2 exposes a command system via `GET /api/command` (`client.command.list()`) and `POST /api/session/{id}/command` (`client.session.command`), plus skills via `GET /api/skill` (`client.skill.list()`) and `POST /api/session/{id}/skill` (`client.session.skill`). Built-in **and** custom commands are returned by `command.list()` (custom commands come from V2 `commands:` config + `.opencode/commands/*.md`), each tagged with a `source` (`command` | `mcp` | `skill`). **The extension must source its slash menu entirely from V2 `command.list()` + `skill.list()` — we do NOT hardcode command names, and we do NOT use any V1 TUI command list.**
 
-Upstream built-in slash commands (17) + input patterns:
+The extension has **none of this in the composer** (`Composer.tsx` only has agent/model/variant/permission pickers). As a **GUI-first** app these become native affordances (command popover, fuzzy file picker, skill chips, native forms), not a terminal line.
 
-| Command | Purpose | Maps to V2 API / UI action | Status here |
+> **Reference vs. fact:** The table below is an *illustrative* list gathered from OpenCode docs/blogs that may mix **V1 TUI** commands with V2. It is **NOT** the source of truth. At implementation, the actual built-in set = whatever V2's `command.list()` returns. Rows marked **(TUI-only)** are terminal-era commands not applicable to a VS Code GUI and are very likely V1 — ignore them. Validate every name against V2 before wiring a first-class UI action.
+
+| Command | Purpose | V2 API / UI action | Applies to V2 GUI? |
 |---|---|---|---|
-| `/connect` | Add provider + API key | `integration.connect.{key,oauth,command}` | MISSING (CLI handoff only) |
-| `/compact` (`/summarize`) | Compact session | `session.compact` | OK button exists |
-| `/details` | Toggle tool details | UI pref `expand*Tools` | PARTIAL via settings |
-| `/editor` | Compose in $EDITOR | n/a in VS Code | n/a |
-| `/exit` `/quit` `/q` | Exit | n/a | n/a |
-| `/export` | Export convo to Markdown | `session.export` | MISSING (clipboard only) |
-| `/help` | Help dialog | n/a | n/a |
-| `/init` | Guided `AGENTS.md` setup | `session.instructions.entry.*` | MISSING |
-| `/models` | List models | `model.list` | OK picker |
-| `/new` (`/clear`) | New session | `session.create` | OK button |
-| `/redo` | Redo after undo (Git-backed) | `session.revert.commit` | MISSING |
-| `/sessions` (`/resume`) | List/switch sessions | `session.list` | OK drawer |
-| `/share` | Share session | (server share link) | MISSING |
-| `/themes` | List themes | our theme switcher (later official presets) | OPTIONAL (rework) |
-| `/thinking` | Toggle reasoning | `ui.showReasoning` | OK via settings |
-| `/undo` | Undo last turn + revert files | `session.revert.stage` then `commit` | MISSING |
-| `/unshare` | Unshare | (server) | MISSING |
-| `@<file>` | Fuzzy file inject | `file.find` + prompt `files[]` | MISSING (not surfaced) |
-| `!<shell>` | Run shell, add as result | `session.shell` | MISSING (GUI affordance optional) |
+| `/connect` | Add provider + API key | `integration.connect.{key,oauth,command}` | Yes (in-app connect) |
+| `/compact` (`/summarize`) | Compact session | `session.compact` | Yes (button exists) |
+| `/details` | Toggle tool details | UI pref `expand*Tools` | Yes (via settings) |
+| `/editor` | Compose in $EDITOR | n/a in VS Code | **(TUI-only) ignore** |
+| `/exit` `/quit` `/q` | Exit | n/a | **(TUI-only) ignore** |
+| `/export` | Export convo to Markdown | `session.export` | Yes |
+| `/help` | Help dialog | n/a | **(TUI-only) ignore** |
+| `/init` | Guided `AGENTS.md` setup | `session.instructions.entry.*` | Yes |
+| `/models` | List models | `model.list` | Yes (picker) |
+| `/new` (`/clear`) | New session | `session.create` | Yes (button) |
+| `/redo` | Redo after undo (Git-backed) | `session.revert.commit` | Yes |
+| `/sessions` (`/resume`) | List/switch sessions | `session.list` | Yes (drawer) |
+| `/share` | Share session | (server share link) | Maybe (if V2 supports) |
+| `/themes` | List themes | our theme switcher (later official presets) | Yes (our switcher) |
+| `/thinking` | Toggle reasoning | `ui.showReasoning` | Yes (via settings) |
+| `/undo` | Undo last turn + revert files | `session.revert.stage`→`commit` | Yes |
+| `/unshare` | Unshare | (server) | Maybe (if V2 supports) |
+| `@<file>` | Fuzzy file inject | `file.find` + prompt `files[]` | Yes |
+| `!<shell>` | Run shell, add as result | `session.shell` | Optional GUI affordance |
 
 ### 3.2 Missing V2 capabilities (endpoint/method coverage)
 Client method surface ≈ 120; **used ≈ 25**.
@@ -101,6 +105,8 @@ Client method surface ≈ 120; **used ≈ 25**.
 **Unhandled but valuable:** `session.text.delta`/`reasoning.delta`/`tool.*` (true streaming), `session.model/agent.selected`/`renamed`/`moved` (targeted refresh), `form.*` (real forms), `mcp.status.changed`/`resources.changed`, `integration.updated`/`connection.updated`, `config.updated`, `vcs.branch.updated`, `worktree.*`, `session.revert.*`, `session.compaction.*`, `session.inbox.*`, `session.instructions.updated`, `command.updated`, `skill.updated`, `plugin.*`, `websearch.updated`, `reference.updated`, `session.shell.*`, `session.skill.activated`.
 **Recommendation:** explicit typed event router (`Record<EventType, handler>` or switch); keep REST `onResync` re-sync as safety net.
 
+> **V2-only events to ignore:** the V2 `V2Event` union also includes `Tui*` events (`TuiPromptAppend`, `TuiCommandExecute`, `TuiToastShow`, `TuiSessionSelect`) and `Installation*` events. These are for the V2 **TUI client** / CLI self-update and are **not** relevant to this VS Code GUI — do not handle them.
+
 ### 3.4 Message/content rendering gaps
 `SessionMessageInfo` is a **union of 10 types**; the webview models only `user` + `assistant` (others return `null`). Assistant tool-content can be `{type:"file"}` (e.g., a tool-produced image) — `ToolCard` only renders `{type:"text"}` and `diff`, so tool file/image outputs are dropped. User-uploaded images sent via `files[]` render only as text in the bubble.
 
@@ -120,7 +126,7 @@ A **bespoke VS Code GUI sidebar**, not a terminal clone:
 - `!` shell → optional GUI affordance, not a shell prompt (deferred per §5 reply).
 - Forms → native `FormCard` components styled in our theme.
 - Avoid terminal aesthetics (monospace-everywhere, `$` prompts) except where useful (shell tool output).
-- The OpenCode desktop app is referenced for **feature parity + official themes only**.
+- The OpenCode **V1 desktop app** is referenced **for UX inspiration only** (how features like slash menus / forms / permissions are *presented*); official OpenCode themes are a separate V2 concept we add later. Neither is a source of API/config/command semantics — V2 only.
 
 ---
 
@@ -172,8 +178,8 @@ ANSWER: ___
 ### B. Slash commands / skills / `@` mention (decided: inline `/` popover)
 
 **Q8. Which built-ins get first-class UI vs sent via `session.command`?**
-Context: Not every built-in maps to a GUI action; some are TUI-only (`/exit`, `/editor`).
-Recommendation: First-class buttons/overflow for `/export`, `/undo`, `/redo`, `/compact`, `/new`, `/sessions`, `/thinking`; `/connect` → Providers drawer; `/init` → instructions drawer; everything else (custom + mcp + skill) sent via `session.command`/`session.skill`.
+Context: We must NOT hardcode V1 TUI command names. The V2 built-in set = whatever V2 `command.list()` returns; some commands are terminal-era and not applicable to a GUI.
+Recommendation: Treat V2 `command.list()` (+ `skill.list()`) as the source of truth; render all returned entries in the popover badged by `source`. For first-class UI beyond the popover, wire the V2-relevant ones we confirm exist (e.g., `/export`, `/undo`, `/redo`, `/compact`, `/new`, `/sessions`, `/thinking`, `/connect`→Providers, `/init`→instructions) and send the rest via `session.command`/`session.skill`. Ignore TUI-only names (`/exit`, `/editor`, `/help`, `/clear`).
 ANSWER: ___
 
 **Q9. How to open the slash popover (keyboard).**
@@ -182,7 +188,7 @@ Recommendation: Type `/` in an empty composer opens the popover; also a command-
 ANSWER: ___
 
 **Q10. Custom commands discovery.**
-Context: `command.list()` returns custom + mcp + skill entries with a `source` field.
+Context: `command.list()` returns custom + mcp + skill entries with a `source` field. This is the **V2 source of truth** — do not use any V1 TUI command list.
 Recommendation: Surface **all** returned commands in the popover, badged by `source` (command / mcp / skill).
 ANSWER: ___
 
