@@ -252,7 +252,7 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
         {part.state.content?.map((c, i) => {
           if (c.type === "text") {
             const txt = String(c.text);
-            // Edit summary like "Edited webview-src/styles.css (1 replacement)" — make file clickable for whole-file diff
+            // Edit summary like "Edited webview-src/styles.css (1 replacement)" — file name opens the file
             if (kind === "edit" && txt.startsWith("Edited ")) {
               const m = txt.match(/Edited\s+([^\s(]+)/);
               const file = m?.[1];
@@ -265,10 +265,10 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        void rpc.call("diff.open", { file, diff: "" }).catch(() => undefined);
+                        void rpc.call("file.open", { path: file }).catch(() => undefined);
                       }}
                       style={{ color: "var(--oc2-link)", cursor: "pointer", textDecoration: "underline" }}
-                      title="Open whole file diff"
+                      title="Open file"
                     >
                       {file}
                     </a>
