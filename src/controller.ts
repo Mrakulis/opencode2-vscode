@@ -29,6 +29,16 @@ export class OpenCodeController implements vscode.Disposable {
   private generation = 0;
   private pumpToken = 0;
 
+  // Connection self-healing: discovery/ensure or the health probe can hang on
+  // first open (e.g. the background service is still starting). Without a bound
+  // we'd sit on "connecting" forever and force a manual reload. So every attempt
+  // is time-boxed and retried with backoff while auto-start is enabled.
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  private retryCount = 0;
+  private readonly connectTimeoutMs = 12_000;
+  private readonly retryBaseMs = 4_000;
+  private readonly maxRetries = 20;
+
   constructor(
     private readonly log: Log,
     private readonly resolveCli: CliResolver = () => Promise.resolve(undefined),
@@ -69,15 +79,15 @@ export class OpenCodeController implements vscode.Disposable {
   /** (Re)establish the connection. Safe to call repeatedly; later calls win. */
   async connect(cli?: ResolvedCli): Promise<OpenCodeClient> {
     const generation = ++this.generation;
+    this.clearRetry();
     this.setConnecting();
 
     try {
-      const client = await this.createClient(cli);
+      const { client, health } = await this.withTimeout(this.establish(cli, generation), this.connectTimeoutMs);
       if (generation !== this.generation) return this.getClient(); // superseded
-      const health = await client.health.get();
-      if (generation !== this.generation) return this.getClient();
       this.client = client;
       this.lastError = undefined;
+      this.retryCount = 0;
       this.emitter.fire("connected");
       this.log.info(`connected to ${this.activeBaseUrl} (service v${health.version}, pid ${health.pid})`);
       this.startEventPump(client, generation);
@@ -89,8 +99,66 @@ export class OpenCodeController implements vscode.Disposable {
         this.client = undefined;
         this.lastError = message;
         this.emitter.fire("error");
+        this.scheduleRetry(generation, cli);
       }
       throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
+  /** Discover/start the service and verify it with a health probe. */
+  private async establish(
+    cli: ResolvedCli | undefined,
+    generation: number,
+  ): Promise<{ client: OpenCodeClient; health: Awaited<ReturnType<OpenCodeClient["health"]["get"]>> }> {
+    const client = await this.createClient(cli);
+    if (generation !== this.generation) throw new Error("connection superseded");
+    const health = await client.health.get();
+    if (generation !== this.generation) throw new Error("connection superseded");
+    return { client, health };
+  }
+
+  /** Reject if `p` does not settle within `ms`; never leaks the timer. */
+  private withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`connection timed out after ${ms}ms`)), ms);
+      this.pendingTimers.add(timer);
+    });
+    return Promise.race([p, timeout]).finally(() => {
+      clearTimeout(timer);
+      this.pendingTimers.delete(timer);
+    });
+  }
+
+  /** Auto-retry the connection while auto-start is enabled (backoff, capped). */
+  private scheduleRetry(generation: number, cli: ResolvedCli | undefined): void {
+    if (generation !== this.generation || this.client) return;
+    const autoStart = vscode.workspace.getConfiguration("opencode2").get<boolean>("server.autoStart", true);
+    if (!autoStart) return;
+    if (this.retryCount >= this.maxRetries) {
+      this.log.warn("connection retries exhausted — run 'OpenCode 2: Restart Background Service'");
+      return;
+    }
+    this.retryCount++;
+    const delay = Math.min(this.retryBaseMs * 2 ** (this.retryCount - 1), 30_000);
+    this.log.debug(`scheduling connection retry #${this.retryCount} in ${delay}ms`);
+    const timer = setTimeout(() => {
+      this.pendingTimers.delete(timer);
+      this.retryTimer = undefined;
+      if (generation !== this.generation || this.client) return;
+      void this.connect(cli).catch(() => {
+        /* next retry scheduled by connect() on failure */
+      });
+    }, delay);
+    this.retryTimer = timer;
+    this.pendingTimers.add(timer);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.pendingTimers.delete(this.retryTimer);
+      this.retryTimer = undefined;
     }
   }
 

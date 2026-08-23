@@ -108,6 +108,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
     this.controller.onResync(() => this.post({ type: "resync" }), null, this.disposables);
 
+    // Re-sync state whenever the panel becomes visible — covers the case where
+    // a connection resolved while the view was still hidden/not yet mounted.
+    view.onDidChangeVisibility(
+      () => {
+        if (view.visible) pushState();
+      },
+      null,
+      this.disposables,
+    );
+
     view.webview.html = this.renderHtml(view.webview);
   }
 
