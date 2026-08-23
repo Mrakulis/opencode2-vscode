@@ -49,7 +49,7 @@ button {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
-  background: var(--vscode-button-secondaryBackground, transparent);
+  background: transparent;
   border: none;
   border-radius: var(--oc2-radius);
   padding: calc(var(--oc2-space-1) + 1px) var(--oc2-space-3);
@@ -176,12 +176,13 @@ textarea:focus-visible {
   position: relative;
 }
 .chip {
-  background: transparent;
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
   border-radius: 999px;
-  padding: 1px var(--oc2-space-2);
+  padding: 2px var(--oc2-space-2);
   box-shadow: inset 0 0 0 1px var(--oc2-border);
   font-family: var(--oc2-mono);
-  font-size: calc(var(--oc2-font-size) - 2px);
+  font-size: calc(var(--oc2-font-size) - 1px);
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -222,7 +223,7 @@ textarea:focus-visible {
 }
 .menu-section {
   font-family: var(--oc2-mono);
-  font-size: calc(var(--oc2-font-size) - 4px);
+  font-size: calc(var(--oc2-font-size) - 2px);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--vscode-descriptionForeground);
@@ -707,20 +708,90 @@ textarea:focus-visible {
   flex-direction: column;
   gap: var(--oc2-space-2);
 }
+.composer-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
 .composer textarea {
   resize: none;
-  padding: var(--oc2-space-2) var(--oc2-space-3);
+  padding: var(--oc2-space-2) 52px var(--oc2-space-2) var(--oc2-space-3);
   line-height: 1.45;
+  width: 100%;
 }
-.composer-bar {
+.composer-input-actions {
+  position: absolute;
+  right: var(--oc2-space-1);
+  bottom: var(--oc2-space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-1);
+}
+.sendbtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-size: var(--oc2-font-size);
+  padding: 0;
+  line-height: 1;
+}
+.sendbtn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+.sendbtn.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.composer-selectors {
   display: flex;
   align-items: center;
   gap: var(--oc2-space-2);
+  flex-wrap: wrap;
+  position: relative;
+}
+.selector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--oc2-space-1);
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-dropdown-background, transparent));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-dropdown-foreground, var(--vscode-foreground)));
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  padding: calc(var(--oc2-space-1) + 1px) var(--oc2-space-2);
+  font-size: var(--oc2-font-size);
+  cursor: pointer;
+}
+.selector:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+}
+.chevron {
+  opacity: 0.7;
+  font-size: 0.8em;
+}
+.composer-actions-right {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  margin-left: auto;
+}
+.menu-empty {
+  padding: var(--oc2-space-2);
+  color: var(--vscode-descriptionForeground);
+  font-size: calc(var(--oc2-font-size) - 1px);
 }
 .composer-error {
   color: var(--vscode-errorForeground, #f66);
   font-family: var(--oc2-mono);
-  font-size: calc(var(--oc2-font-size) - 3px);
+  font-size: calc(var(--oc2-font-size) - 2px);
 }
 
 /* ---------- status strip ---------- */

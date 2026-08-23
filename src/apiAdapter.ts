@@ -88,8 +88,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       const res = await getClient().agent.list();
       return res.data.filter((a) => !a.hidden && a.mode !== "subagent");
     },
-    switchModel: (sessionID: string, model: { id: string; providerID: string }): Promise<void> =>
-      getClient().session.switchModel({ sessionID, model }),
+    switchModel: (
+      sessionID: string,
+      model: { id: string; providerID: string; variant?: string },
+    ): Promise<void> => getClient().session.switchModel({ sessionID, model }),
     switchAgent: (sessionID: string, agent: string): Promise<void> =>
       getClient().session.switchAgent({ sessionID, agent }),
 

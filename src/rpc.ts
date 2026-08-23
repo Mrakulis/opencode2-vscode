@@ -73,11 +73,16 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
     "models.list": () => api.models(),
     "agents.list": () => api.agents(),
     "model.switch": (p) => {
-      const model = p.model as { id?: unknown; providerID?: unknown } | undefined;
+      const model = p.model as { id?: unknown; providerID?: unknown; variant?: unknown } | undefined;
       if (typeof model?.id !== "string" || typeof model?.providerID !== "string") {
         throw new Error("rpc: missing 'model.id'/'model.providerID'");
       }
-      return api.switchModel(str(p, "sessionID"), { id: model.id, providerID: model.providerID });
+      const variant = typeof model.variant === "string" && model.variant.length > 0 ? model.variant : undefined;
+      return api.switchModel(str(p, "sessionID"), {
+        id: model.id,
+        providerID: model.providerID,
+        ...(variant ? { variant } : {}),
+      });
     },
     "agent.switch": (p) => api.switchAgent(str(p, "sessionID"), str(p, "agent")),
     "permissions.pending": () => api.pendingPermissions(),

@@ -37,7 +37,7 @@ export function App() {
   const [messages, setMessages] = useState<AnyMessage[]>([]);
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
-  const [models, setModels] = useState<Array<{ id: string; providerID: string; name: string; context: number }>>([]);
+  const [models, setModels] = useState<Array<{ id: string; providerID: string; name: string; context: number; variants?: Array<{ id: string }> }>>([]);
   const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sounds, setSounds] = useState(true);
@@ -86,7 +86,7 @@ export function App() {
   const refreshPickers = useCallback(async () => {
     try {
       const [m, a, def] = await Promise.all([
-        rpc.call<{ id: string; providerID: string; name: string; context: number }[]>("models.list"),
+        rpc.call<Array<{ id: string; providerID: string; name: string; context: number; variants?: Array<{ id: string }> }>>("models.list"),
         rpc.call<{ id: string; name: string }[]>("agents.list"),
         rpc.call<{ id?: string; providerID?: string; name?: string } | null>("models.default").catch(() => null),
       ]);
@@ -361,44 +361,12 @@ export function App() {
             ? active.location.directory.split(/[\\/]/).filter(Boolean).pop()
             : undefined
         }
-        agentName={agents.find((a) => a.id === active?.agent)?.name}
-        models={models}
-        agents={agents}
-        hidden={cfg?.models.hidden ?? []}
-        favorites={cfg?.models.favorites ?? []}
-        defaultKey={cfg?.models.default ?? ""}
-        recents={recents}
-        activeModel={lastAssistant?.model}
-        activeAgent={active?.agent}
         drawerOpen={drawerOpen}
         onToggleDrawer={() => setDrawerOpen((v) => !v)}
         onRename={async (title) => {
           if (activeId) await rpc.call("session.rename", { sessionID: activeId, title }).catch(() => undefined);
           void refreshSessions();
         }}
-        onPickModel={async (m) => {
-          const key = modelKey(m);
-          setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
-          if (activeId) {
-            await rpc.call("model.switch", { sessionID: activeId, model: m }).catch(() => undefined);
-          }
-          void refreshSessions();
-        }}
-        onPickAgent={async (a) => {
-          if (activeId) {
-            await rpc.call("agent.switch", { sessionID: activeId, agent: a }).catch(() => undefined);
-          }
-          void refreshSessions();
-        }}
-        onToggleFavorite={(key) =>
-          void updateSettings([{ key: "models.favorites", value: toggleInList(cfg?.models.favorites ?? [], key) }])
-        }
-        onSetDefault={(key) =>
-          void updateSettings([{ key: "models.default", value: cfg?.models.default === key ? "" : key }])
-        }
-        onToggleModelVisible={(key) =>
-          void updateSettings([{ key: "models.hidden", value: toggleInList(cfg?.models.hidden ?? [], key) }])
-        }
         onOpenManager={() => setManagerOpen(true)}
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
@@ -511,6 +479,43 @@ export function App() {
         sendKey={cfg?.ui.sendKey ?? "enter"}
         onSend={(t) => void sendMessage(t)}
         onStop={() => void interrupt()}
+        agents={agents}
+        activeAgent={active?.agent}
+        agentName={agents.find((a) => a.id === active?.agent)?.name}
+        models={models}
+        hidden={cfg?.models.hidden ?? []}
+        favorites={cfg?.models.favorites ?? []}
+        defaultKey={cfg?.models.default ?? ""}
+        recents={recents}
+        activeModel={lastAssistant?.model}
+        onPickModel={async (m) => {
+          const key = modelKey(m);
+          setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
+          if (activeId) {
+            await rpc.call("model.switch", { sessionID: activeId, model: m }).catch(() => undefined);
+          }
+          void refreshSessions();
+        }}
+        onPickVariant={async (variant) => {
+          const am = lastAssistant?.model;
+          if (activeId && am) {
+            await rpc.call("model.switch", {
+              sessionID: activeId,
+              model: { id: am.id, providerID: am.providerID, variant },
+            }).catch(() => undefined);
+          }
+          void refreshSessions();
+        }}
+        onPickAgent={async (a) => {
+          if (activeId) {
+            await rpc.call("agent.switch", { sessionID: activeId, agent: a }).catch(() => undefined);
+          }
+          void refreshSessions();
+        }}
+        onToggleFavorite={(key) =>
+          void updateSettings([{ key: "models.favorites", value: toggleInList(cfg?.models.favorites ?? [], key) }])
+        }
+        onOpenManager={() => setManagerOpen(true)}
       />
 
       <StatusStrip connected={conn === "connected"} cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} />
