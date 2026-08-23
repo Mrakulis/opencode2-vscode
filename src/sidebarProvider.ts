@@ -7,10 +7,52 @@ import {
   type InboundMessage,
   type OutboundMessage,
   type RpcResponse,
+  type WireForm,
+  type WireFormField,
 } from "./protocol";
 import type { RpcDispatcher } from "./rpc";
 
 export const SIDEBAR_VIEW_ID = "opencode2.sidebar";
+
+/**
+ * Normalize a V2 FormInfo-ish object into our dependency-free WireForm.
+ * Unknown field kinds are passed through with their key/title so the UI can
+ * at least render a text input for them.
+ */
+export function toWireForm(raw: unknown): WireForm | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const rec = raw as Record<string, unknown>;
+  const id = typeof rec.id === "string" ? rec.id : "";
+  const sessionID = typeof rec.sessionID === "string" ? rec.sessionID : "";
+  const title = typeof rec.title === "string" ? rec.title : "Agent input";
+  const fieldsRaw = Array.isArray(rec.fields) ? rec.fields : [];
+  const fields: WireFormField[] = [];
+  for (const f of fieldsRaw) {
+    if (typeof f !== "object" || f === null) continue;
+    const fr = f as Record<string, unknown>;
+    const key = typeof fr.key === "string" ? fr.key : "";
+    if (!key) continue;
+    const options = Array.isArray(fr.options)
+      ? fr.options
+          .filter((o): o is Record<string, unknown> => typeof o === "object" && o !== null)
+          .map((o) => ({
+            label: typeof o.label === "string" ? o.label : String(o.value ?? ""),
+            value: o.value as string | number | boolean | undefined,
+          }))
+      : undefined;
+    fields.push({
+      key,
+      title: typeof fr.title === "string" ? fr.title : key,
+      description: typeof fr.description === "string" ? fr.description : undefined,
+      required: fr.required === true,
+      type: typeof fr.type === "string" ? fr.type : "string",
+      options,
+      default: typeof fr.default === "string" || typeof fr.default === "number" || typeof fr.default === "boolean" ? fr.default : undefined,
+      placeholder: typeof fr.placeholder === "string" ? fr.placeholder : undefined,
+    });
+  }
+  return { id, sessionID, title, fields };
+}
 
 /**
  * Hosts the React chat UI. All server I/O happens in the extension host;
@@ -85,7 +127,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.disposables,
     );
     this.controller.onEvent(
-      (event) => this.post({ type: "event", event } satisfies InboundMessage),
+      (event) => {
+        this.post({ type: "event", event } satisfies InboundMessage);
+        // Real form requests replace the old text-heuristic "question" flow.
+        if ((event as { type?: string }).type === "form.created") {
+          const wire = toWireForm((event as { data?: unknown }).data);
+          if (wire) this.post({ type: "form", form: wire } satisfies InboundMessage);
+        }
+      },
       null,
       this.disposables,
     );
@@ -124,10 +173,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Ask the webview to refetch everything (workspace scope changed). */
   notifyResync(): void {
     this.post({ type: "resync" });
-  }
-
-  showQuestion(text: string, options: string[], recommended?: string, hasOther?: boolean): void {
-    this.post({ type: "question", text, options, recommended, hasOther } satisfies InboundMessage);
   }
 
   /** Create a session in the active workspace and tell the UI to select it. */

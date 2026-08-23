@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isInbound } from "../src/protocol";
-import type { ResolvedConfig, SettingKey } from "../src/protocol";
+import type { ResolvedConfig, SettingKey, WireForm } from "../src/protocol";
 import {
   isAssistant,
   isUser,
@@ -17,6 +17,7 @@ import { ModelManager } from "./components/ModelManager";
 import { ProvidersDrawer } from "./components/ProvidersDrawer";
 import { McpDrawer } from "./components/McpDrawer";
 import { Feed } from "./components/Feed";
+import { FormCard } from "./components/FormCard";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 
@@ -31,6 +32,7 @@ interface PermissionCardData {
 
 export function App() {
   const [conn, setConn] = useState<Conn>("connecting");
+  const [forms, setForms] = useState<WireForm[]>([]);
   const [connDetail, setConnDetail] = useState<string | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
@@ -56,13 +58,6 @@ export function App() {
   const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
     undefined,
   );
-  const [otherText, setOtherText] = useState("");
-  const [activeQuestion, setActiveQuestion] = useState<{
-    text: string;
-    options: string[];
-    recommended?: string;
-    hasOther?: boolean;
-  } | null>(null);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
@@ -151,10 +146,22 @@ export function App() {
       setActiveId(id);
       setMessages([]);
       setPermissions([]);
+      setForms((list) => (id ? list.filter((f) => f.sessionID === id) : []));
       if (id) void refreshMessages(id);
     },
     [refreshMessages],
   );
+
+  /** Re-fetch pending agent form requests (all sessions; UI filters by visibility). */
+  const refreshForms = useCallback(async () => {
+    try {
+      const rows = await rpc.call<Array<Record<string, unknown>>>("forms.pending");
+      const wires = rows.map(toWireFormClient).filter((f): f is WireForm => f !== undefined);
+      setForms(wires);
+    } catch {
+      /* transient */
+    }
+  }, []);
 
   // ---- push events ---------------------------------------------------------
   useEffect(() => {
@@ -183,6 +190,7 @@ export function App() {
               const list = await refreshSessions();
               await refreshPickers();
               void refreshPendingPermissions();
+              void refreshForms();
               setActiveId((current) => {
                 if (!current) {
                   const recent = mostRecentSession(list);
@@ -200,6 +208,7 @@ export function App() {
             const list = await refreshSessions();
             await refreshPickers();
             void refreshPendingPermissions();
+            void refreshForms();
             setActiveId((current) => {
               if (current) {
                 void refreshMessages(current);
@@ -217,13 +226,8 @@ export function App() {
           setDrawerOpen(false);
           break;
         }
-        case "question": {
-          setActiveQuestion({
-            text: msg.text,
-            options: msg.options,
-            recommended: (msg as { recommended?: string }).recommended,
-            hasOther: (msg as { hasOther?: boolean }).hasOther,
-          });
+        case "form": {
+          setForms((list) => (list.some((f) => f.id === msg.form.id) ? list : [...list, msg.form]));
           break;
         }
         case "event": {
@@ -279,6 +283,12 @@ export function App() {
               );
             }
           }
+
+          // Forms resolve server-side; drop them when answered/cancelled.
+          if (evt.type === "form.replied" || evt.type === "form.cancelled") {
+            const fid = (evt.data as { id?: string } | undefined)?.id;
+            if (fid) setForms((list) => list.filter((f) => f.id !== fid));
+          }
           break;
         }
       }
@@ -295,7 +305,7 @@ export function App() {
       clearTimeout(sessionTimer);
       clearTimeout(messageTimer);
     };
-  }, [refreshSessions, refreshMessages, refreshPickers, refreshPendingPermissions, selectSession, sounds]);
+  }, [refreshSessions, refreshMessages, refreshPickers, refreshPendingPermissions, refreshForms, selectSession, sounds]);
 
   // Report the visible session so host notifications skip it.
   useEffect(() => {
@@ -421,66 +431,9 @@ export function App() {
     const texts = m?.content?.filter((p) => p.type === "text").map((p) => p.text ?? "") ?? [];
     return texts.join("\n");
   }, [messages]);
+  // Real V2 "question" permissions render as a card below; the old regex-based
+  // text heuristic was removed now that structured forms (form.*) are wired.
   const questionPerm = useMemo(() => permissions.find((p) => p.action.toLowerCase() === "question"), [permissions]);
-  const isQuestion = useMemo(() => {
-    if (questionPerm) return true;
-    if (busy) return false;
-    if (!lastAssistantText) return false;
-    // only recent questions (last 2 minutes) to avoid stale 0.2.32 text showing as question
-    const lastTime = ([...messages].reverse().find(isAssistant) as unknown as { time?: { created?: number } })?.time?.created;
-    if (lastTime && Date.now() - lastTime > 2 * 60 * 1000) return false;
-    const t = lastAssistantText.trim();
-    return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
-  }, [lastAssistantText, questionPerm, busy, messages]);
-
-  const questionOptions = useMemo(() => {
-    if (!isQuestion || !lastAssistantText) return null;
-    const lines = lastAssistantText.split("\n");
-    const opts: Array<{ label: string; recommended?: boolean; isOther?: boolean }> = [];
-    for (const line of lines) {
-      const m =
-        line.match(/^\s*[○●◯•\-*]\s*(.+)/) ||
-        line.match(/^\s*[A-Z]\)\s*(.+)/) ||
-        line.match(/^\s*\d+[\.)]\s*(.+)/);
-      if (m) {
-        const raw = m[1]!.trim();
-        // filter out long descriptive bullets like the 0.2.32 release notes
-        if (raw.length > 40 || raw.includes("`") || raw.toLowerCase().includes("permission")) continue;
-        const isRec = /\(recommended\)/i.test(raw) || /★/.test(raw);
-        const label = raw.replace(/\s*\(recommended\)\s*/i, "").replace(/\s*★.*/, "").trim();
-        if (!label) continue;
-        const isOther = /^other$/i.test(label) || label.toLowerCase().startsWith("other");
-        // allow any plausible option — paths, short phrases, not long sentences
-        if (!isOther && label.length > 60) continue;
-        if (!isOther && label.split(/\s+/).length > 8) continue;
-        if (!isOther && label.includes("`")) continue;
-        opts.push({ label, recommended: isRec, isOther });
-      }
-    }
-    if (opts.length === 0) {
-      const inline = lastAssistantText.match(/(?:Options?:)?\s*A\)\s*([^,]+),?\s*B\)\s*([^,]+),?\s*C\)\s*([^\n]+)/i);
-      if (inline) {
-        const a = inline[1]!.trim();
-        const b = inline[2]!.trim();
-        const c = inline[3]!.trim();
-        const bRec = /recommended/i.test(b);
-        opts.push({ label: a.replace(/\(recommended\)/i, "").trim() });
-        opts.push({ label: b.replace(/\(recommended\)/i, "").trim(), recommended: bRec });
-        const cOther = /^other/i.test(c);
-        opts.push({ label: c.replace(/\(recommended\)/i, "").trim(), isOther: cOther });
-      }
-    }
-    return opts.length > 0 ? opts : null;
-  }, [isQuestion, lastAssistantText]);
-
-  const handleQuestionAnswer = useCallback(
-    (text: string) => {
-      if (!activeId || !text.trim()) return;
-      setActiveQuestion(null);
-      void sendMessage(text.trim());
-    },
-    [activeId, sendMessage],
-  );
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
@@ -621,6 +574,14 @@ export function App() {
         {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} />}
       </main>
 
+      {forms.length > 0 && (
+        <div className="permissions">
+          {forms.map((f) => (
+            <FormCard key={f.id} form={f} />
+          ))}
+        </div>
+      )}
+
       {permissionMode === "askFirst" &&
         permissions.filter((p) => p.action.toLowerCase() !== "question").length > 0 &&
         activeId && (
@@ -633,165 +594,7 @@ export function App() {
           </div>
         )}
 
-      {activeQuestion && activeId && (
-        <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
-            <div className="perm-header">
-              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
-                question
-              </span>
-              <span>{activeQuestion.text}</span>
-            </div>
-            <div className="perm-resources" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {activeQuestion.options.map((opt, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className="perm-res"
-                  style={{
-                    textAlign: "left",
-                    cursor: opt.toLowerCase().startsWith("other") ? "default" : "pointer",
-                    border: opt === activeQuestion.recommended ? "1px solid var(--oc2-question)" : undefined,
-                    background: opt === activeQuestion.recommended ? "rgba(192,132,252,0.12)" : undefined,
-                  }}
-                  onClick={() => {
-                    if (opt.toLowerCase().startsWith("other")) return;
-                    setActiveQuestion(null);
-                    void handleQuestionAnswer(opt);
-                  }}
-                >
-                  {opt} {opt === activeQuestion.recommended ? "★ Recommended" : ""}{" "}
-                  {opt.toLowerCase().startsWith("other") ? "— type below" : ""}
-                </button>
-              ))}
-              {activeQuestion.hasOther && (
-                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                  <input
-                    className="search"
-                    placeholder="Other — type your response..."
-                    value={otherText}
-                    onChange={(e) => setOtherText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && otherText.trim()) {
-                        const t = otherText;
-                        setOtherText("");
-                        setActiveQuestion(null);
-                        void handleQuestionAnswer(t);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={!otherText.trim()}
-                    onClick={() => {
-                      const t = otherText;
-                      setOtherText("");
-                      setActiveQuestion(null);
-                      void handleQuestionAnswer(t);
-                    }}
-                  >
-                    Send
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {questionPerm && activeId && (
-        <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
-            <div className="perm-header">
-              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
-                question
-              </span>
-              <span>Agent is asking for input</span>
-            </div>
-            <div className="perm-res" style={{ whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
-              Permission: {questionPerm.action} — {questionPerm.resources.join(", ")}
-              {lastAssistantText ? `\n\n${lastAssistantText.slice(-600)}` : ""}
-            </div>
-            <div className="perm-actions">
-              <button type="button" className="primary" onClick={() => void replyPermission(questionPerm.requestID, "once")}>
-                Allow
-              </button>
-              <button type="button" className="danger" onClick={() => void replyPermission(questionPerm.requestID, "reject")}>
-                Deny
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isQuestion && !questionPerm && activeId && (
-        <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
-            <div className="perm-header">
-              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
-                question
-              </span>
-              <span>Agent is waiting for your answer</span>
-            </div>
-            <div className="perm-res" style={{ whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
-              {lastAssistantText.slice(-800)}
-            </div>
-            {questionOptions ? (
-              <div className="perm-resources" style={{ gap: "6px" }}>
-                {questionOptions.map((opt, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="perm-res"
-                    style={{
-                      textAlign: "left",
-                      cursor: opt.isOther ? "default" : "pointer",
-                      border: opt.recommended ? "1px solid var(--oc2-question)" : undefined,
-                      background: opt.recommended ? "rgba(192,132,252,0.12)" : undefined,
-                    }}
-                    onClick={() => {
-                      if (opt.isOther) return;
-                      void handleQuestionAnswer(opt.label);
-                    }}
-                  >
-                    {opt.label} {opt.recommended ? "★ Recommended" : ""} {opt.isOther ? "— type below" : ""}
-                  </button>
-                ))}
-                {questionOptions.some((o) => o.isOther) && (
-                  <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                    <input
-                      className="search"
-                      placeholder="Other — type your response..."
-                      value={otherText}
-                      onChange={(e) => setOtherText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && otherText.trim()) {
-                          void handleQuestionAnswer(otherText);
-                          setOtherText("");
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={!otherText.trim()}
-                      onClick={() => {
-                        void handleQuestionAnswer(otherText);
-                        setOtherText("");
-                      }}
-                    >
-                      Send
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="perm-hint">Reply in the composer below — it will be sent as the answer.</div>
-            )}
-          </div>
-        </div>
-      )}
 
       <Composer
         disabled={!activeId || conn !== "connected"}
@@ -937,6 +740,34 @@ function PermissionRow({
 
 function mostRecentSession(list: SessionSummary[]): SessionSummary | undefined {
   return [...list].sort((a, b) => b.time.updated - a.time.updated)[0];
+}
+
+/** Client-side mirror of the host's toWireForm normalization. */
+function toWireFormClient(raw: Record<string, unknown>): WireForm | undefined {
+  if (typeof raw.id !== "string" || typeof raw.sessionID !== "string") return undefined;
+  const fieldsRaw = Array.isArray(raw.fields) ? raw.fields : [];
+  return {
+    id: raw.id,
+    sessionID: raw.sessionID,
+    title: typeof raw.title === "string" ? raw.title : "Agent input",
+    fields: fieldsRaw
+      .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null && typeof (f as Record<string, unknown>).key === "string")
+      .map((f) => ({
+        key: f.key as string,
+        title: typeof f.title === "string" ? f.title : (f.key as string),
+        description: typeof f.description === "string" ? f.description : undefined,
+        required: f.required === true,
+        type: typeof f.type === "string" ? f.type : "string",
+        options: Array.isArray(f.options)
+          ? (f.options as Array<Record<string, unknown>>).map((o) => ({
+              label: typeof o.label === "string" ? o.label : String(o.value ?? ""),
+              value: o.value as string | number | boolean | undefined,
+            }))
+          : undefined,
+        default: typeof f.default === "string" || typeof f.default === "number" || typeof f.default === "boolean" ? f.default : undefined,
+        placeholder: typeof f.placeholder === "string" ? f.placeholder : undefined,
+      })),
+  };
 }
 
 /** Render the visible conversation as markdown for clipboard export. */

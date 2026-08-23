@@ -119,6 +119,18 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       return api.sessionCommand(str(p, "sessionID"), command, typeof args === "string" ? args : undefined);
     },
     "session.skill": (p) => api.sessionSkill(str(p, "sessionID"), str(p, "name")),
+    "forms.pending": (p) => api.formsList(optStr(p, "sessionID")),
+    "form.reply": (p) => {
+      const answer = p.answer as Record<string, unknown> | undefined;
+      if (!answer || typeof answer !== "object") throw new Error("rpc: missing 'answer'");
+      const clean: Record<string, string | number | boolean | ReadonlyArray<string>> = {};
+      for (const [k, v] of Object.entries(answer)) {
+        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") clean[k] = v;
+        else if (Array.isArray(v) && v.every((x) => typeof x === "string")) clean[k] = v as string[];
+      }
+      return api.formReply(str(p, "sessionID"), str(p, "formID"), clean);
+    },
+    "form.cancel": (p) => api.formCancel(str(p, "sessionID"), str(p, "formID")),
     "workspace.directory": async () => preferredDirectory(),
     "settings.update": (p) => {
       const updates = p.updates as Array<{ key?: unknown; value?: unknown }> | undefined;

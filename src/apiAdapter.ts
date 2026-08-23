@@ -113,6 +113,26 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       reply: "once" | "always" | "reject",
     ): Promise<void> => getClient().permission.reply({ sessionID, requestID, reply }),
 
+    // -- forms -----------------------------------------------------------------
+    formsList: async (sessionID?: string): Promise<Array<Record<string, unknown>>> => {
+      if (sessionID) {
+        const rows = await getClient().form.list({ sessionID });
+        return rows as unknown as Array<Record<string, unknown>>;
+      }
+      const res = await getClient().form.request.list();
+      return (res.data ?? []) as Array<Record<string, unknown>>;
+    },
+    formReply: async (
+      sessionID: string,
+      formID: string,
+      answer: Record<string, string | number | boolean | ReadonlyArray<string>>,
+    ): Promise<void> => {
+      await getClient().form.reply({ sessionID, formID, answer });
+    },
+    formCancel: async (sessionID: string, formID: string): Promise<void> => {
+      await getClient().form.cancel({ sessionID, formID });
+    },
+
     // -- misc ----------------------------------------------------------------
     findFiles: (query: string, directory?: string) => getClient().file.find({ query, location: directory ? { directory } : undefined }),
     commands: async (): Promise<Array<{ name: string; description?: string }>> => {

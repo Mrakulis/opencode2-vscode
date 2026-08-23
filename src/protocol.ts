@@ -68,8 +68,30 @@ export type InboundMessage =
   | { type: "resync" }
   | { type: "event"; event: unknown }
   | { type: "selectSession"; id: string }
-  | { type: "question"; text: string; options: string[]; recommended?: string; hasOther?: boolean }
+  | { type: "form"; form: WireForm }
   | { type: "error"; message: string };
+
+/**
+ * Dependency-free shape of an agent form request (mirrors V2 `FormInfo`).
+ * Fields are kept loose (`WireFormField`) because the server union is wide;
+ * the webview renders what it knows and ignores the rest.
+ */
+export interface WireFormField {
+  key: string;
+  title?: string;
+  description?: string;
+  required?: boolean;
+  type?: string;
+  options?: Array<{ label?: string; value?: string | number | boolean }>;
+  default?: string | number | boolean;
+  placeholder?: string;
+}
+export interface WireForm {
+  id: string;
+  sessionID: string;
+  title: string;
+  fields: WireFormField[];
+}
 
 export interface RpcRequest {
   type: "rpc";
@@ -125,6 +147,10 @@ export type RpcMethod =
   | "skills.list"
   | "session.command"
   | "session.skill"
+  // forms
+  | "forms.pending"
+  | "form.reply"
+  | "form.cancel"
   // providers & mcp
   | "providers.list"
   | "providers.authCli"
