@@ -1,0 +1,276 @@
+{
+  "name": "opencode2-vscode",
+  "displayName": "OpenCode 2 for VS Code",
+  "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
+  "version": "0.2.0",
+  "license": "MIT",
+  "publisher": "Mrakulis",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mrakulis/opencode2-vscode"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Chat",
+    "AI"
+  ],
+  "keywords": [
+    "opencode",
+    "ai",
+    "agent",
+    "chat",
+    "sidebar"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "opencode2",
+          "title": "OpenCode 2",
+          "icon": "resources/opencode.svg"
+        }
+      ]
+    },
+    "views": {
+      "opencode2": [
+        {
+          "type": "webview",
+          "id": "opencode2.sidebar",
+          "name": "OpenCode 2"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "opencode2.focus",
+        "title": "OpenCode 2: Focus Sidebar"
+      },
+      {
+        "command": "opencode2.toggle",
+        "title": "OpenCode 2: Toggle Sidebar"
+      },
+      {
+        "command": "opencode2.newSession",
+        "title": "OpenCode 2: New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "opencode2.refresh",
+        "title": "OpenCode 2: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "opencode2.restartService",
+        "title": "OpenCode 2: Restart Background Service"
+      },
+      {
+        "command": "opencode2.openTerminal",
+        "title": "OpenCode 2: Open Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "opencode2.installCli",
+        "title": "OpenCode 2: Install CLI"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "opencode2.focus",
+        "key": "ctrl+shift+alt+o",
+        "mac": "cmd+shift+alt+o"
+      },
+      {
+        "command": "opencode2.toggle",
+        "key": "ctrl+shift+alt+i",
+        "mac": "cmd+shift+alt+i"
+      },
+      {
+        "command": "opencode2.newSession",
+        "key": "ctrl+shift+alt+n",
+        "mac": "cmd+shift+alt+n"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "opencode2.newSession",
+          "when": "view == opencode2.sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "opencode2.refresh",
+          "when": "view == opencode2.sidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "opencode2.openTerminal",
+          "when": "view == opencode2.sidebar",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenCode 2",
+      "properties": {
+        "opencode2.ui.sounds": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a subtle chime when the agent finishes or asks for permission."
+        },
+        "opencode2.ui.showReasoning": {
+          "type": "string",
+          "enum": [
+            "hide",
+            "collapsed",
+            "expanded"
+          ],
+          "enumDescriptions": [
+            "Hide reasoning blocks entirely",
+            "Show collapsed (one click to expand)",
+            "Show fully expanded"
+          ],
+          "default": "collapsed",
+          "description": "How to display model reasoning blocks."
+        },
+        "opencode2.ui.expandShellTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expand shell/command tool cards by default."
+        },
+        "opencode2.ui.expandEditTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expand edit/diff tool cards by default."
+        },
+        "opencode2.ui.messageStats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show per-message token and cost badges under assistant replies."
+        },
+        "opencode2.composer.sendKey": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "ctrlEnter"
+          ],
+          "enumDescriptions": [
+            "Enter sends, Shift+Enter newlines",
+            "Ctrl/Cmd+Enter sends, Enter newlines"
+          ],
+          "default": "enter",
+          "description": "Which key combination sends the prompt."
+        },
+        "opencode2.models.hidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Models hidden from the picker, as 'providerID/modelID' keys."
+        },
+        "opencode2.models.favorites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Starred models pinned to the top of the picker, as 'providerID/modelID' keys."
+        },
+        "opencode2.models.default": {
+          "type": "string",
+          "default": "",
+          "description": "Default model for new sessions, as 'providerID/modelID'. Empty = server default."
+        },
+        "opencode2.notifications.errors": {
+          "type": "boolean",
+          "default": false,
+          "description": "Notify when an agent run fails."
+        },
+        "opencode2.server.baseUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Explicit OpenCode V2 server URL (e.g. `http://127.0.0.1:4096`). Leave empty to auto-discover/start the shared background service."
+        },
+        "opencode2.server.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the shared OpenCode background service when no healthy service is discovered."
+        },
+        "opencode2.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path or command name for the OpenCode CLI. Empty = try 'opencode2' then 'opencode'."
+        },
+        "opencode2.debug.logs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stream service/client diagnostics into the OpenCode 2 output channel."
+        },
+        "opencode2.ui.density": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "comfortable"
+          ],
+          "enumDescriptions": [
+            "13px base, tight paddings",
+            "14px base, roomier paddings"
+          ],
+          "default": "compact",
+          "description": "UI density of the sidebar."
+        },
+        "opencode2.ui.accentTint": {
+          "type": "string",
+          "default": "",
+          "description": "Optional CSS color tinting live-state accents. Empty = follow the VS Code theme."
+        },
+        "opencode2.agent.autoCompactThreshold": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 95,
+          "markdownDescription": "Auto-compact a session when context usage reaches this percent. `0` disables."
+        },
+        "opencode2.notifications.permissions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when a session requests a permission."
+        },
+        "opencode2.notifications.agentEvents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when the agent finishes or fails."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "format": "prettier --write .",
+    "package": "npm run build && vsce package"
+  },
+  "dependencies": {
+    "@opencode-ai/client": "0.0.0-beta-17927",
+    "dompurify": "^3.4.14",
+    "marked": "^18.0.10",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/vscode": "^1.96.0",
+    "esbuild": "^0.25.11",
+    "prettier": "^3.5.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}

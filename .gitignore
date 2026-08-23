@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+out/
+media/webview/
+*.vsix
+
+# secrets
+.env
+.env.*
+
+# vscode
+.vscode-test/
+test-results/
+
+# graphify working artifacts (regenerated)
+graphify-out/
+
+# os
+Thumbs.db
+.DS_Store

@@ -1,0 +1,228 @@
+import { useEffect, useRef, useState } from "react";
+import { isAssistant, isUser, type AnyMessage, type MessagePartText, type MessagePartReasoning, type MessagePartTool } from "../lib/rpc";
+import { renderMarkdown } from "../lib/markdown";
+import { diffLines, formatCost, formatTokens, toolTitle, truncate } from "../lib/format";
+
+export function Feed({
+  messages,
+  busy,
+  showReasoning,
+  expandShellTools,
+  expandEditTools,
+  messageStats,
+}: {
+  messages: AnyMessage[];
+  busy: boolean;
+  showReasoning: "hide" | "collapsed" | "expanded";
+  expandShellTools: boolean;
+  expandEditTools: boolean;
+  messageStats: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pinnedRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = (): void => {
+      pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+      setShowJump(!pinnedRef.current);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Follow output only while the user stays pinned to the bottom.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  return (
+    <div className="feed-scroll" ref={scrollRef}>
+      {messages.map((m) => (
+        <MessageGroup
+          key={m.id}
+          message={m}
+          showReasoning={showReasoning}
+          expandShellTools={expandShellTools}
+          expandEditTools={expandEditTools}
+          messageStats={messageStats}
+        />
+      ))}
+      {busy && <div className="streaming-caret" aria-label="working" />}
+
+      {showJump && (
+        <button
+          type="button"
+          className="jump"
+          onClick={() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+            pinnedRef.current = true;
+            setShowJump(false);
+          }}
+        >
+          ↓ latest
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MessageGroup({
+  message,
+  showReasoning,
+  expandShellTools,
+  expandEditTools,
+  messageStats,
+}: {
+  message: AnyMessage;
+  showReasoning: "hide" | "collapsed" | "expanded";
+  expandShellTools: boolean;
+  expandEditTools: boolean;
+  messageStats: boolean;
+}) {
+  if (isUser(message)) {
+    return (
+      <article className="msg user">
+        <div className="bubble">{message.text}</div>
+      </article>
+    );
+  }
+  if (!isAssistant(message)) return null;
+
+  return (
+    <article className="msg assistant">
+      <header className="msg-head">
+        {message.agent} · {message.model?.id ?? ""}
+      </header>
+      {message.content?.map((part, i) => (
+        <Part key={i} part={part} showReasoning={showReasoning} expandShellTools={expandShellTools} expandEditTools={expandEditTools} />
+      ))}
+      {messageStats && (message.cost !== undefined || message.tokens !== undefined) && (
+        <footer className="msg-foot">
+          {message.tokens && (
+            <span title={`input ${message.tokens.input} · output ${message.tokens.output} · reasoning ${message.tokens.reasoning} · cache read ${message.tokens.cache.read} · cache write ${message.tokens.cache.write}`}>
+              ↑{formatTokens(message.tokens.input)} ↓{formatTokens(message.tokens.output)}
+              {message.tokens.reasoning > 0 ? ` ✻${formatTokens(message.tokens.reasoning)}` : ""}
+            </span>
+          )}
+          {message.cost !== undefined && <span>{formatCost(message.cost)}</span>}
+        </footer>
+      )}
+      {message.error != null && (
+        <pre className="tool-error">{stringifyError(message.error)}</pre>
+      )}
+    </article>
+  );
+}
+
+function Part({
+  part,
+  showReasoning,
+  expandShellTools,
+  expandEditTools,
+}: {
+  part: MessagePartText | MessagePartReasoning | MessagePartTool;
+  showReasoning: "hide" | "collapsed" | "expanded";
+  expandShellTools: boolean;
+  expandEditTools: boolean;
+}) {
+  if (part.type === "text") {
+    return <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }} />;
+  }
+  if (part.type === "reasoning") {
+    if (showReasoning === "hide") return null;
+    return <Reasoning text={part.text} defaultOpen={showReasoning === "expanded"} />;
+  }
+  if (part.type === "tool") {
+    return <ToolCard part={part} expandShellTools={expandShellTools} expandEditTools={expandEditTools} />;
+  }
+  return null;
+}
+
+function Reasoning({ text, defaultOpen }: { text: string; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!text.trim()) return null;
+  return (
+    <details className="reasoning" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>thinking</summary>
+      <div className="reasoning-body">{text}</div>
+    </details>
+  );
+}
+
+const SHELL_TOOLS = new Set(["bash", "shell", "terminal", "exec", "command", "powershell"]);
+const EDIT_TOOLS = new Set(["edit", "write", "apply", "apply_patch", "multiedit", "patch", "create_file", "str_replace"]);
+
+function initiallyExpanded(toolName: string, shellPref: boolean, editPref: boolean): boolean {
+  const n = toolName.toLowerCase();
+  if (/[/.]/.test(n) || SHELL_TOOLS.has(n)) return shellPref;
+  if (EDIT_TOOLS.has(n) || /edit|diff|patch/.test(n)) return editPref;
+  return false;
+}
+
+type ToolPart = MessagePartTool;
+
+function ToolCard({ part, expandShellTools, expandEditTools }: { part: ToolPart; expandShellTools: boolean; expandEditTools: boolean }) {
+  const [expanded, setExpanded] = useState(() => initiallyExpanded(part.name, expandShellTools, expandEditTools));
+
+  let title = part.name;
+  let body: React.ReactNode = null;
+
+  if (part.state.status === "completed") {
+    title = toolTitle(part.name, part.state.input ?? {});
+    body = (
+      <>
+        {part.state.content?.map((c, i) => {
+          if (c.type === "text") {
+            return (
+              <pre key={i} className="tool-out">
+                {truncate(String(c.text), 4000)}
+              </pre>
+            );
+          }
+          const maybeDiff = (c as { diff?: unknown }).diff;
+          if (typeof maybeDiff === "string") {
+            return (
+              <pre key={i} className="diff">
+                {diffLines(maybeDiff).map((l, j) => (
+                  <span key={j} className={`line ${l.cls}`}>
+                    {l.text}
+                    {"\n"}
+                  </span>
+                ))}
+              </pre>
+            );
+          }
+          return null;
+        })}
+      </>
+    );
+  } else if (part.state.status === "error") {
+    title = `${part.name} — failed`;
+    body = <pre className="tool-error">{part.state.error?.message ?? "error"}</pre>;
+  } else {
+    title = `${part.name} — ${part.state.status}`;
+  }
+
+  return (
+    <div className={`tool-card st-${part.state.status}`}>
+      <button type="button" className="tool-head" onClick={() => setExpanded((v) => !v)}>
+        <span className={`chev${expanded ? " open" : ""}`}>▸</span> {title}
+      </button>
+      {expanded && <div className="tool-body">{body}</div>}
+    </div>
+  );
+}
+
+function stringifyError(error: unknown): string {
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error, null, 1);
+  } catch {
+    return String(error);
+  }
+}

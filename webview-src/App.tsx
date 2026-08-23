@@ -1,0 +1,563 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isInbound } from "../src/protocol";
+import type { ResolvedConfig, SettingKey } from "../src/protocol";
+import {
+  isAssistant,
+  isUser,
+  rpc,
+  type AnyMessage,
+  type SessionSummary,
+} from "./lib/rpc";
+import { contextPercent, formatCost, formatTokens } from "./lib/format";
+import { modelKey, resolveDefault, toggleInList } from "./lib/models";
+import { chime } from "./lib/sound";
+import { HeaderBar } from "./components/HeaderBar";
+import { SessionsDrawer } from "./components/SessionsDrawer";
+import { ModelManager } from "./components/ModelManager";
+import { ProvidersDrawer } from "./components/ProvidersDrawer";
+import { McpDrawer } from "./components/McpDrawer";
+import { Feed } from "./components/Feed";
+import { Composer } from "./components/Composer";
+import { StatusStrip } from "./components/StatusStrip";
+
+type Conn = "connected" | "connecting" | "error";
+
+interface PermissionCardData {
+  sessionID: string;
+  requestID: string;
+  action: string;
+  resources: string[];
+}
+
+export function App() {
+  const [conn, setConn] = useState<Conn>("connecting");
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [activeId, setActiveId] = useState<string | undefined>(undefined);
+  const [messages, setMessages] = useState<AnyMessage[]>([]);
+  const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
+  const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
+  const [models, setModels] = useState<Array<{ id: string; providerID: string; name: string; context: number }>>([]);
+  const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sounds, setSounds] = useState(true);
+  const [cfg, setCfg] = useState<ResolvedConfig | undefined>(undefined);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
+  const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
+    undefined,
+  );
+
+  const active = useMemo(() => sessions.find((s) => s.id === activeId), [sessions, activeId]);
+  const busy = activeId ? busySessions[activeId] === true : false;
+
+  // Keep a ref of activeId so push handlers never go stale.
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  // ---- data loading --------------------------------------------------------
+  const [allProjects, setAllProjects] = useState(false);
+  const refreshSessions = useCallback(
+    async (all?: boolean) => {
+      try {
+        const list = await rpc.call<SessionSummary[]>("session.list", { allProjects: all ?? allProjects });
+        setSessions(list);
+        return list;
+      } catch {
+        return [];
+      }
+    },
+    [allProjects],
+  );
+
+  const refreshMessages = useCallback(async (sessionId: string) => {
+    try {
+      const list = await rpc.call<AnyMessage[]>("messages.list", { sessionID: sessionId });
+      setMessages(list);
+    } catch {
+      /* transient */
+    }
+  }, []);
+
+  const refreshPickers = useCallback(async () => {
+    try {
+      const [m, a, def] = await Promise.all([
+        rpc.call<{ id: string; providerID: string; name: string; context: number }[]>("models.list"),
+        rpc.call<{ id: string; name: string }[]>("agents.list"),
+        rpc.call<{ id?: string; providerID?: string; name?: string } | null>("models.default").catch(() => null),
+      ]);
+      setModels(m);
+      setAgents(a);
+      if (def?.id && def?.providerID) {
+        setServerDefault({ id: def.id, providerID: def.providerID, name: def.name });
+      }
+    } catch {
+      /* not connected yet */
+    }
+  }, []);
+
+  const refreshPendingPermissions = useCallback(async () => {
+    try {
+      const pending = (await rpc.call<
+        Array<{ data?: { id: string; sessionID: string; action: string; resources?: string[] } }>
+      >("permissions.pending")) as unknown as {
+        data?: Array<{ id: string; sessionID: string; action: string; resources?: string[] }>;
+      };
+      const rows = pending.data ?? [];
+      setPermissions(
+        rows.map((r) => ({
+          sessionID: r.sessionID,
+          requestID: r.id,
+          action: r.action,
+          resources: r.resources ?? [],
+        })),
+      );
+    } catch {
+      /* transient */
+    }
+  }, []);
+
+  const selectSession = useCallback(
+    (id: string | undefined) => {
+      setActiveId(id);
+      setMessages([]);
+      setPermissions([]);
+      if (id) void refreshMessages(id);
+    },
+    [refreshMessages],
+  );
+
+  // ---- push events ---------------------------------------------------------
+  useEffect(() => {
+    let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const offPush = rpc.onPush((msg) => {
+      switch (msg.type) {
+        case "ready": {
+          setCfg(msg.config);
+          document.documentElement.dataset.density = msg.config.ui.density;
+          if (msg.config.ui.accentTint) {
+            document.documentElement.style.setProperty("--oc2-accent", msg.config.ui.accentTint);
+          } else {
+            document.documentElement.style.removeProperty("--oc2-accent");
+          }
+          setSounds(msg.config.ui.sounds);
+          break;
+        }
+        case "connection": {
+          setConn(msg.state);
+          if (msg.state === "connected") {
+            void (async () => {
+              const list = await refreshSessions();
+              await refreshPickers();
+              void refreshPendingPermissions();
+              setActiveId((current) => {
+                if (!current) {
+                  const recent = mostRecentSession(list);
+                  if (recent) void refreshMessages(recent.id);
+                  return recent?.id;
+                }
+                return current;
+              });
+            })();
+          }
+          break;
+        }
+        case "resync": {
+          void (async () => {
+            const list = await refreshSessions();
+            await refreshPickers();
+            void refreshPendingPermissions();
+            setActiveId((current) => {
+              if (current) {
+                void refreshMessages(current);
+                return current;
+              }
+              const recent = mostRecentSession(list);
+              if (recent) void refreshMessages(recent.id);
+              return recent?.id;
+            });
+          })();
+          break;
+        }
+        case "selectSession": {
+          selectSession(msg.id);
+          setDrawerOpen(false);
+          break;
+        }
+        case "event": {
+          const evt = msg.event as { type?: string; data?: { sessionID?: string } } | undefined;
+          if (!evt?.type) break;
+          const sid = evt.data?.sessionID;
+
+          // Sounds: finish + permission chimes for background sessions only.
+          if (sounds && sid && sid !== activeIdRef.current) {
+            if (evt.type === "session.execution.succeeded") chime("done");
+            if (evt.type === "permission.asked") chime("attention");
+          }
+
+          const isTerminal =
+            evt.type === "session.execution.succeeded" ||
+            evt.type === "session.execution.failed" ||
+            evt.type === "session.execution.interrupted";
+          if ((isTerminal || evt.type === "session.idle") && sounds && sid === activeIdRef.current) {
+            if (isTerminal) chime("done");
+          }
+
+          if (
+            evt.type.startsWith("session.") ||
+            evt.type.startsWith("permission.") ||
+            evt.type.startsWith("execution.")
+          ) {
+            clearTimeout(sessionTimer);
+            sessionTimer = setTimeout(() => void refreshSessions(), 150);
+          }
+
+          if (sid && sid === activeIdRef.current) {
+            clearTimeout(messageTimer);
+            messageTimer = setTimeout(() => void refreshMessages(sid), 120);
+            if (evt.type === "session.execution.started" || evt.type === "session.status.updated") {
+              setBusySessions((b) => ({ ...b, [sid]: true }));
+            }
+            if (
+              evt.type === "session.execution.succeeded" ||
+              evt.type === "session.execution.failed" ||
+              evt.type === "session.execution.interrupted" ||
+              evt.type === "session.idle"
+            ) {
+              setBusySessions((b) => ({ ...b, [sid]: false }));
+            }
+          }
+
+          if (evt.type === "permission.asked") {
+            const data = evt.data as unknown as PermissionCardData | undefined;
+            if (data?.sessionID && data.requestID) {
+              setPermissions((list) =>
+                list.some((p) => p.requestID === data.requestID) ? list : [...list, data],
+              );
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      offPush();
+      window.removeEventListener("keydown", onKey);
+      clearTimeout(sessionTimer);
+      clearTimeout(messageTimer);
+    };
+  }, [refreshSessions, refreshMessages, refreshPickers, refreshPendingPermissions, selectSession, sounds]);
+
+  // Report the visible session so host notifications skip it.
+  useEffect(() => {
+    if (conn !== "connected") return;
+    void rpc.call("ui.activeSession", { id: activeId }).catch(() => undefined);
+  }, [activeId, conn]);
+
+  // ---- actions -------------------------------------------------------------
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!activeId || !text.trim()) return;
+      const optimistic: Extract<AnyMessage, { type: "user" }> = {
+        type: "user",
+        id: `pending-${Date.now()}`,
+        text,
+        time: { created: Date.now() },
+      };
+      setMessages((m) => [...m, optimistic]);
+      setBusySessions((b) => ({ ...b, [activeId]: true }));
+      try {
+        await rpc.call("prompt.send", { sessionID: activeId, text });
+      } catch (error) {
+        setMessages((m) => m.filter((x) => x.id !== optimistic.id));
+        setBusySessions((b) => ({ ...b, [activeId]: false }));
+        throw error;
+      }
+    },
+    [activeId],
+  );
+
+  const interrupt = useCallback(async () => {
+    if (!activeId) return;
+    try {
+      await rpc.call("prompt.interrupt", { sessionID: activeId });
+    } catch {
+      /* surfaced by state */
+    }
+  }, [activeId]);
+
+  const updateSettings = useCallback(async (updates: Array<{ key: SettingKey; value: unknown }>) => {
+    try {
+      await rpc.call("settings.update", { updates });
+      // host pushes the fresh config automatically on settings change
+    } catch {
+      /* config push will reflect reality */
+    }
+  }, []);
+
+  const newSession = useCallback(async () => {
+    try {
+      const def = resolveDefault(cfg?.models.default ?? "", serverDefault);
+      const session = await rpc.call<SessionSummary>("session.create", def ? { model: def } : {});
+      await refreshSessions();
+      selectSession(session.id);
+      setDrawerOpen(false);
+    } catch {
+      /* error toast comes from rpc rejection path */
+    }
+  }, [cfg, serverDefault, refreshSessions, selectSession]);
+
+  const replyPermission = useCallback(
+    async (requestID: string, reply: "once" | "always" | "reject") => {
+      const target = permissions.find((p) => p.requestID === requestID);
+      setPermissions((list) => list.filter((p) => p.requestID !== requestID));
+      if (!target) return;
+      try {
+        await rpc.call("permission.reply", {
+          sessionID: target.sessionID,
+          requestID,
+          reply,
+        });
+      } catch {
+        /* reappear via next permission.asked */
+      }
+    },
+    [permissions],
+  );
+
+  // ---- derived -------------------------------------------------------------
+  const lastAssistant = useMemo(() => [...messages].reverse().find(isAssistant), [messages]);
+  const ctxLimit = useMemo(() => {
+    const ref = lastAssistant?.model ?? undefined;
+    if (!ref) return undefined;
+    return models.find((m) => m.id === ref.id && m.providerID === ref.providerID)?.context;
+  }, [lastAssistant, models]);
+  const ctxPct = useMemo(
+    () => contextPercent(lastAssistant?.tokens ?? active?.tokens, ctxLimit),
+    [lastAssistant, active, ctxLimit],
+  );
+
+  return (
+    <div className="app">
+      <HeaderBar
+        conn={conn}
+        title={active?.title}
+        sessionId={activeId}
+        agentName={agents.find((a) => a.id === active?.agent)?.name}
+        models={models}
+        agents={agents}
+        hidden={cfg?.models.hidden ?? []}
+        favorites={cfg?.models.favorites ?? []}
+        defaultKey={cfg?.models.default ?? ""}
+        recents={recents}
+        activeModel={lastAssistant?.model}
+        activeAgent={active?.agent}
+        drawerOpen={drawerOpen}
+        onToggleDrawer={() => setDrawerOpen((v) => !v)}
+        onRename={async (title) => {
+          if (activeId) await rpc.call("session.rename", { sessionID: activeId, title }).catch(() => undefined);
+          void refreshSessions();
+        }}
+        onPickModel={async (m) => {
+          const key = modelKey(m);
+          setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
+          if (activeId) {
+            await rpc.call("model.switch", { sessionID: activeId, model: m }).catch(() => undefined);
+          }
+          void refreshSessions();
+        }}
+        onPickAgent={async (a) => {
+          if (activeId) {
+            await rpc.call("agent.switch", { sessionID: activeId, agent: a }).catch(() => undefined);
+          }
+          void refreshSessions();
+        }}
+        onToggleFavorite={(key) =>
+          void updateSettings([{ key: "models.favorites", value: toggleInList(cfg?.models.favorites ?? [], key) }])
+        }
+        onSetDefault={(key) =>
+          void updateSettings([{ key: "models.default", value: cfg?.models.default === key ? "" : key }])
+        }
+        onToggleModelVisible={(key) =>
+          void updateSettings([{ key: "models.hidden", value: toggleInList(cfg?.models.hidden ?? [], key) }])
+        }
+        onOpenManager={() => setManagerOpen(true)}
+        onOpenProviders={() => setProvidersOpen(true)}
+        onOpenMcp={() => setMcpOpen(true)}
+        onCopyTranscript={async () => {
+          const md = buildTranscript(messages);
+          try {
+            await rpc.call("transcript.copy", { markdown: md });
+          } catch {
+            /* clipboard unavailable */
+          }
+        }}
+        onFork={async () => {
+          if (!activeId) return;
+          const forked = await rpc.call<SessionSummary>("session.fork", { sessionID: activeId }).catch(() => undefined);
+          if (forked) {
+            await refreshSessions();
+            selectSession(forked.id);
+          }
+        }}
+        onCompact={async () => {
+          if (activeId) await rpc.call("session.compact", { sessionID: activeId }).catch(() => undefined);
+        }}
+      />
+
+      <main className="feed">
+        {conn !== "connected" ? (
+          <div className="empty">
+            {conn === "connecting" ? (
+              <>
+                <h2>Connecting…</h2>
+                <p>Looking for the OpenCode V2 background service.</p>
+              </>
+            ) : (
+              <>
+                <h2>Service unreachable</h2>
+                <p>Run “OpenCode 2: Restart Background Service” from the command palette.</p>
+              </>
+            )}
+          </div>
+        ) : !activeId ? (
+          <div className="empty">
+            <h2>No sessions yet</h2>
+            <button type="button" className="primary" onClick={() => void newSession()}>
+              New session
+            </button>
+          </div>
+        ) : (
+          <Feed
+            messages={messages}
+            busy={busy}
+            showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
+            expandShellTools={cfg?.ui.expandShellTools ?? false}
+            expandEditTools={cfg?.ui.expandEditTools ?? false}
+            messageStats={cfg?.ui.messageStats ?? true}
+          />
+        )}
+
+        {drawerOpen && (
+          <SessionsDrawer
+            sessions={sessions}
+            activeId={activeId}
+            allProjects={allProjects}
+            onToggleAll={() => {
+              const next = !allProjects;
+              setAllProjects(next);
+              void refreshSessions(next);
+            }}
+            onSelect={(id) => {
+              selectSession(id);
+              setDrawerOpen(false);
+            }}
+            onNew={() => void newSession()}
+            onDelete={async (id) => {
+              await rpc.call("session.remove", { sessionID: id }).catch(() => undefined);
+              if (id === activeId) selectSession(undefined);
+              await refreshSessions();
+            }}
+          />
+        )}
+
+        {managerOpen && (
+          <ModelManager
+            models={models}
+            hidden={cfg?.models.hidden ?? []}
+            favorites={cfg?.models.favorites ?? []}
+            defaultKey={cfg?.models.default ?? ""}
+            recents={recents}
+            onClose={() => setManagerOpen(false)}
+            onUpdate={(updates) => void updateSettings(updates)}
+          />
+        )}
+
+        {providersOpen && <ProvidersDrawer onClose={() => setProvidersOpen(false)} />}
+
+        {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} />}
+      </main>
+
+      {permissions.length > 0 && activeId && (
+        <div className="permissions">
+          {permissions.map((p) => (
+            <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
+          ))}
+        </div>
+      )}
+
+      <Composer
+        disabled={!activeId || conn !== "connected"}
+        busy={busy}
+        sendKey={cfg?.ui.sendKey ?? "enter"}
+        onSend={(t) => void sendMessage(t)}
+        onStop={() => void interrupt()}
+      />
+
+      <StatusStrip connected={conn === "connected"} cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} />
+    </div>
+  );
+}
+
+function PermissionRow({
+  perm,
+  onReply,
+}: {
+  perm: PermissionCardData;
+  onReply: (reply: "once" | "always" | "reject") => void;
+}) {
+  return (
+    <div className="perm-card">
+      <div className="perm-title">Permission · {perm.action}</div>
+      {perm.resources.length > 0 && <code className="perm-res">{perm.resources.join(", ")}</code>}
+      <div className="perm-actions">
+        <button type="button" className="primary" onClick={() => onReply("once")}>
+          Allow once
+        </button>
+        <button type="button" onClick={() => onReply("always")}>
+          Always allow
+        </button>
+        <button type="button" className="danger" onClick={() => onReply("reject")}>
+          Deny
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function mostRecentSession(list: SessionSummary[]): SessionSummary | undefined {
+  return [...list].sort((a, b) => b.time.updated - a.time.updated)[0];
+}
+
+/** Render the visible conversation as markdown for clipboard export. */
+function buildTranscript(messages: AnyMessage[]): string {
+  const lines: string[] = [];
+  for (const m of messages) {
+    if (isUser(m)) {
+      lines.push(`## 🧑 Prompt\n\n${m.text}\n`);
+    } else if (isAssistant(m)) {
+      lines.push(`## 🤖 ${m.agent}${m.model ? ` (${m.model.providerID}/${m.model.id})` : ""}\n`);
+      for (const part of m.content ?? []) {
+        if (part.type === "text") lines.push(`${part.text}\n`);
+        if (part.type === "reasoning") lines.push(`> _thinking:_ ${truncate(part.text, 400)}\n`);
+      }
+      if (m.cost !== undefined) lines.push(`_cost: ${formatCost(m.cost)} · ${formatTokens(m.tokens?.input)} in / ${formatTokens(m.tokens?.output)} out_\n`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
