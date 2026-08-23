@@ -1,0 +1,363 @@
+# OpenCode 2 for VS Code — Full Functionality Audit & Remediation Plan
+
+> **Date:** 2026-08-23. **Scope:** v0.2.37. **Status:** audit complete; implementation pending your review of the Open Questions section.
+> **Direction (confirmed):** GUI-first extension UX (not a TUI/CLI clone). **Our own theme now**; official OpenCode themes added later for authenticity.
+> **How to use this doc:** §1–§4 are the audit. **§5 is the Open Questions & Decisions log** — read it and write your answers on the `ANSWER:` lines (or as comments). §6 is the milestone plan (defaults already applied from recommendations). Once you've annotated §5, we commit the review and start implementing.
+> **Sources:** full source (`src/`, `webview-src/`), pinned client `@opencode-ai/client@0.0.0-beta-17927` type defs, V2 OpenAPI spec (`%TEMP%\opencode-v2-openapi.json`, 100 paths / 231 schemas), V2 docs via Context7, and the upstream **OpenCode desktop/GUI app as reference only** (feature parity + official themes; *not* visual/TUI treatment).
+
+---
+
+## 1. Executive summary
+
+The extension is **solid and works** for its core loop: auto-connect → chat → streaming → tool/diff/reasoning rendering → per-session model/agent switching → permission approvals → cost/token/context telemetry → MCP & provider drawers. Typecheck + tests + build gate is green and the connection layer is robust (service discovery, auto-start, backoff, volatile-event resync).
+
+**But there is a large capability gap vs. the V2 API and the OpenCode desktop app.** Of the **~120 client methods** in `@opencode-ai/client`, the extension uses **~25**. The RPC surface exposes **34 methods**; the V2 `V2Event` union has **100+ event types** but the webview handles **~8**. Most importantly, the user-facing **slash-command and skill surface is entirely missing** — exactly the gap called out in the brief — even though `plan.md §8.2` and the README promise a `/` command & skill menu and `@` file mentions.
+
+**Headline gaps (verified):**
+1. **No slash commands** (`/command` catalog + `session.command`), **no skills** (`skill.list` + `session.skill`), **no `@` file mention** in the composer (API exists: `file.find` is wired host-side but never surfaced).
+2. **No real Forms** — the app guesses "the agent is asking a question" by regex-parsing assistant text. V2 has a full `form.*` API + `form.created` events that should replace this.
+3. **Event handling is thin** — ~92 of 100+ event types ignored; UI refreshes via a coarse "any `session.*` event → refetch list" rule.
+4. **Feature-parity gaps with the desktop app**: `/export`+`/import`, `/undo`+`/redo` (Git-backed revert), `/connect` (in-app provider OAuth/key vs. today's `opencode2 auth login` CLI handoff), `/init` (instructions), `/themes`/`/thinking`, `/share`+`/unshare`, VCS diff/status, worktrees, saved-permission management.
+5. **Documented-but-unsurfaced**: README claims "Queue or steer follow-ups while the agent is working" — `delivery: queue|steer` exists in the adapter but **no UI** lets the user choose it.
+6. **Latent bug**: `rpc.ts` hard-codes `opencode2 auth login` and `extension.ts` falls back to `"opencode2"`, but `installCli` installs `opencode-ai@beta` whose binary is **`opencode`** — so on a machine with only the npm binary, provider auth and "Open Terminal" fail.
+
+**Theming pivot:** we are **not** following the VS Code theme. `plan.md §9` is superseded. We ship **our own design language** now; official OpenCode themes come later as selectable presets. The current `styles.css` is built almost entirely on `--vscode-*` tokens, so a first-party token system is required (see §5 Q1–Q7, §6 M-theme).
+
+---
+
+## 2. What is verified working
+
+| Area | Status | Evidence |
+|---|---|---|
+| Auto-connect (discover → ensure → explicit URL) | OK | `controller.ts` + live smoke in MEMORY |
+| Health / status bar / reconnect + backoff | OK | `controller.ts`, `extension.ts` |
+| Session CRUD + fork + folder-scoped list + all-projects toggle | OK | `apiAdapter`, `rpc`, `SessionsDrawer` |
+| Streaming chat (reasoning, tool cards, inline diffs) | OK | `Feed.tsx`, `App.tsx` event pump → debounced `messages.list` |
+| Per-session model/agent/variant switching | OK | `Composer.tsx`, `ModelManager.tsx` |
+| Permission approve (once/always/deny) | OK | `notifications.ts`, `App.tsx` |
+| Cost/token/context telemetry + auto-compact | OK | `StatusStrip`, `autoCompact.ts` |
+| MCP drawer (CRUD + connect/disconnect + resources) | OK | `McpDrawer.tsx`, `rpc.mcp.*` |
+| Providers drawer + CLI auth handoff | WARN only if `opencode2` binary present (see §4.6.1) | `ProvidersDrawer.tsx`, `rpc.ts:145` |
+| Theming | CHANGED own theme (currently still `--vscode-*`; rework needed, §5 Q1) | `styles.css`, `protocol.ts` |
+| Notifications + sounds | OK | `notifications.ts`, `lib/sound.ts` |
+| Build / typecheck / tests gate | OK green (29/29) | `package.json` scripts |
+
+---
+
+## 3. Audit findings (detailed)
+
+### 3.1 Missing slash commands & skills — THE headline gap
+The OpenCode desktop/GUI (reference) builds its slash popover from `command.list()` + built-ins + skills, with `source: "command" | "mcp" | "skill"`. The extension has **none of this in the composer** (`Composer.tsx` only has agent/model/variant/permission pickers). As a **GUI-first** app these become native affordances (command popover, fuzzy file picker, skill chips, native forms), not a terminal line.
+
+Upstream built-in slash commands (17) + input patterns:
+
+| Command | Purpose | Maps to V2 API / UI action | Status here |
+|---|---|---|---|
+| `/connect` | Add provider + API key | `integration.connect.{key,oauth,command}` | MISSING (CLI handoff only) |
+| `/compact` (`/summarize`) | Compact session | `session.compact` | OK button exists |
+| `/details` | Toggle tool details | UI pref `expand*Tools` | PARTIAL via settings |
+| `/editor` | Compose in $EDITOR | n/a in VS Code | n/a |
+| `/exit` `/quit` `/q` | Exit | n/a | n/a |
+| `/export` | Export convo to Markdown | `session.export` | MISSING (clipboard only) |
+| `/help` | Help dialog | n/a | n/a |
+| `/init` | Guided `AGENTS.md` setup | `session.instructions.entry.*` | MISSING |
+| `/models` | List models | `model.list` | OK picker |
+| `/new` (`/clear`) | New session | `session.create` | OK button |
+| `/redo` | Redo after undo (Git-backed) | `session.revert.commit` | MISSING |
+| `/sessions` (`/resume`) | List/switch sessions | `session.list` | OK drawer |
+| `/share` | Share session | (server share link) | MISSING |
+| `/themes` | List themes | our theme switcher (later official presets) | OPTIONAL (rework) |
+| `/thinking` | Toggle reasoning | `ui.showReasoning` | OK via settings |
+| `/undo` | Undo last turn + revert files | `session.revert.stage` then `commit` | MISSING |
+| `/unshare` | Unshare | (server) | MISSING |
+| `@<file>` | Fuzzy file inject | `file.find` + prompt `files[]` | MISSING (not surfaced) |
+| `!<shell>` | Run shell, add as result | `session.shell` | MISSING (GUI affordance optional) |
+
+### 3.2 Missing V2 capabilities (endpoint/method coverage)
+Client method surface ≈ 120; **used ≈ 25**.
+
+| Group | Available, not used | Value |
+|---|---|---|
+| Session | `import`, `export`, `active`, `move`, `synthetic`, `shell`, `wait`, `background`, `message.get`, `environment`, `view`, `agent.get`, `server.get`, `location.get` | export/import, move session, shell in-session, background runs |
+| **Revert** | `revert.stage` / `revert.clear` / `revert.commit` | `/undo` + `/redo` Git-backed file reversion |
+| **Context** | `session.context` | precise token/context (today approximated) |
+| **Inbox** | `inbox.list` / `cancel` / `steer` / `queue` | steer/queue individual items |
+| **Instructions** | `instructions.entry.list/put/remove` | `/init` project rules |
+| **Forms** | `form.request.list`, `form.list/create/get/state/reply/cancel` | structured agent input |
+| **Permissions** | `permission.saved.list/remove`, `permission.create/list/get` | manage "always allow" rules |
+| **Integration** | `integration.get`, `wellknown.add`, `connect.key`, `oauth.*`, `command.*` | in-app provider connect |
+| **MCP** | `credential.update/remove` | manage MCP secrets |
+| **Project/Config** | `project.list`, `project.current`, `config.get` | workspace + agent context |
+| **File** | `file.read`, `file.list` | richer file preview / tree |
+| **Command/Skill** | `command.list`, `skill.list` | slash menu source |
+| **VCS** | `vcs.get` / `status` / `diff` | branch chip + session diffs |
+| **Worktree** | `worktree.list/create/remove/refresh` | worktree UI |
+| **Websearch** | `websearch.providers` / `query` | expose web search |
+| **Plugin** | `plugin.list` | surface loaded plugins |
+| **PTY/Shell** | `pty.*`, `shell.*` | in-session terminal (advanced) |
+
+### 3.3 Event-handling coverage
+`V2Event` union has **100+** members. Webview handles only: `session.execution.started/succeeded/failed/interrupted`, `session.idle`, `permission.asked`, plus a coarse `startsWith("session."|"permission."|"execution."|"message.")` → debounced refetch.
+**Unhandled but valuable:** `session.text.delta`/`reasoning.delta`/`tool.*` (true streaming), `session.model/agent.selected`/`renamed`/`moved` (targeted refresh), `form.*` (real forms), `mcp.status.changed`/`resources.changed`, `integration.updated`/`connection.updated`, `config.updated`, `vcs.branch.updated`, `worktree.*`, `session.revert.*`, `session.compaction.*`, `session.inbox.*`, `session.instructions.updated`, `command.updated`, `skill.updated`, `plugin.*`, `websearch.updated`, `reference.updated`, `session.shell.*`, `session.skill.activated`.
+**Recommendation:** explicit typed event router (`Record<EventType, handler>` or switch); keep REST `onResync` re-sync as safety net.
+
+### 3.4 Message/content rendering gaps
+`SessionMessageInfo` is a **union of 10 types**; the webview models only `user` + `assistant` (others return `null`). Assistant tool-content can be `{type:"file"}` (e.g., a tool-produced image) — `ToolCard` only renders `{type:"text"}` and `diff`, so tool file/image outputs are dropped. User-uploaded images sent via `files[]` render only as text in the bubble.
+
+### 3.5 Documented-but-unsurfaced
+README: *"Queue or steer follow-ups while the agent is working"* — `delivery` is plumbed in `apiAdapter.prompt` but **no composer UI** lets the user pick queue-vs-steer.
+
+### 3.6 Bugs / behavior issues
+1. **Binary-name mismatch (confirmed).** `rpc.ts:145` `opencode2 auth login` and `extension.ts:90` fallback `"opencode2"`, but `installCli` installs `opencode-ai@beta` → binary **`opencode`**. Provider auth + "Open Terminal" fail on a machine with only the npm binary. Fix: use resolved `ResolvedCli.display`.
+2. **Fragile question detection.** `App.tsx` `isQuestion` regex-parses assistant text for `?` / "please confirm" → mis-fires on FAQs/release notes. Replace with real `form.*`.
+3. **`permissions.mode` vs server.** `askFirst/autoAllow/deny` drives only client-side auto-reply; not clearly wired to server permission behavior. Align in M7.
+4. **Stray debug command.** `opencode2.showTestQuestion` ships in production. Remove or gate.
+
+### 3.7 GUI-first UX direction (not TUI/CLI)
+A **bespoke VS Code GUI sidebar**, not a terminal clone:
+- Slash commands → polished **command popover** (Copilot-chat style), not a raw terminal line.
+- `@` file mention → inline **fuzzy picker popover**.
+- `!` shell → optional GUI affordance, not a shell prompt (deferred per §5 reply).
+- Forms → native `FormCard` components styled in our theme.
+- Avoid terminal aesthetics (monospace-everywhere, `$` prompts) except where useful (shell tool output).
+- The OpenCode desktop app is referenced for **feature parity + official themes only**.
+
+---
+
+## 4. (Reserved)
+
+---
+
+## 5. Open Questions & Decisions — REVIEW AND FILL IN
+
+> Read this section and write your answers on the `ANSWER:` lines (or as `<!-- -->` comments). Defaults from my recommendations are pre-filled where you already said "refer to last response"; theming transition (Q1) is left open. Anything blank = still open.
+
+### A. Theming (our own theme + later official OpenCode themes)
+
+**Q1. Transition strategy for the styling layer.**
+Context: `styles.css` is almost entirely `--vscode-*`. We are not following VS Code themes.
+Recommendation: **Rip out `--vscode-*` now** and replace with a first-party token system — cleanest base for our theme and for later OpenCode presets.
+ANSWER: ___
+
+**Q2. Default theme coverage.**
+Context: Do we ship dark-only, light-only, or both from day one?
+Recommendation: **Dark + Light** from day one (our own designs), High-Contrast later if needed.
+ANSWER: ___
+
+**Q3. Brand accent / primary color for the default theme.**
+Context: Defines our identity; also used for live states (send, streaming caret, ctx meter).
+Recommendation: A violet/indigo in the OpenCode family (e.g. `#7c5cff`/`#8b5cf6`) so the later official themes feel continuous.
+ANSWER: ___
+
+**Q4. Typography.**
+Context: Keep mono micro-labels for status strip/chips? Font stack?
+Recommendation: Keep subtle mono micro-labels (identity via shape/typography); system UI font for body; keep `data-density` (compact/comfortable).
+ANSWER: ___
+
+**Q5. Density.**
+Context: Keep compact ⇄ comfortable toggle?
+Recommendation: Yes, keep `opencode2.ui.density` (compact default).
+ANSWER: ___
+
+**Q6. Official OpenCode themes — sourcing & loading.**
+Context: Later milestone to "feel more authentic." How do we get them and apply them?
+Recommendation: Source the official theme definitions from the OpenCode repo (reference) as **static CSS preset files** (light/dark/high-contrast), selected via our theme switcher; no runtime fetch.
+ANSWER: ___
+
+**Q7. Theme switching surface.**
+Context: Where does the user pick a theme?
+Recommendation: Settings (`opencode2.ui.theme`) + overflow menu item; persists to global config.
+ANSWER: ___
+
+### B. Slash commands / skills / `@` mention (decided: inline `/` popover)
+
+**Q8. Which built-ins get first-class UI vs sent via `session.command`?**
+Context: Not every built-in maps to a GUI action; some are TUI-only (`/exit`, `/editor`).
+Recommendation: First-class buttons/overflow for `/export`, `/undo`, `/redo`, `/compact`, `/new`, `/sessions`, `/thinking`; `/connect` → Providers drawer; `/init` → instructions drawer; everything else (custom + mcp + skill) sent via `session.command`/`session.skill`.
+ANSWER: ___
+
+**Q9. How to open the slash popover (keyboard).**
+Context: Discoverability + power-user speed.
+Recommendation: Type `/` in an empty composer opens the popover; also a command-palette entry (`Cmd/Ctrl+Shift+P` style) lists commands+skills.
+ANSWER: ___
+
+**Q10. Custom commands discovery.**
+Context: `command.list()` returns custom + mcp + skill entries with a `source` field.
+Recommendation: Surface **all** returned commands in the popover, badged by `source` (command / mcp / skill).
+ANSWER: ___
+
+**Q11. Skills presentation.**
+Context: How do skills appear?
+Recommendation: Inside the same `/` popover, badged "skill" (separate visual group), invoked via `session.skill`.
+ANSWER: ___
+
+**Q12. `@` file mention behavior.**
+Context: Fuzzy find via `file.find`; what gets inserted?
+Recommendation: Fuzzy ranked list; insert as a chip that carries file content/reference into `prompt.files`; support image files too (sent as attachment).
+ANSWER: ___
+
+### C. Forms (replace the question heuristic)
+
+**Q13. Replace `isQuestion` heuristic entirely?**
+Context: It's fragile (regex on assistant text).
+Recommendation: Replace with real `form.*` in M6; keep heuristic only as a short-lived fallback until forms land.
+ANSWER: ___
+
+**Q14. Form field types to support first.**
+Context: `FormFields` can be string/number/select/bool/etc.
+Recommendation: string (incl. options), number, boolean, select; file later if needed.
+ANSWER: ___
+
+**Q15. Where does the FormCard render?**
+Context: Mirrors the permission card pattern.
+Recommendation: Inline in the feed (like permission cards), styled in our theme; posts via `form.reply`.
+ANSWER: ___
+
+### D. Events / streaming
+
+**Q16. Event router shape.**
+Context: Coarse prefix match today.
+Recommendation: Explicit typed router (`Record<EventType, handler>`); additive, keeps `onResync` re-sync.
+ANSWER: ___
+
+**Q17. True delta streaming adoption.**
+Context: Today = whole-list refetch every 120ms + 1500ms poll while busy.
+Recommendation: Adopt `session.text.delta`/`reasoning.delta`/`tool.*` in M7, keep REST poll as fallback.
+ANSWER: ___
+
+**Q18. Must-wire vs nice-to-have events for first pass.**
+Context: 100+ events; prioritize.
+Recommendation: Must-wire first: `form.*`, `mcp.status.changed`, `integration.updated`, `config.updated`, `session.compaction.*`, `session.revert.*`, `vcs.branch.updated`. Rest later.
+ANSWER: ___
+
+### E. Parity features priority (M7)
+
+**Q19. Priority order of M7 parity items.**
+Context: Export/import, undo/redo, connect in-app, init, vcs, worktrees, saved perms, queue/steer, context precise.
+Recommendation: (1) connect in-app, (2) export/import, (3) undo/redo, (4) saved permissions, (5) queue/steer UI, (6) context precise, (7) init/instructions, (8) VCS, (9) worktrees.
+ANSWER: ___
+
+**Q20. Connect in-app flows.**
+Context: `integration.connect.{key,oauth,command}`.
+Recommendation: Support all three (key paste, OAuth, command) in the Providers drawer.
+ANSWER: ___
+
+**Q21. VCS scope.**
+Context: `vcs.status` / `vcs.diff`.
+Recommendation: Branch chip in header + diff viewer using `vcs.diff`; full status grid optional later.
+ANSWER: ___
+
+**Q22. Worktrees priority.**
+Context: Lower user demand for a GUI sidebar.
+Recommendation: Low priority; include list/create/remove/refresh UI but defer if time-constrained.
+ANSWER: ___
+
+### F. MCP / Providers
+
+**Q23. MCP credential (secrets) management UI.**
+Context: `credential.update/remove` exist; current add only takes a config object.
+Recommendation: Add secret entry fields in the MCP add form; manage via credentials API.
+ANSWER: ___
+
+**Q24. Providers drawer: fully replace CLI handoff?**
+Context: Today `opencode2 auth login` terminal handoff (also the binary bug).
+Recommendation: Yes — replace with in-app connect flows (Q20); removes the binary dependency for auth.
+ANSWER: ___
+
+### G. Bugs / cleanup
+
+**Q25. Binary-name bug fix timing.**
+Context: `opencode2` vs `opencode` (§3.6.1).
+Recommendation: Quick fix now (use `ResolvedCli.display`) — low risk, unblocks provider auth + terminal.
+ANSWER: ___
+
+**Q26. Stray `showTestQuestion` command.**
+Context: Debug command shipped in production.
+Recommendation: Remove it (or gate behind a debug setting).
+ANSWER: ___
+
+**Q27. `permissions.mode` vs server alignment.**
+Context: Client-side auto-reply only today.
+Recommendation: Investigate server permission model in M7; align `askFirst/autoAllow/deny` with it (and surface saved rules).
+ANSWER: ___
+
+### H. Testing / delivery
+
+**Q28. Test strategy expansion.**
+Context: 29/29 unit tests today (format + protocol guards).
+Recommendation: Add unit tests for new rpc guards + adapter mapping; keep manual live smoke as the integration gate (no headless service in CI yet).
+ANSWER: ___
+
+**Q29. Versioning for the next drop.**
+Context: Currently 0.2.37.
+Recommendation: Bump to **0.3.0** for the theme + slash-command feature drop (or keep 0.2.x patch until theme lands — your call).
+ANSWER: ___
+
+**Q30. README accuracy.**
+Context: README claims things not yet built (queue/steer, "follows VS Code theme").
+Recommendation: Correct the README now to match reality (remove VS Code-theme claim, mark queue/steer as planned), then expand after M8.
+ANSWER: ___
+
+### I. GUI-first boundaries
+
+**Q31. Explicit "do NOT copy from the desktop TUI" list.**
+Context: Keep our own GUI identity.
+Recommendation: No full-terminal aesthetic, no `$` prompts everywhere, no TUI keybind emulation; keep mono only for tool/shell output and micro-labels.
+ANSWER: ___
+
+---
+
+## 6. Remediation plan (milestones)
+
+> Architecture intact: **all new server I/O in `apiAdapter.ts`**, new RPC in `protocol.ts` + `rpc.ts`, new UI in `webview-src/`. Gate every milestone with `npm run typecheck` + `npm test`; update `todo.md`/`MEMORY.md`; commit (conventional); verify `graphify-out/` refresh. GUI-first + own-theme direction throughout.
+
+### M-theme — Own theme system + later official OpenCode themes
+- [ ] Define first-party design tokens (colors, spacing, radii, typography, motion) replacing `--vscode-*` in `styles.css` (keep `data-density` + `accentTint` hooks). *(Q1 strategy)*
+- [ ] Ship our default theme (dark + light). *(Q2/Q3)*
+- [ ] Theme switcher UI (settings + overflow menu). *(Q7)*
+- [ ] Later: add **official OpenCode themes** as static CSS presets (light/dark/high-contrast). *(Q6)*
+- [ ] Verify every component under our theme + each official preset.
+
+### M5 — Slash commands, skills & `@` mention (highest priority)  *(decided: inline `/` popover; scope = slash + skills + `@` only)*
+- [ ] `apiAdapter`: `commands()`, `skills()`, `sessionCommand()`, `sessionSkill()` (wrap `client.command.list`, `client.skill.list`, `client.session.command`, `client.session.skill`).
+- [ ] `protocol.ts`/`rpc.ts`: add `commands.list`, `skills.list`, `session.command`, `session.skill`; validate params.
+- [ ] `Composer.tsx`: **inline `/` popover** (built-ins we support + custom `command.list()` + skills `skill.list()`, badged by source), `@` file-mention popover (`file.find`), optional `!` shell (deferred). *(Q8–Q12)*
+- [ ] Wire: `/x` → `session.command`; `/skill y` → `session.skill`; `@file` → chip → `prompt.files`.
+- [ ] Tests for new rpc guards + adapter mapping.
+
+### M6 — Forms (replace the question heuristic)
+- [ ] `apiAdapter`: `formsList()`, `formGet()`, `formReply()`, `formCancel()`; event handler for `form.created/replied/cancelled`.
+- [ ] `App.tsx`/`Feed`: native `FormCard` rendering fields (string/number/select/bool) from `FormInfo`, posting via `form.reply`. Gate old `isQuestion` heuristic as fallback. *(Q13–Q15)*
+- [ ] Remove/gate `showTestQuestion`. *(Q26)*
+
+### M7 — Event router + streaming + parity features
+- [ ] Explicit typed event router; wire `mcp.status.changed`, `integration.updated`, `config.updated`, `vcs.branch.updated`, `session.revert.*`, `session.compaction.*`, `command.updated`, `skill.updated`, `plugin.*`, `session.inbox.*`, `session.instructions.updated`. *(Q16/Q18)*
+- [ ] True delta streaming (`session.text.delta`/`reasoning.delta`/`tool.*`) with REST poll fallback. *(Q17)*
+- [ ] **Export/Import**: `session.export` (download .md) + `session.import`.
+- [ ] **Undo/Redo**: `session.revert.stage`→`commit`/`clear` controls.
+- [ ] **Connect in-app**: `integration.connect.{key,oauth,command}` in Providers drawer (replaces CLI handoff). *(Q20/Q24)*
+- [ ] **Init/instructions**: `instructions.entry.*` editor.
+- [ ] **VCS**: branch chip + `vcs.diff`/`vcs.status`. *(Q21)*
+- [ ] **Worktrees**: list/create/remove/refresh UI (low priority). *(Q22)*
+- [ ] **Saved permissions**: `permission.saved.list/remove` manager; align `permissions.mode` with server. *(Q27)*
+- [ ] **Context precise**: use `session.context`.
+- [ ] **Queue/steer UI**: "while busy" chip to choose `delivery`.
+- [ ] **Binary-name bug**: use `ResolvedCli.display` in `rpc.ts:145` and `extension.ts:90`. *(Q25)*
+- [ ] MCP credential management UI. *(Q23)*
+
+### M8 — Polish & completeness
+- [ ] Render tool `file` parts (images) + user image attachments in history; handle/ignore the 8 meta message types. *(§3.4)*
+- [ ] `file.read`/`file.list` for richer `@` mentions.
+- [ ] `plugin.list`, `websearch.providers/query`, `project.current`, `config.get` surfaced where useful.
+- [ ] `/share`+`/unshare` if server supports; `session.move` in session drawer.
+- [ ] README correction + expansion. *(Q30)*
+- [ ] Final typecheck + tests + build + vsix. *(Q29 version)*
+
+---
+
+## 7. Verification approach per milestone
+1. `npm run typecheck` (host + webview) — gate.
+2. `npm test` — new guards for rpc validation + adapter mapping.
+3. `npm run build` + `vsce package`.
+4. Live smoke against a running `opencode2`/`opencode` service: connect → slash `/command` runs → skill runs → `@` mention injects → form renders & replies → export downloads → undo/redo reverts files → provider connects in-app → event-driven MCP/integration refresh with no manual resync → theme switch (our theme + official presets) renders all components.
+5. Update `todo.md` + `MEMORY.md`; commit; verify `graphify-out/` refreshed.

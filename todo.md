@@ -2,9 +2,21 @@
 
 Legend: ☐ todo · ◨ in progress · ✅ done · ⏸ blocked/deferred
 
-**Current: ✅ ALL MILESTONES COMPLETE** — v0.2.0 (providers/models/MCP/workspace scope) 2026-08-23
+**Current: ✅ ALL v0.2 MILESTONES COMPLETE** — v0.2.37 (providers/models/MCP/workspace scope) 2026-08-23
 
 ---
+
+## Post-audit roadmap — see `AUDIT_AND_PLAN.md`
+
+Full functionality audit complete 2026-08-23. **Open Questions (§5 of that doc) are pending your review/annotation before any code.** Milestones copied from the audit plan:
+
+- [ ] M-theme: own first-party theme tokens (replace `--vscode-*`) + theme switcher; later add official OpenCode themes as presets
+- [ ] M5: slash commands + skills + `@` mention (inline `/` popover) — the headline gap
+- [ ] M6: real Forms (replace the `isQuestion` text heuristic)
+- [ ] M7: event router + true delta streaming + parity (export/import, undo/redo, connect in-app, init, vcs, worktrees, saved perms, queue/steer UI, binary-name fix)
+- [ ] M8: polish, richer rendering, README correction, vsix
+
+
 
 ## M0 — Scaffold ✅
 - ✅ plan.md, agents.md, MEMORY.md, todo.md created; git repo initialized
