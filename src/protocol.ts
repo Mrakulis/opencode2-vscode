@@ -127,6 +127,7 @@ export type RpcMethod =
   | "transcript.copy"
   | "ui.activeSession"
   | "settings.update"
+  | "settings.open"
   | "workspace.directory"
   | "file.open"
   | "diff.open";

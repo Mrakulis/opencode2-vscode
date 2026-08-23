@@ -15,6 +15,7 @@ interface Props {
   onOpenManager(): void;
   onOpenProviders(): void;
   onOpenMcp(): void;
+  onOpenSettings(): void;
 }
 
 export function HeaderBar(props: Props) {
@@ -84,6 +85,9 @@ export function HeaderBar(props: Props) {
       )}
 
       <div className="header-right" ref={menuRef}>
+        <button type="button" className="iconbtn" title="Settings" onClick={props.onOpenSettings} style={{ fontSize: "14px", padding: "0 4px" }}>
+          ⚙
+        </button>
         <div className="picker">
           <button type="button" className="chip" onClick={() => setMenuOpen((v) => !v)}>
             ⋯ ▾

@@ -378,6 +378,7 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
+        onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
         onCopyTranscript={async () => {
           const md = buildTranscript(messages);
           try {

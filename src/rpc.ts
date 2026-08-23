@@ -129,6 +129,10 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       log.info(`provider auth handoff: opencode2 auth login${name ? ` ${name}` : ""}`);
       return Promise.resolve(true);
     },
+    "settings.open": async () => {
+      await vscode.commands.executeCommand("workbench.action.openSettings", "opencode2");
+      return true;
+    },
     "file.open": async (p) => {
       const raw = str(p, "path");
       // handle file:line or file:line:col suffix
