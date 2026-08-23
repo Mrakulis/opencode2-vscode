@@ -21,6 +21,7 @@
 8. GUI-first direction (2026-08-23): build a bespoke VS Code GUI sidebar, not a TUI/CLI clone. Slash commands/skills/`@` = native popovers / `FormCard`s; OpenCode desktop app referenced for feature parity + official themes only.
 9. Full functionality audit complete (2026-08-23): `AUDIT_AND_PLAN.md` has findings + Open Questions (§5, for inline review) + milestones (M-theme/M5–M8). Headline gap = missing slash commands/skills/`@` mention. Pending user review of §5 before implementation.
 10. V1 vs V2 boundary (2026-08-23): implement **V2 ONLY**. The OpenCode V1 desktop app is UX-reference only (how features are *presented*), never a source of API/config/command semantics. Slash-command catalog must come from V2 `command.list()`/`session.command` (+ `skill.list()`); do NOT hardcode V1 TUI command names. The V2 OpenAPI spec + `@opencode-ai/client` types are the only source of truth (see `AUDIT_AND_PLAN.md` V1-vs-V2 boundary note). Ignore V2 `Tui*`/`Installation*` events (they're for the TUI client / CLI self-update).
+11. Audit plan APPROVED (2026-08-23): all Open Questions resolved; recommendations accepted. Review exceptions: Q18 = wire ALL V2 events, Q22 = INCLUDE worktrees (in scope), Q25 = confirmed binary is `opencode2` (fix uses ResolvedCli.display, preserves it). Implementation starts M-theme (own tokens) then M5 (slash commands/skills/@). `AUDIT_AND_PLAN.md` = agreed spec.
 
 ## Environment facts (Windows box)
 

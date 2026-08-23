@@ -1,6 +1,6 @@
 # OpenCode 2 for VS Code — Full Functionality Audit & Remediation Plan
 
-> **Date:** 2026-08-23. **Scope:** v0.2.37. **Status:** audit complete; implementation pending your review of the Open Questions section.
+> **Date:** 2026-08-23. **Scope:** v0.2.37. **Status:** APPROVED — all Open Questions resolved (recommendations accepted; Q18=all events, Q22=include worktrees, Q25=confirmed opencode2). Ready for implementation: start **M-theme**, then **M5**.
 > **Direction (confirmed):** GUI-first extension UX (not a TUI/CLI clone). **Our own theme now**; official OpenCode themes added later for authenticity.
 > **How to use this doc:** §1–§4 are the audit. **§5 is the Open Questions & Decisions log** — read it and write your answers on the `ANSWER:` lines (or as comments). §6 is the milestone plan (defaults already applied from recommendations). Once you've annotated §5, we commit the review and start implementing.
 > **Sources:** full source (`src/`, `webview-src/`), pinned client `@opencode-ai/client@0.0.0-beta-17927` type defs, V2 OpenAPI spec (`%TEMP%\opencode-v2-openapi.json`, 100 paths / 231 schemas), V2 docs via Context7.
@@ -136,7 +136,7 @@ A **bespoke VS Code GUI sidebar**, not a terminal clone:
 
 ## 5. Open Questions & Decisions — REVIEW AND FILL IN
 
-> Read this section and write your answers on the `ANSWER:` lines (or as `<!-- -->` comments). Defaults from my recommendations are pre-filled where you already said "refer to last response"; theming transition (Q1) is left open. Anything blank = still open.
+> Read this section and write your answers on the `ANSWER:` lines (or as `<!-- -->` comments). **STATUS: APPROVED.** All questions resolved; recommendations accepted. Confirmed-in-review exceptions: **Q18 = wire ALL events**, **Q22 = INCLUDE worktrees**, **Q25 = confirmed binary is `opencode2`** (fix preserves it). All other blank `ANSWER:` lines accept the Recommendation stated directly above them.
 
 ### A. Theming (our own theme + later official OpenCode themes)
 
@@ -233,8 +233,8 @@ ANSWER: ___
 
 **Q18. Must-wire vs nice-to-have events for first pass.**
 Context: 100+ events; prioritize.
-Recommendation: Must-wire first: `form.*`, `mcp.status.changed`, `integration.updated`, `config.updated`, `session.compaction.*`, `session.revert.*`, `vcs.branch.updated`. Rest later.
-ANSWER: ___
+Recommendation: Wire ALL valuable events from §3.3 (the full list), not just a subset. The bullet list below was a first-pass priority ordering; implement the complete set.
+ANSWER: Wire ALL valuable events from §3.3 (full list), not just the must-wire subset.
 
 ### E. Parity features priority (M7)
 
@@ -255,8 +255,8 @@ ANSWER: ___
 
 **Q22. Worktrees priority.**
 Context: Lower user demand for a GUI sidebar.
-Recommendation: Low priority; include list/create/remove/refresh UI but defer if time-constrained.
-ANSWER: ___
+Recommendation: IN SCOPE — include list/create/remove/refresh UI. Lowest-priority parity item, but not deferred/skipped (per review).
+ANSWER: Include the worktree feature (list/create/remove/refresh UI). Lowest-priority parity item but IN SCOPE — do not skip.
 
 ### F. MCP / Providers
 
@@ -275,7 +275,7 @@ ANSWER: ___
 **Q25. Binary-name bug fix timing.**
 Context: `opencode2` vs `opencode` (§3.6.1).
 Recommendation: Quick fix now (use `ResolvedCli.display`) — low risk, unblocks provider auth + terminal.
-ANSWER: ___
+ANSWER: Confirmed — the V2 CLI binary is 'opencode2' (present on PATH). Fix uses ResolvedCli.display, which resolves to opencode2 here and also handles opencode-only installs. Your setup is unchanged.
 
 **Q26. Stray `showTestQuestion` command.**
 Context: Debug command shipped in production.
@@ -344,7 +344,7 @@ ANSWER: ___
 - [ ] **Connect in-app**: `integration.connect.{key,oauth,command}` in Providers drawer (replaces CLI handoff). *(Q20/Q24)*
 - [ ] **Init/instructions**: `instructions.entry.*` editor.
 - [ ] **VCS**: branch chip + `vcs.diff`/`vcs.status`. *(Q21)*
-- [ ] **Worktrees**: list/create/remove/refresh UI (low priority). *(Q22)*
+- [ ] **Worktrees**: list/create/remove/refresh UI — IN SCOPE (lowest-priority parity item, not skipped). *(Q22, included per review)*
 - [ ] **Saved permissions**: `permission.saved.list/remove` manager; align `permissions.mode` with server. *(Q27)*
 - [ ] **Context precise**: use `session.context`.
 - [ ] **Queue/steer UI**: "while busy" chip to choose `delivery`.
