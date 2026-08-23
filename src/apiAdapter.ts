@@ -26,15 +26,17 @@ export function createApi({ getClient }: ApiAdapterDeps) {
 
     // -- sessions ------------------------------------------------------------
     sessionList: async (directory?: string): Promise<SessionInfo[]> => {
-      const res = await getClient().session.list(
-        directory ? { directory } : undefined,
-      );
+      // Server's `?directory=` filter is case-sensitive (drive letter `E:` vs
+      // `e:` on Windows). Fetch all and filter case-insensitively here so
+      // `e:\_Code\...` matches stored `E:\_Code\...`.
+      const res = await getClient().session.list();
       const root = directory ? path.normalize(directory).toLowerCase() : undefined;
       let data = res.data;
       if (root) {
+        const sep = path.sep.toLowerCase();
         data = data.filter((s) => {
           const dir = s.location?.directory ? path.normalize(s.location.directory).toLowerCase() : undefined;
-          return dir !== undefined && (dir === root || dir.startsWith(root + path.sep));
+          return dir !== undefined && (dir === root || dir.startsWith(root + sep));
         });
       }
       return data;
