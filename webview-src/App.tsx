@@ -391,23 +391,13 @@ export function App() {
     const texts = m?.content?.filter((p) => p.type === "text").map((p) => p.text ?? "") ?? [];
     return texts.join("\n");
   }, [messages]);
+  const questionPerm = useMemo(() => permissions.find((p) => p.action.toLowerCase() === "question"), [permissions]);
   const isQuestion = useMemo(() => {
+    if (questionPerm) return true;
     if (!lastAssistantText) return false;
     const t = lastAssistantText.trim();
     return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
-  }, [lastAssistantText]);
-
-  useEffect(() => {
-    // debug — helps trace why banner doesn't show
-    console.log("[oc2] question check", {
-      len: lastAssistantText.length,
-      preview: lastAssistantText.slice(0, 120),
-      isQuestion,
-      busy,
-      perms: permissions.length,
-      hasActive: !!activeId,
-    });
-  }, [lastAssistantText, isQuestion, busy, permissions.length, activeId]);
+  }, [lastAssistantText, questionPerm]);
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
@@ -545,24 +535,41 @@ export function App() {
         {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} />}
       </main>
 
-      {permissions.length > 0 && activeId && (
+      {permissions.filter((p) => p.action.toLowerCase() !== "question").length > 0 && activeId && (
         <div className="permissions">
-          {permissions.map((p) => (
-            <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
-          ))}
+          {permissions
+            .filter((p) => p.action.toLowerCase() !== "question")
+            .map((p) => (
+              <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
+            ))}
         </div>
       )}
 
-      {isQuestion && permissions.length === 0 && activeId && (
+      {(isQuestion || questionPerm) && activeId && (
         <div className="permissions">
           <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
             <div className="perm-header">
               <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
                 question
               </span>
-              <span>Agent is waiting for your answer</span>
+              <span>{questionPerm ? "Agent is asking for input" : "Agent is waiting for your answer"}</span>
             </div>
-            <div className="perm-hint">Reply in the composer below — it will be sent as the answer. Other agents show this as an inline prompt with quick-reply buttons; we surface it here so it never gets lost in the feed.</div>
+            <div className="perm-res" style={{ whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
+              {questionPerm ? `Permission: ${questionPerm.action} — ${questionPerm.resources.join(", ")}` : ""}
+              {questionPerm && lastAssistantText ? "\n\n" : ""}
+              {lastAssistantText ? lastAssistantText.slice(-600) : "Reply in the composer below."}
+            </div>
+            {questionPerm && (
+              <div className="perm-actions">
+                <button type="button" className="primary" onClick={() => void replyPermission(questionPerm.requestID, "once")}>
+                  Answer in chat
+                </button>
+                <button type="button" className="danger" onClick={() => void replyPermission(questionPerm.requestID, "reject")}>
+                  Dismiss
+                </button>
+              </div>
+            )}
+            {!questionPerm && <div className="perm-hint">Reply in the composer below — it will be sent as the answer. Other agents show this as an inline prompt; we surface it here so it never gets lost.</div>}
           </div>
         </div>
       )}
