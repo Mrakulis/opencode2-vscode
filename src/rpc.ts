@@ -162,24 +162,27 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
     },
     "diff.open": async (p) => {
       const file = str(p, "file");
-      const diff = str(p, "diff");
-      // show diff as a diff-language document
-      const doc = await vscode.workspace.openTextDocument({ language: "diff", content: diff });
-      await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
-      // also try to open the actual file alongside for reference
+      const diff = optStr(p, "diff") ?? "";
+      if (diff) {
+        const doc = await vscode.workspace.openTextDocument({ language: "diff", content: diff });
+        await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
+        return true;
+      }
+      // No diff string: open whole-file diff via VS Code's git provider (shows full file)
+      const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      let fileUri: vscode.Uri;
+      if (/^[a-zA-Z]:[\\/]/.test(file) || file.startsWith("/") || file.startsWith("\\")) fileUri = vscode.Uri.file(file);
+      else if (base) fileUri = vscode.Uri.file(path.join(base, file));
+      else throw new Error("no base");
       try {
-        const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        let fileUri: vscode.Uri;
-        if (/^[a-zA-Z]:[\\/]/.test(file) || file.startsWith("/") || file.startsWith("\\")) fileUri = vscode.Uri.file(file);
-        else if (base) fileUri = vscode.Uri.file(path.join(base, file));
-        else throw new Error("no base");
-        // open as second editor if file exists
-        await vscode.workspace.openTextDocument(fileUri).then(
-          () => vscode.commands.executeCommand("workbench.action.splitEditor"),
-          () => undefined,
-        );
-      } catch {}
-      return true;
+        const gitUri = fileUri.with({ scheme: "git", query: JSON.stringify({ path: fileUri.fsPath, ref: "HEAD" }) });
+        await vscode.commands.executeCommand("vscode.diff", gitUri, fileUri, `${path.basename(fileUri.fsPath)} ↔ Working Tree`);
+        return true;
+      } catch {
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+        return true;
+      }
     },
   };
 

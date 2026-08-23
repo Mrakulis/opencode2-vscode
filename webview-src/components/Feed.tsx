@@ -252,8 +252,33 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
         {part.state.content?.map((c, i) => {
           if (c.type === "text") {
             const txt = String(c.text);
+            // Edit summary like "Edited webview-src/styles.css (1 replacement)" — make file clickable for whole-file diff
+            if (kind === "edit" && txt.startsWith("Edited ")) {
+              const m = txt.match(/Edited\s+([^\s(]+)/);
+              const file = m?.[1];
+              if (file) {
+                const idx = txt.indexOf(file);
+                return (
+                  <pre key={i} className="tool-out" onClick={handleFileClick}>
+                    {txt.slice(0, idx)}
+                    <a
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void rpc.call("diff.open", { file, diff: "" }).catch(() => undefined);
+                      }}
+                      style={{ color: "var(--oc2-link)", cursor: "pointer", textDecoration: "underline" }}
+                      title="Open whole file diff"
+                    >
+                      {file}
+                    </a>
+                    {txt.slice(idx + file.length)}
+                  </pre>
+                );
+              }
+            }
             return (
-              <pre key={i} className={`tool-out terminal${fullShellOutput ? " full" : ""}`} onClick={handleFileClick}>
+              <pre key={i} className={`tool-out${kind === "shell" ? " terminal" : ""}${fullShellOutput ? " full" : ""}`} onClick={handleFileClick}>
                 {fullShellOutput ? txt : truncate(txt, 4000)}
               </pre>
             );
