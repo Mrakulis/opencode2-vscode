@@ -216,11 +216,11 @@ button:focus-visible {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-editorWidget-background);
-  color: var(--vscode-editorWidget-foreground);
-  border: 1px solid var(--vscode-widget-border, var(--oc2-border));
+  background: var(--vscode-menu-background, var(--vscode-dropdown-background, var(--vscode-quickInput-background, var(--vscode-editorWidget-background))));
+  color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground, var(--vscode-quickInput-foreground, var(--vscode-editorWidget-foreground, var(--vscode-foreground)))));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-menu-border, var(--oc2-border)));
   border-radius: var(--oc2-radius);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   padding: var(--oc2-space-1);
 }
 .menu-item {

@@ -48,7 +48,25 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
       </div>
 
       <div className="drawer-list">
-        {filtered.length === 0 && <div className="drawer-empty">No matching sessions.</div>}
+        {filtered.length === 0 && (
+          <div className="drawer-empty">
+            {query.trim() ? (
+              "No matching sessions."
+            ) : sessions.length === 0 && !allProjects ? (
+              <>
+                No sessions in this folder.
+                <br />
+                <button type="button" className="menu-item manage" onClick={onToggleAll} style={{ marginTop: "8px" }}>
+                  Show all projects
+                </button>
+              </>
+            ) : sessions.length === 0 ? (
+              "No sessions yet — start a new one."
+            ) : (
+              "No matching sessions."
+            )}
+          </div>
+        )}
         {filtered.map((s) => (
           <div
             key={s.id}

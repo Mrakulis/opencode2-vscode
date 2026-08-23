@@ -30,7 +30,10 @@ export function groupByProvider<T extends PickerModel>(models: T[]): Array<{ pro
     else map.set(m.providerID, [m]);
   }
   return [...map.entries()]
-    .map(([providerID, grouped]) => ({ providerID, models: grouped }))
+    .map(([providerID, grouped]) => ({
+      providerID,
+      models: [...grouped].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)),
+    }))
     .sort((a, b) => a.providerID.localeCompare(b.providerID));
 }
 
