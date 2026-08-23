@@ -3,12 +3,13 @@ import { renderMarkdown } from "../lib/markdown";
 import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
+import { rpc } from "../lib/rpc";
 
 interface Props {
   disabled: boolean;
   busy: boolean;
   sendKey: "enter" | "ctrlEnter";
-  onSend(text: string): Promise<void> | void;
+  onSend(text: string, files?: Array<{ uri: string; name?: string }>): Promise<void> | void;
   onStop(): void;
   // selectors moved here from header
   agents: Array<{ id: string; name: string }>;
@@ -34,6 +35,8 @@ export function Composer(props: Props) {
   const [menu, setMenu] = useState<"agent" | "model" | "variant" | undefined>(undefined);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; preview: string; uri: string }>>([]);
 
   // auto-grow up to ~40vh
   useEffect(() => {
@@ -65,18 +68,62 @@ export function Composer(props: Props) {
     };
   }, [menu]);
 
+  const addFiles = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files as unknown as File[]);
+    for (const file of list) {
+      if (!file.type.startsWith("image/")) continue;
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const preview = URL.createObjectURL(file);
+      setAttachments((a) => [...a, { id, name: file.name || "pasted-image.png", preview, uri: "" }]);
+      try {
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+        const b64 = btoa(binary);
+        const res = await rpc.call<{ uri: string }>("image.save", { data: b64, name: file.name || "pasted-image.png", mime: file.type });
+        setAttachments((a) => a.map((x) => (x.id === id ? { ...x, uri: res.uri } : x)));
+      } catch {}
+    }
+  }, []);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]!;
+        if (it.type.startsWith("image/")) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length) {
+        e.preventDefault();
+        void addFiles(files);
+      }
+    },
+    [addFiles],
+  );
+
   const submit = useCallback(async () => {
     const value = text.trim();
-    if (!value || props.busy) return;
+    if ((!value && attachments.length === 0) || props.busy) return;
+    const files = attachments.filter((a) => a.uri).map((a) => ({ uri: a.uri, name: a.name }));
     setText("");
+    setAttachments((a) => {
+      a.forEach((x) => URL.revokeObjectURL(x.preview));
+      return [];
+    });
     setPreview(false);
     try {
-      await props.onSend(value);
+      await props.onSend(value, files.length ? files : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setTimeout(() => setError(undefined), 4000);
     }
-  }, [text, props]);
+  }, [text, attachments, props]);
 
   // derived for selectors
   const visibleModels = useMemo(() => filterVisibleModels(props.models, props.hidden), [props.models, props.hidden]);
@@ -143,7 +190,16 @@ export function Composer(props: Props) {
     <div className="composer">
       {error && <div className="composer-error">{error}</div>}
 
-      <div className="composer-input-wrap">
+      <div
+        className="composer-input-wrap"
+        onDragOver={(e) => {
+          if ([...Array.from(e.dataTransfer.types)].includes("Files")) e.preventDefault();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.files.length) void addFiles(e.dataTransfer.files);
+        }}
+      >
         <textarea
           ref={ref}
           rows={1}
@@ -151,6 +207,7 @@ export function Composer(props: Props) {
           disabled={props.disabled}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={handlePaste}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               const allowed = props.sendKey === "enter" || e.ctrlKey || e.metaKey;
@@ -161,11 +218,14 @@ export function Composer(props: Props) {
           }}
         />
         <div className="composer-input-actions">
-          <button type="button" className="iconbtn" title="Attach" disabled>＋</button>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
+          <button type="button" className="iconbtn" title="Attach image" disabled={props.disabled} onClick={() => fileInputRef.current?.click()}>
+            ＋
+          </button>
           <button
             type="button"
-            className={`sendbtn${!text.trim() || props.disabled ? " disabled" : ""}`}
-            disabled={props.disabled || !text.trim()}
+            className={`sendbtn${(!text.trim() && attachments.length === 0) || props.disabled ? " disabled" : ""}`}
+            disabled={props.disabled || (!text.trim() && attachments.length === 0)}
             onClick={() => void submit()}
             title="Send"
           >
@@ -173,6 +233,26 @@ export function Composer(props: Props) {
           </button>
         </div>
       </div>
+      {attachments.length > 0 && (
+        <div className="attachments">
+          {attachments.map((a) => (
+            <div key={a.id} className="attachment">
+              <img src={a.preview} alt={a.name} />
+              <button
+                type="button"
+                className="attachment-remove"
+                onClick={() => {
+                  URL.revokeObjectURL(a.preview);
+                  setAttachments((prev) => prev.filter((x) => x.id !== a.id));
+                }}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="composer-selectors" ref={menuRef}>
         {/* Agent / Plan */}

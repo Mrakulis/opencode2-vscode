@@ -277,18 +277,20 @@ export function App() {
 
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!activeId || !text.trim()) return;
+    async (text: string, files?: Array<{ uri: string; name?: string }>) => {
+      if (!activeId || (!text.trim() && (!files || files.length === 0))) return;
       const optimistic: Extract<AnyMessage, { type: "user" }> = {
         type: "user",
         id: `pending-${Date.now()}`,
-        text,
+        text: text || (files?.length ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}` : ""),
         time: { created: Date.now() },
       };
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [activeId]: true }));
       try {
-        await rpc.call("prompt.send", { sessionID: activeId, text });
+        const params: Record<string, unknown> = { sessionID: activeId, text: text || "" };
+        if (files && files.length) (params as Record<string, unknown>).files = files;
+        await rpc.call("prompt.send", params);
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [activeId]: false }));
@@ -487,7 +489,7 @@ export function App() {
         disabled={!activeId || conn !== "connected"}
         busy={busy}
         sendKey={cfg?.ui.sendKey ?? "enter"}
-        onSend={(t) => void sendMessage(t)}
+        onSend={(t, files) => void sendMessage(t, files)}
         onStop={() => void interrupt()}
         agents={agents}
         activeAgent={active?.agent}

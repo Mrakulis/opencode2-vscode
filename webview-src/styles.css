@@ -848,23 +848,60 @@ button:focus-visible {
   gap: var(--oc2-space-2);
 }
 .composer-input-wrap {
-  position: relative;
   display: flex;
+  gap: var(--oc2-space-2);
   align-items: flex-end;
 }
 .composer textarea {
   resize: none;
-  padding: var(--oc2-space-2) 52px var(--oc2-space-2) var(--oc2-space-3);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
   line-height: 1.45;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 .composer-input-actions {
-  position: absolute;
-  right: var(--oc2-space-1);
-  bottom: var(--oc2-space-1);
   display: flex;
   align-items: center;
   gap: var(--oc2-space-1);
+  flex: none;
+  padding-bottom: 2px;
+}
+.attachments {
+  display: flex;
+  gap: var(--oc2-space-2);
+  flex-wrap: wrap;
+}
+.attachment {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  overflow: hidden;
+  background: var(--oc2-bg-input);
+}
+.attachment img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.attachment-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
 }
 .sendbtn {
   width: 28px;

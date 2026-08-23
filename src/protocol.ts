@@ -130,7 +130,8 @@ export type RpcMethod =
   | "settings.open"
   | "workspace.directory"
   | "file.open"
-  | "diff.open";
+  | "diff.open"
+  | "image.save";
 
 export function isInbound(value: unknown): value is InboundMessage {
   return (

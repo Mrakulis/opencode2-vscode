@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { createApi } from "./apiAdapter";
 import type { OpenCodeController } from "./controller";
 import { isSettingKey, validateSettingValue, type RpcMethod, type RpcRequest } from "./protocol";
@@ -63,12 +65,27 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       return Promise.resolve();
     },
     "messages.list": (p) => api.messages(str(p, "sessionID")),
-    "prompt.send": (p) =>
-      api.prompt({
+    "prompt.send": (p) => {
+      const rawFiles = p.files as unknown;
+      let files: Array<{ uri: string; name?: string }> | undefined;
+      if (Array.isArray(rawFiles)) {
+        files = rawFiles
+          .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null && typeof (f as Record<string, unknown>).uri === "string")
+          .map((f) => {
+            const rec = f as Record<string, unknown>;
+            return { uri: rec.uri as string, ...(typeof rec.name === "string" ? { name: rec.name } : {}) };
+          });
+        if (files.length === 0) files = undefined;
+      }
+      const text = typeof p.text === "string" ? p.text : "";
+      if (!text && !files) throw new Error("rpc: missing 'text' or 'files'");
+      return api.prompt({
         sessionID: str(p, "sessionID"),
-        text: str(p, "text"),
+        text,
+        ...(files ? { files } : {}),
         delivery: p.delivery === "steer" || p.delivery === "queue" ? p.delivery : undefined,
-      }),
+      });
+    },
     "prompt.interrupt": (p) => api.interrupt(str(p, "sessionID")),
     "session.compact": (p) => api.compact(str(p, "sessionID")),
     "models.list": () => api.models(),
@@ -183,6 +200,19 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
         await vscode.window.showTextDocument(doc, { preview: false });
         return true;
       }
+    },
+    "image.save": async (p) => {
+      const data = str(p, "data");
+      const name = optStr(p, "name") ?? `pasted-${Date.now()}.png`;
+      // mime not strictly needed, keep for future
+      const dir = path.join(os.tmpdir(), "opencode-images");
+      await fs.promises.mkdir(dir, { recursive: true });
+      // sanitize name
+      const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filePath = path.join(dir, `${Date.now()}-${safe}`);
+      const buf = Buffer.from(data, "base64");
+      await fs.promises.writeFile(filePath, buf);
+      return { uri: filePath, name: safe };
     },
   };
 
