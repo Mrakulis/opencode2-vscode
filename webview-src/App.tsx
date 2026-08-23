@@ -56,6 +56,7 @@ export function App() {
   const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
     undefined,
   );
+  const [otherText, setOtherText] = useState("");
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -399,6 +400,48 @@ export function App() {
     return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
   }, [lastAssistantText, questionPerm]);
 
+  const questionOptions = useMemo(() => {
+    if (!isQuestion || !lastAssistantText) return null;
+    const lines = lastAssistantText.split("\n");
+    const opts: Array<{ label: string; recommended?: boolean; isOther?: boolean }> = [];
+    for (const line of lines) {
+      const m =
+        line.match(/^\s*[○●◯•\-*]\s*(.+)/) ||
+        line.match(/^\s*[A-Z]\)\s*(.+)/) ||
+        line.match(/^\s*\d+[\.)]\s*(.+)/);
+      if (m) {
+        const raw = m[1]!.trim();
+        const isRec = /\(recommended\)/i.test(raw) || /★/.test(raw);
+        const label = raw.replace(/\s*\(recommended\)\s*/i, "").replace(/\s*★.*/, "").trim();
+        if (!label) continue;
+        const isOther = /^other$/i.test(label) || label.toLowerCase().startsWith("other");
+        opts.push({ label, recommended: isRec, isOther });
+      }
+    }
+    if (opts.length === 0) {
+      const inline = lastAssistantText.match(/(?:Options?:)?\s*A\)\s*([^,]+),?\s*B\)\s*([^,]+),?\s*C\)\s*([^\n]+)/i);
+      if (inline) {
+        const a = inline[1]!.trim();
+        const b = inline[2]!.trim();
+        const c = inline[3]!.trim();
+        const bRec = /recommended/i.test(b);
+        opts.push({ label: a.replace(/\(recommended\)/i, "").trim() });
+        opts.push({ label: b.replace(/\(recommended\)/i, "").trim(), recommended: bRec });
+        const cOther = /^other/i.test(c);
+        opts.push({ label: c.replace(/\(recommended\)/i, "").trim(), isOther: cOther });
+      }
+    }
+    return opts.length > 0 ? opts : null;
+  }, [isQuestion, lastAssistantText]);
+
+  const handleQuestionAnswer = useCallback(
+    (text: string) => {
+      if (!activeId || !text.trim()) return;
+      void sendMessage(text.trim());
+    },
+    [activeId, sendMessage],
+  );
+
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
     if (id.includes("plan")) return true;
@@ -545,31 +588,95 @@ export function App() {
         </div>
       )}
 
-      {(isQuestion || questionPerm) && activeId && (
+      {questionPerm && activeId && (
         <div className="permissions">
           <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
             <div className="perm-header">
               <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
                 question
               </span>
-              <span>{questionPerm ? "Agent is asking for input" : "Agent is waiting for your answer"}</span>
+              <span>Agent is asking for input</span>
             </div>
             <div className="perm-res" style={{ whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
-              {questionPerm ? `Permission: ${questionPerm.action} — ${questionPerm.resources.join(", ")}` : ""}
-              {questionPerm && lastAssistantText ? "\n\n" : ""}
-              {lastAssistantText ? lastAssistantText.slice(-600) : "Reply in the composer below."}
+              Permission: {questionPerm.action} — {questionPerm.resources.join(", ")}
+              {lastAssistantText ? `\n\n${lastAssistantText.slice(-600)}` : ""}
             </div>
-            {questionPerm && (
-              <div className="perm-actions">
-                <button type="button" className="primary" onClick={() => void replyPermission(questionPerm.requestID, "once")}>
-                  Answer in chat
-                </button>
-                <button type="button" className="danger" onClick={() => void replyPermission(questionPerm.requestID, "reject")}>
-                  Dismiss
-                </button>
+            <div className="perm-actions">
+              <button type="button" className="primary" onClick={() => void replyPermission(questionPerm.requestID, "once")}>
+                Allow
+              </button>
+              <button type="button" className="danger" onClick={() => void replyPermission(questionPerm.requestID, "reject")}>
+                Deny
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isQuestion && !questionPerm && activeId && (
+        <div className="permissions">
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+            <div className="perm-header">
+              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+                question
+              </span>
+              <span>Agent is waiting for your answer</span>
+            </div>
+            <div className="perm-res" style={{ whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
+              {lastAssistantText.slice(-800)}
+            </div>
+            {questionOptions ? (
+              <div className="perm-resources" style={{ gap: "6px" }}>
+                {questionOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="perm-res"
+                    style={{
+                      textAlign: "left",
+                      cursor: opt.isOther ? "default" : "pointer",
+                      border: opt.recommended ? "1px solid #c084fc" : undefined,
+                      background: opt.recommended ? "rgba(192,132,252,0.12)" : undefined,
+                    }}
+                    onClick={() => {
+                      if (opt.isOther) return;
+                      void handleQuestionAnswer(opt.label);
+                    }}
+                  >
+                    {opt.label} {opt.recommended ? "★ Recommended" : ""} {opt.isOther ? "— type below" : ""}
+                  </button>
+                ))}
+                {questionOptions.some((o) => o.isOther) && (
+                  <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                    <input
+                      className="search"
+                      placeholder="Other — type your response..."
+                      value={otherText}
+                      onChange={(e) => setOtherText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && otherText.trim()) {
+                          void handleQuestionAnswer(otherText);
+                          setOtherText("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={!otherText.trim()}
+                      onClick={() => {
+                        void handleQuestionAnswer(otherText);
+                        setOtherText("");
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                )}
               </div>
+            ) : (
+              <div className="perm-hint">Reply in the composer below — it will be sent as the answer.</div>
             )}
-            {!questionPerm && <div className="perm-hint">Reply in the composer below — it will be sent as the answer. Other agents show this as an inline prompt; we surface it here so it never gets lost.</div>}
           </div>
         </div>
       )}
