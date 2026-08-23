@@ -754,14 +754,22 @@ textarea:focus-visible {
   flex-wrap: wrap;
   position: relative;
 }
+.composer-selectors .picker {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.composer-selectors .picker-model {
+  flex: 1 1 120px;
+  min-width: 110px;
+  max-width: 58%;
+}
 .selector {
   display: inline-flex;
   align-items: center;
   gap: var(--oc2-space-1);
-  max-width: 46%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  width: auto;
   background: var(--vscode-button-secondaryBackground, var(--vscode-dropdown-background, transparent));
   color: var(--vscode-button-secondaryForeground, var(--vscode-dropdown-foreground, var(--vscode-foreground)));
   border: 1px solid var(--oc2-border);
@@ -773,9 +781,30 @@ textarea:focus-visible {
 .selector:hover {
   background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
 }
+.selector-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
 .chevron {
   opacity: 0.7;
   font-size: 0.8em;
+  flex: none;
+}
+/* bottom-row menus open upward and stay anchored to their button */
+.composer-selectors .picker .menu {
+  bottom: calc(100% + 6px);
+  top: auto;
+  left: 0;
+  right: auto;
+  min-width: 220px;
+  max-width: min(320px, 92vw);
+}
+.composer-selectors .picker:nth-child(3) .menu {
+  left: auto;
+  right: 0;
 }
 .composer-actions-right {
   display: flex;

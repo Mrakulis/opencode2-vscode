@@ -155,8 +155,14 @@ export function Composer(props: Props) {
       <div className="composer-selectors" ref={menuRef}>
         {/* Agent / Plan */}
         <div className="picker">
-          <button type="button" className="selector" onClick={() => setMenu(menu === "agent" ? undefined : "agent")}>
-            {props.agentName ?? props.activeAgent ?? "Plan"} <span className="chevron">▾</span>
+          <button
+            type="button"
+            className="selector"
+            title={props.agentName ?? props.activeAgent ?? "Plan"}
+            onClick={() => setMenu(menu === "agent" ? undefined : "agent")}
+          >
+            <span className="selector-label">{props.agentName ?? props.activeAgent ?? "Plan"}</span>{" "}
+            <span className="chevron">▾</span>
           </button>
           {menu === "agent" && (
             <div className="menu">
@@ -175,9 +181,9 @@ export function Composer(props: Props) {
         </div>
 
         {/* Model */}
-        <div className="picker">
-          <button type="button" className="selector" onClick={() => setMenu(menu === "model" ? undefined : "model")}>
-            {activeModelLabel} <span className="chevron">▾</span>
+        <div className="picker picker-model">
+          <button type="button" className="selector" title={activeModelLabel} onClick={() => setMenu(menu === "model" ? undefined : "model")}>
+            <span className="selector-label">{activeModelLabel}</span> <span className="chevron">▾</span>
           </button>
           {menu === "model" && (
             <div className="menu">
@@ -215,9 +221,9 @@ export function Composer(props: Props) {
             type="button"
             className="selector"
             onClick={() => setMenu(menu === "variant" ? undefined : "variant")}
-            title={activeModelVariants.length === 0 ? "No variants for this model" : undefined}
+            title={activeModelVariants.length === 0 ? `No variants for this model — ${activeVariantLabel}` : activeVariantLabel}
           >
-            {activeVariantLabel} <span className="chevron">▾</span>
+            <span className="selector-label">{activeVariantLabel}</span> <span className="chevron">▾</span>
           </button>
           {menu === "variant" && (
             <div className="menu">
