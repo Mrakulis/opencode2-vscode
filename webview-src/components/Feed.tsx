@@ -116,6 +116,17 @@ function MessageGroup({
   if (isUser(message)) {
     return (
       <article className="msg user">
+        {message.files && message.files.length > 0 && (
+          <div className="user-files">
+            {message.files.map((f, i) =>
+              f.uri && /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.uri) ? (
+                <img key={i} className="user-file-img" src={f.uri} alt={f.name ?? "attachment"} />
+              ) : (
+                <code key={i} className="perm-res">{f.name ?? f.uri}</code>
+              ),
+            )}
+          </div>
+        )}
         <div className="bubble">{message.text}</div>
       </article>
     );
@@ -335,6 +346,22 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
                   ↗ Open file
                 </button>
               </div>
+            );
+          }
+          // Tool-produced files (screenshots, exports): render images inline,
+          // everything else as a clickable file chip.
+          if (c.type === "file") {
+            const f = c as { uri?: string; mime?: string; name?: string };
+            if (!f.uri) return null;
+            const isImage = typeof f.mime === "string" ? f.mime.startsWith("image/") : /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.uri);
+            return isImage ? (
+              <img key={i} className="tool-file-img" src={f.uri} alt={f.name ?? "tool output"} />
+            ) : (
+              <pre key={i} className="tool-out" onClick={handleFileClick}>
+                <a onClick={(e) => { e.preventDefault(); e.stopPropagation(); void rpc.call("file.open", { path: f.uri! }).catch(() => undefined); }} style={{ color: "var(--oc2-link)", cursor: "pointer" }}>
+                  ⤒ {f.name ?? f.uri}
+                </a>
+              </pre>
             );
           }
           return null;

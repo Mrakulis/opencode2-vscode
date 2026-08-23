@@ -1210,6 +1210,29 @@ button:focus-visible {
 .model-meta.ok {
   color: var(--oc2-success);
 }
+
+/* tool/user file outputs */
+.user-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--oc2-space-1);
+  justify-content: flex-end;
+  margin-bottom: var(--oc2-space-1);
+}
+.user-file-img {
+  max-width: 160px;
+  max-height: 120px;
+  border-radius: var(--oc2-radius);
+  border: 1px solid var(--oc2-border);
+}
+.tool-file-img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: var(--oc2-radius);
+  border: 1px solid var(--oc2-border);
+  margin-top: var(--oc2-space-1);
+}
 .model-meta.err,
 .model-meta.warn {
   color: var(--oc2-error);

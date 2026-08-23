@@ -1,30 +1,39 @@
 # OpenCode 2 for VS Code
 
-A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on the **OpenCode V2 API** (`@opencode-ai/client`) and designed around what V2 makes possible and how VS Code itself behaves.
+A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on the **OpenCode V2 API** (`@opencode-ai/client`) with a GUI-first experience — not a terminal clone.
 
 ## Features
 
 - **Native sidebar chat** with an agent that reads and edits your code
-- **Auto-connects** to OpenCode V2's shared background service (no ports, no manual `serve`)
-- **Live streaming** responses with reasoning blocks, tool cards, and inline diffs
+- **Auto-connects** to the shared V2 background service (discover → ensure, no ports to manage)
+- **Live streaming** — incremental text/reasoning deltas plus tool cards and inline diffs
+- **Slash commands & skills** — type `/` for the V2 command catalog (`command.list`), skills included; runs via `session.command` / `session.skill`
+- **`@` file mentions** — fuzzy file picker backed by `file.find`; files attach as prompt context
+- **Agent forms** — structured input requests render as native cards (V2 `form.*`)
 - **Session management**: search, switch, rename (double-click title), delete, fork
 - **Agent controls**: per-session model & agent switching without restarts
-- **Permission approvals** inline (allow once / always / deny)
+- **Permission approvals** inline (allow once / always / deny) + a saved-rules manager
+- **Undo / Redo** a turn with Git-backed file reversion (V2 `session.revert.*`)
+- **Export / import** sessions in the V2 transfer format (JSON)
+- **Worktrees** manager (list / create / remove) via `worktree.*`
+- **Project instructions** editor (`instructions.entry.*`) — the GUI home of `/init`
+- **MCP drawer** with live status; auto-refreshes on `mcp.status.changed`
+- **Providers drawer** with in-app connect: API key or OAuth browser flow
 - **Cost, token and context telemetry** with an optional auto-compact threshold
-- **Queue or steer** follow-ups while the agent is working
-- **Theme-native**: follows your VS Code theme exactly; compact/comfortable density
+- **Queue or steer** follow-ups while the agent is working (composer chip)
+- **Own theme system** — dark & light themes designed for this extension (not the VS Code theme); compact/comfortable density; official OpenCode theme presets planned
 
 ## Requirements
 
 - VS Code 1.96+
-- An OpenCode V2 CLI (`opencode2`) installed locally. The extension can install it via the command palette (`OpenCode 2: Install CLI`).
+- An OpenCode V2 CLI installed locally (`opencode2`, or `opencode` from npm). The extension can install it via the command palette (`OpenCode 2: Install CLI`).
 
 ## Getting started
 
 1. Open a workspace folder.
 2. Click the OpenCode icon in the activity bar.
 3. The extension discovers your running OpenCode service (or starts one).
-4. Type a prompt.
+4. Type a prompt — or `/` for commands, `@` to attach a file.
 
 ## Commands
 
@@ -36,7 +45,7 @@ A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on 
 | `OpenCode 2: Refresh` | Reconnect + resync |
 | `OpenCode 2: Restart Background Service` | Force a new service connection |
 | `OpenCode 2: Open Terminal` | Launch the CLI in a terminal |
-| `OpenCode 2: Install CLI` | Install/update via npm (`opencode-ai@beta`) |
+| `OpenCode 2: Install CLI` | Install/update via npm |
 
 ## Settings (`opencode2.*`)
 
@@ -46,23 +55,32 @@ A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on 
 | `server.autoStart` | `true` | Start the shared service when none is running |
 | `cliPath` | `""` | Custom CLI path; empty = try `opencode2` then `opencode` |
 | `debug.logs` | `false` | Verbose logging in the output channel |
+| `ui.theme` | `dark` | Built-in theme: `dark` / `light` |
 | `ui.density` | `compact` | `compact` / `comfortable` |
 | `ui.accentTint` | `off` | Optional accent color tint |
 | `ui.sounds` | `true` | Subtle chimes on finish/permission |
 | `ui.showReasoning` | `collapsed` | Reasoning blocks: hide / collapsed / expanded |
 | `ui.expandShellTools` | `false` | Shell tool cards expanded by default |
 | `ui.expandEditTools` | `false` | Edit/diff tool cards expanded by default |
+| `ui.fullShellOutput` | `false` | Show full shell output without truncation |
 | `ui.messageStats` | `true` | Per-message token/cost badges |
 | `composer.sendKey` | `enter` | enter / ctrlEnter to send |
 | `models.hidden` | `[]` | Models hidden from the picker (`providerID/modelID`) |
 | `models.favorites` | `[]` | Starred models pinned to picker top |
 | `models.default` | `` | Default model for new sessions (`providerID/modelID`) |
+| `notifications.permissions` | `true` | Permission-request notifications |
+| `notifications.agentEvents` | `true` | Agent finished notifications |
 | `notifications.errors` | `false` | Failed-run notifications |
+| `permissions.mode` | `askFirst` | Ask first / Auto allow / Deny |
 | `agent.autoCompactThreshold` | `0` | Percent of context that triggers auto-compact |
 
 ## Workspaces
 
-Open a folder, and every **new** session is anchored to it — the agent reads/edits inside that directory, exactly like running `opencode2` from a terminal already cd'd there. The header shows the bound folder as a chip. The sessions drawer defaults to the same scope; flip `this folder` ⇄ `all projects` to see history across projects. (Under the hood: one shared background service per machine; each session carries its own directory anchor.)
+Open a folder, and every **new** session is anchored to it — the agent reads/edits inside that directory, exactly like running the CLI from a terminal already cd'd there. The header shows the bound folder as a chip (plus the git branch when available). The sessions drawer defaults to the same scope; flip `this folder` ⇄ `all projects` to see history across projects.
+
+## Architecture notes
+
+All server I/O lives in the extension host (`src/controller.ts`; every client call isolated in `src/apiAdapter.ts`). The React webview communicates over a typed postMessage RPC bridge (`src/protocol.ts`). Incoming V2 events route through an explicit table (`webview-src/lib/events.ts`); text/reasoning deltas stream incrementally (`webview-src/lib/deltas.ts`) with REST re-sync as the volatile-stream safety net. See `AUDIT_AND_PLAN.md` for the audit that drove the current feature set.
 
 ## Development
 
@@ -75,10 +93,6 @@ npm run watch
 ```
 
 Press F5 to launch an Extension Development Host.
-
-## Architecture notes
-
-All server I/O lives in the extension host (`src/controller.ts`, all client calls isolated in `src/apiAdapter.ts`). The React webview communicates over a typed postMessage RPC bridge (`src/protocol.ts`). The `/api/event` stream is treated as volatile by contract: every reconnect triggers a REST re-sync. See `plan.md` for the full design.
 
 ## License
 

@@ -107,10 +107,17 @@ export interface MessagePartTool {
 }
 export type ToolContent =
   | { type: "text"; text: string }
+  | { type: "file"; uri?: string; mime?: string; name?: string }
   | { type: string; [k: string]: unknown };
 
 export type AnyMessage =
-  | { type: "user"; id: string; text: string; time: { created: number }; files?: Array<{ name?: string }> }
+  | {
+      type: "user";
+      id: string;
+      text: string;
+      time: { created: number };
+      files?: Array<{ uri?: string; name?: string }>;
+    }
   | {
       type: "assistant";
       id: string;

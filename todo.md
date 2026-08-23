@@ -2,19 +2,21 @@
 
 Legend: ☐ todo · ◨ in progress · ✅ done · ⏸ blocked/deferred
 
-**Current: ✅ ALL v0.2 MILESTONES COMPLETE** — v0.2.37 (providers/models/MCP/workspace scope) 2026-08-23
+**Current: M-theme + M5–M8 COMPLETE (v0.3.0) — 2026-08-23**
 
 ---
 
 ## Post-audit roadmap — see `AUDIT_AND_PLAN.md`
 
-Full functionality audit complete 2026-08-23. **Open Questions (§5 of that doc) are pending your review/annotation before any code.** Milestones copied from the audit plan:
+Audit complete 2026-08-23; plan APPROVED (all Open Questions resolved). Milestones:
 
-- [ ] M-theme: own first-party theme tokens (replace `--vscode-*`) + theme switcher; later add official OpenCode themes as presets
-- [ ] M5: slash commands + skills + `@` mention (inline `/` popover) — the headline gap
-- [ ] M6: real Forms (replace the `isQuestion` text heuristic)
-- [ ] M7: event router + true delta streaming + parity (export/import, undo/redo, connect in-app, init, vcs, worktrees, saved perms, queue/steer UI, binary-name fix)
-- [ ] M8: polish, richer rendering, README correction, vsix
+- [x] **M-theme**: first-party theme system rebranded (violet accent), light theme via `[data-theme]`, semantic tokens for tool/diff/terminal/question colors, `opencode2.ui.theme` setting + overflow toggle. *(No --vscode-* existed to remove — verified.)*
+- [x] **M5**: slash commands + skills (`/` popover from command.list/skill.list, badged, keyboard nav) + `@` file mentions (file.find fuzzy picker); sends via session.command / session.skill.
+- [x] **M6**: real Forms — FormCard renders V2 form.created requests (string/number/bool/select, required validation); isQuestion heuristic + showTestQuestion removed.
+- [x] **M7**: typed event router covering ALL valuable events (lib/events.ts); true delta streaming with REST fallback (lib/deltas.ts); export/import (V2 transfer JSON via dialogs); undo/redo via revert.stage+commit; VCS branch chip; instructions drawer; saved-permissions manager; worktrees drawer; queue-vs-steer composer chip; in-app provider connect (key/OAuth, CLI fallback); MCP drawer auto-refresh; binary-name fix (ResolvedCli).
+- [x] **M8**: tool file/image outputs + user image attachments rendered; meta message types deliberately handled; README rewritten for accuracy; version 0.3.0; vsix packaged.
+
+Deferred (documented): MCP credential (secrets) UI — needs live credential IDs from a connected server; config passes through env/secrets today. Official OpenCode theme presets — next drop (theme switcher infrastructure already in place).
 
 
 
