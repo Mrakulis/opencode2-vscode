@@ -10,7 +10,7 @@ import { SidebarProvider, SIDEBAR_VIEW_ID } from "./sidebarProvider";
 export function activate(context: vscode.ExtensionContext): void {
   const log = new Log();
   const controller = new OpenCodeController(log, () => resolveCli(log));
-  const rpc = createRpcDispatcher(controller, log);
+  const rpc = createRpcDispatcher(controller, log, () => resolveCli(log));
   const provider = new SidebarProvider(context.extensionUri, controller, rpc);
   const autoCompact = new AutoCompactWatcher(controller, log);
   const notifications = new NotificationService(controller, log, rpc.getActiveSessionId);

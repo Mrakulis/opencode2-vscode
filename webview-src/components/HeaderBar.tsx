@@ -6,12 +6,19 @@ interface Props {
   title?: string;
   sessionId?: string;
   workspaceName?: string;
+  branch?: string;
   drawerOpen: boolean;
   onToggleDrawer(): void;
   onRename(title: string): Promise<void>;
   onCopyTranscript(): Promise<void>;
   onFork(): Promise<void>;
   onCompact(): Promise<void>;
+  onExport(): void;
+  onUndo(): void;
+  onRedo(): void;
+  onOpenSavedPermissions(): void;
+  onOpenInstructions(): void;
+  onOpenWorktrees(): void;
   onOpenManager(): void;
   onOpenProviders(): void;
   onOpenMcp(): void;
@@ -85,6 +92,11 @@ export function HeaderBar(props: Props) {
           {truncate(props.workspaceName, 18)}
         </span>
       )}
+      {props.branch && (
+        <span className="ws-chip branch-chip" title={`Git branch: ${props.branch}`}>
+          ⑂ {truncate(props.branch, 16)}
+        </span>
+      )}
 
       <div className="header-right" ref={menuRef}>
         <button type="button" className="iconbtn" title="Settings" onClick={props.onOpenSettings} style={{ fontSize: "14px", padding: "0 4px" }}>
@@ -104,6 +116,25 @@ export function HeaderBar(props: Props) {
               </button>
               <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenMcp(); }}>
                 MCP servers…
+              </button>
+              <button type="button" className="menu-item manage" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onOpenInstructions(); }}>
+                Instructions…
+              </button>
+              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenWorktrees(); }}>
+                Worktrees…
+              </button>
+              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenSavedPermissions(); }}>
+                Saved permissions…
+              </button>
+              <div className="menu-sep" />
+              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onUndo(); }} title="Undo the last turn and revert its file changes">
+                ↶ Undo last turn
+              </button>
+              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onRedo(); }}>
+                ↷ Redo
+              </button>
+              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onExport(); }}>
+                ⤓ Export session…
               </button>
               <div className="menu-sep" />
               <button

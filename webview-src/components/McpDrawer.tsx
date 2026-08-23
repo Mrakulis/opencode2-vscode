@@ -16,13 +16,14 @@ interface McpServerRow {
 
 interface Props {
   onClose(): void;
+  refreshTick?: number;
 }
 
 /**
  * Live MCP server management. Changes apply to the running service; they are
  * runtime-scoped (the service's own config), so the drawer says so.
  */
-export function McpDrawer({ onClose }: Props) {
+export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   const [servers, setServers] = useState<McpServerRow[]>([]);
   const [error, setError] = useState<string | undefined>(undefined);
   const [adding, setAdding] = useState(false);
@@ -44,6 +45,10 @@ export function McpDrawer({ onClose }: Props) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
+
+  useEffect(() => {
+    if (refreshTick > 0) void refresh();
+  }, [refreshTick, refresh]);
 
   useEffect(() => {
     void refresh();

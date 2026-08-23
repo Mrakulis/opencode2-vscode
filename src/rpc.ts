@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { createApi } from "./apiAdapter";
+import type { ResolvedCli } from "./cli";
 import type { OpenCodeController } from "./controller";
 import { isSettingKey, validateSettingValue, type RpcMethod, type RpcRequest } from "./protocol";
 import { Log } from "./log";
@@ -13,7 +14,7 @@ type Handler = (params: Record<string, unknown>) => Promise<unknown>;
  * Host-side RPC dispatcher: routes webview requests to the api adapter.
  * Params are read defensively — the wire is a trust boundary.
  */
-export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
+export function createRpcDispatcher(controller: OpenCodeController, log: Log, resolveCli?: () => Promise<ResolvedCli | undefined>) {
   const api = createApi({
     getClient: () => controller.getClient(),
   });
@@ -131,7 +132,85 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       return api.formReply(str(p, "sessionID"), str(p, "formID"), clean);
     },
     "form.cancel": (p) => api.formCancel(str(p, "sessionID"), str(p, "formID")),
+
+    // -- session parity ---------------------------------------------------------
+    "session.export": (p) => api.exportSession(str(p, "sessionID")),
+    "session.import": (p) => {
+      if (typeof p.payload !== "object" || p.payload === null) throw new Error("rpc: missing 'payload'");
+      return api.importSession(p.payload);
+    },
+    "session.move": (p) => api.moveSession(str(p, "sessionID"), str(p, "directory")),
+    "session.revert.stage": (p) => {
+      const files = p.files as unknown;
+      return api.revertStage(str(p, "sessionID"), str(p, "messageID"), typeof files === "boolean" ? files : undefined);
+    },
+    "session.revert.clear": (p) => api.revertClear(str(p, "sessionID")),
+    "session.revert.commit": (p) => api.revertCommit(str(p, "sessionID")),
+    "session.context": (p) => api.sessionContext(str(p, "sessionID")),
+    "inbox.list": (p) => api.inboxList(str(p, "sessionID")),
+    "inbox.cancel": (p) => api.inboxCancel(str(p, "sessionID"), str(p, "inboxID")),
+    "inbox.steer": (p) => api.inboxSteer(str(p, "sessionID"), str(p, "inboxID")),
+    "inbox.queue": (p) => api.inboxQueue(str(p, "sessionID"), str(p, "inboxID")),
+
+    // -- instructions -----------------------------------------------------------
+    "instructions.list": (p) => api.instructionsList(str(p, "sessionID")),
+    "instructions.put": (p) => api.instructionPut(str(p, "sessionID"), str(p, "key"), p.value),
+    "instructions.remove": (p) => api.instructionRemove(str(p, "sessionID"), str(p, "key")),
+
+    // -- saved permissions -------------------------------------------------------
+    "permissions.saved": () => api.savedPermissions(),
+    "permissions.saved.remove": (p) => api.savedPermissionRemove(str(p, "id")),
+
+    // -- provider connect ---------------------------------------------------------
+    "integration.connectKey": (p) => api.connectKey(str(p, "integrationID"), str(p, "key")),
+    "integration.oauthConnect": (p) => {
+      const methodID = optStr(p, "methodID");
+      return api.oauthConnect(str(p, "integrationID"), methodID);
+    },
+    "integration.oauthStatus": (p) => api.oauthStatus(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.oauthComplete": (p) => api.oauthComplete(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.oauthCancel": (p) => api.oauthCancel(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.commandConnect": (p) => api.commandConnect(str(p, "integrationID"), str(p, "methodID")),
+
+    // -- vcs & worktrees ------------------------------------------------------------
+    "vcs.info": () => api.vcsInfo(),
+    "vcs.diff": (p) => {
+      const mode = p.mode === "branch" ? "branch" : "working";
+      return api.vcsDiff(mode, optStr(p, "directory"));
+    },
+    "worktree.list": (p) => api.worktreeList(str(p, "projectID")),
+    "worktree.create": (p) => {
+      const directory = str(p, "directory");
+      const name = optStr(p, "name");
+      const from = optStr(p, "from");
+      return api.worktreeCreate(str(p, "projectID"), { directory, ...(name ? { name } : {}), ...(from ? { from } : {}) });
+    },
+    "worktree.remove": (p) => api.worktreeRemove(str(p, "projectID"), str(p, "directory"), p.force === true),
+    "worktree.refresh": (p) => api.worktreeRefresh(str(p, "projectID")),
     "workspace.directory": async () => preferredDirectory(),
+    "project.current": async () => {
+      try {
+        const res = await api.projectCurrent();
+        return res;
+      } catch {
+        return undefined;
+      }
+    },
+    "dialog.saveText": async (p) => {
+      const content = str(p, "content");
+      const suggested = optStr(p, "suggestedName") ?? "export.json";
+      const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(suggested) });
+      if (!uri) return { saved: false };
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
+      return { saved: true, path: uri.fsPath };
+    },
+    "dialog.openText": async (p) => {
+      const filters = (p.filters as Record<string, string[]> | undefined) ?? { "Session export": ["json"] };
+      const uris = await vscode.window.showOpenDialog({ canSelectMany: false, filters });
+      if (!uris || uris.length === 0) return undefined;
+      const doc = await vscode.workspace.openTextDocument(uris[0]!);
+      return doc.getText();
+    },
     "settings.update": (p) => {
       const updates = p.updates as Array<{ key?: unknown; value?: unknown }> | undefined;
       if (!Array.isArray(updates)) throw new Error("rpc: 'updates' must be an array");
@@ -158,13 +237,17 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
     "mcp.connect": (p) => api.mcpConnect(str(p, "name")),
     "mcp.disconnect": (p) => api.mcpDisconnect(str(p, "name")),
     "mcp.resources": () => api.mcpResources(),
-    "providers.authCli": (p) => {
+    "providers.authCli": async (p) => {
+      // Use the actually-resolved binary (opencode2 on this machine, opencode
+      // for npm-only installs) instead of a hard-coded name.
+      const resolved = resolveCli ? await resolveCli() : undefined;
+      const bin = resolved ? resolved.program.split(/[\\/]/).pop()?.replace(/\.exe$/i, "") ?? "opencode2" : "opencode2";
       const name = optStr(p, "name");
       const terminal = vscode.window.createTerminal({ name: "OpenCode 2 — connect provider" });
       terminal.show();
-      terminal.sendText(`opencode2 auth login${name ? ` ${name}` : ""}`, true);
-      log.info(`provider auth handoff: opencode2 auth login${name ? ` ${name}` : ""}`);
-      return Promise.resolve(true);
+      terminal.sendText(`${bin} auth login${name ? ` ${name}` : ""}`, true);
+      log.info(`provider auth handoff: ${bin} auth login${name ? ` ${name}` : ""}`);
+      return true;
     },
     "settings.open": async () => {
       await vscode.commands.executeCommand("workbench.action.openSettings", "opencode2");

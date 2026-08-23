@@ -908,6 +908,10 @@ button:focus-visible {
   padding: var(--oc2-space-3);
   color: var(--oc2-fg-muted);
 }
+.branch-chip {
+  font-family: var(--oc2-mono);
+  color: var(--oc2-link);
+}
 
 /* ---------- permissions ---------- */
 .permissions {

@@ -81,6 +81,36 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     fork: (sessionID: string): Promise<SessionInfo> =>
       getClient().session.fork({ sessionID, boundary: { type: "through" } }),
 
+    // -- session parity (export / move / revert / context / inbox) -------------
+    exportSession: async (sessionID: string): Promise<unknown> => {
+      const res = await getClient().session.export({ sessionID });
+      return res;
+    },
+    importSession: (payload: unknown): Promise<SessionInfo> =>
+      getClient().session.import(payload as never),
+    moveSession: (sessionID: string, directory: string): Promise<void> =>
+      getClient().session.move({ sessionID, directory }),
+    revertStage: (sessionID: string, messageID: string, files?: boolean): Promise<unknown> =>
+      getClient().session.revert.stage({ sessionID, messageID, ...(files !== undefined ? { files } : {}) }),
+    revertClear: (sessionID: string): Promise<void> => getClient().session.revert.clear({ sessionID }),
+    revertCommit: (sessionID: string): Promise<void> => getClient().session.revert.commit({ sessionID }),
+    sessionContext: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
+      const rows = await getClient().session.context({ sessionID });
+      return (Array.isArray(rows) ? rows : ((rows as unknown as { data?: unknown[] }).data ?? [])) as Array<
+        Record<string, unknown>
+      >;
+    },
+    inboxList: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
+      const res = (await getClient().session.inbox.list({ sessionID })) as unknown;
+      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+    },
+    inboxCancel: (sessionID: string, inboxID: string): Promise<void> =>
+      getClient().session.inbox.cancel({ sessionID, inboxID }),
+    inboxSteer: (sessionID: string, inboxID: string): Promise<void> =>
+      getClient().session.inbox.steer({ sessionID, inboxID }),
+    inboxQueue: (sessionID: string, inboxID: string): Promise<void> =>
+      getClient().session.inbox.queue({ sessionID, inboxID }),
+
     // -- pickers -------------------------------------------------------------
     models: async (): Promise<Array<ModelInfo & { context: number }>> => {
       const res = await getClient().model.list();
@@ -168,6 +198,101 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     mcpConnect: (server: string) => getClient().mcp.connect({ server }),
     mcpDisconnect: (server: string) => getClient().mcp.disconnect({ server }),
     mcpResources: () => getClient().mcp.resource.catalog(),
+
+    // -- instructions (project rules / /init) ---------------------------------
+    instructionsList: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
+      const res = await getClient().session.instructions.entry.list({ sessionID });
+      return (Array.isArray(res) ? res : ((res as unknown as { data?: unknown[] }).data ?? [])) as Array<Record<string, unknown>>;
+    },
+    instructionPut: (sessionID: string, key: string, value: unknown): Promise<void> =>
+      getClient().session.instructions.entry.put({ sessionID, key, value: value as never }),
+    instructionRemove: (sessionID: string, key: string): Promise<void> =>
+      getClient().session.instructions.entry.remove({ sessionID, key }),
+
+    // -- permissions: saved rules ---------------------------------------------
+    savedPermissions: async (): Promise<Array<Record<string, unknown>>> => {
+      const res = (await getClient().permission.saved.list()) as unknown;
+      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+    },
+    savedPermissionRemove: (id: string): Promise<void> => getClient().permission.saved.remove({ id }),
+
+    // -- provider connect (in-app; replaces the CLI auth handoff) --------------
+    integrationGet: async (integrationID: string): Promise<Record<string, unknown> | undefined> => {
+      const res = await getClient().integration.get({ integrationID });
+      return res.data as unknown as Record<string, unknown> | undefined;
+    },
+    connectKey: (integrationID: string, key: string): Promise<void> =>
+      getClient().integration.connect.key({ integrationID, key }),
+    oauthConnect: async (
+      integrationID: string,
+      methodID?: string,
+    ): Promise<{ attemptID?: string; url?: string }> => {
+      const res = await getClient().integration.oauth.connect({
+        integrationID,
+        ...(methodID ? { methodID } : {}),
+      } as never);
+      const d = (res.data ?? {}) as Record<string, unknown>;
+      return {
+        attemptID: typeof d.attemptID === "string" ? d.attemptID : undefined,
+        url: typeof d.url === "string" ? d.url : undefined,
+      };
+    },
+    oauthStatus: async (integrationID: string, attemptID: string): Promise<Record<string, unknown>> => {
+      const res = await getClient().integration.oauth.status({ integrationID, attemptID } as never);
+      return (res.data ?? {}) as unknown as Record<string, unknown>;
+    },
+    oauthComplete: (integrationID: string, attemptID: string): Promise<void> =>
+      getClient().integration.oauth.complete({ integrationID, attemptID } as never),
+    oauthCancel: (integrationID: string, attemptID: string): Promise<void> =>
+      getClient().integration.oauth.cancel({ integrationID, attemptID } as never),
+    commandConnect: async (
+      integrationID: string,
+      methodID: string,
+    ): Promise<{ attemptID?: string; instructions?: string }> => {
+      const res = await getClient().integration.command.connect({ integrationID, methodID } as never);
+      const d = (res.data ?? {}) as Record<string, unknown>;
+      return {
+        attemptID: typeof d.attemptID === "string" ? d.attemptID : undefined,
+        instructions: typeof d.instructions === "string" ? d.instructions : undefined,
+      };
+    },
+
+    // -- vcs -------------------------------------------------------------------
+    vcsInfo: async (): Promise<{ branch?: string } | undefined> => {
+      try {
+        const res = await getClient().vcs.get();
+        const info = res.data as unknown as { branch?: { name?: string; current?: string } | string } | undefined;
+        if (!info?.branch) return undefined;
+        if (typeof info.branch === "string") return { branch: info.branch };
+        return { branch: info.branch.name ?? info.branch.current };
+      } catch {
+        return undefined;
+      }
+    },
+    vcsDiff: async (mode: "working" | "branch", directory?: string): Promise<string> => {
+      const res = await getClient().vcs.diff({
+        mode,
+        ...(directory ? { location: { directory } } : {}),
+      } as never);
+      const out = res.data as unknown;
+      if (typeof out === "string") return out;
+      const rec = (out ?? {}) as Record<string, unknown>;
+      return typeof rec.diff === "string" ? rec.diff : typeof rec.text === "string" ? rec.text : "";
+    },
+
+    // -- worktrees --------------------------------------------------------------
+    worktreeList: async (projectID: string): Promise<Array<Record<string, unknown>>> => {
+      const res = (await getClient().worktree.list({ projectID })) as unknown;
+      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+    },
+    worktreeCreate: (projectID: string, opts: { from?: string; directory: string; name?: string }): Promise<unknown> =>
+      getClient().worktree.create({
+        projectID,
+        strategy: { ...(opts.from ? { from: opts.from } : {}), directory: opts.directory, ...(opts.name ? { name: opts.name } : {}) },
+      } as never),
+    worktreeRemove: (projectID: string, directory: string, force: boolean): Promise<void> =>
+      getClient().worktree.remove({ projectID, directory, force } as never),
+    worktreeRefresh: (projectID: string): Promise<void> => getClient().worktree.refresh({ projectID }),
     providers: async () => {
       const [integrations, providers] = await Promise.all([
         getClient().integration.list().catch(() => undefined),
@@ -181,6 +306,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
           activation: p.activation,
         })),
       };
+    },
+    projectCurrent: async (): Promise<Record<string, unknown> | undefined> => {
+      const res = await getClient().project.current();
+      return res as unknown as Record<string, unknown> | undefined;
     },
   };
 }

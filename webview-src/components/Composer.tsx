@@ -18,7 +18,8 @@ interface Props {
   disabled: boolean;
   busy: boolean;
   sendKey: "enter" | "ctrlEnter";
-  onSend(text: string, files?: Array<{ uri: string; name?: string }>): Promise<void> | void;
+  catalogTick?: number;
+  onSend(text: string, files?: Array<{ uri: string; name?: string }>, delivery?: "queue"): Promise<void> | void;
   onSendCommand(command: string, args: string): Promise<void> | void;
   onSendSkill(skill: string): Promise<void> | void;
   onStop(): void;
@@ -60,8 +61,10 @@ export function Composer(props: Props) {
   const [atQuery, setAtQuery] = useState("");
   const [atHits, setAtHits] = useState<FileHit[]>([]);
   const [atIndex, setAtIndex] = useState(0);
+  const [delivery, setDelivery] = useState<"queue" | undefined>(undefined);
 
-  // Load the V2 command/skill catalog once per mount (cheap list endpoints).
+  // Load the V2 command/skill catalog once per mount (cheap list endpoints);
+  // re-runs when the catalogTick changes (command.updated / skill.updated).
   useEffect(() => {
     if (props.disabled) return;
     void (async () => {
@@ -78,7 +81,7 @@ export function Composer(props: Props) {
         /* not connected yet — retried on next composer focus */
       }
     })();
-  }, [props.disabled]);
+  }, [props.disabled, props.catalogTick]);
 
   const filteredSlash = useMemo(() => filterSlashEntries(slashEntries, slashFilter), [slashEntries, slashFilter]);
 
@@ -237,12 +240,13 @@ export function Composer(props: Props) {
     });
     setPreview(false);
     try {
-      await props.onSend(value, files.length ? files : undefined);
+      await props.onSend(value, files.length ? files : undefined, delivery);
+      setDelivery(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setTimeout(() => setError(undefined), 4000);
     }
-  }, [text, attachments, props]);
+  }, [text, attachments, delivery, props]);
 
   // derived for selectors
   const visibleModels = useMemo(() => filterVisibleModels(props.models, props.hidden), [props.models, props.hidden]);
@@ -655,6 +659,18 @@ export function Composer(props: Props) {
         <span className="spacer" />
 
         <div className="composer-actions-right">
+          {props.busy && (
+            <div className="picker">
+              <button
+                type="button"
+                className={`chip${delivery === "queue" ? " on" : ""}`}
+                title={delivery === "queue" ? "Follow-ups queue until the current run ends" : "Follow-ups steer the agent immediately"}
+                onClick={() => setDelivery((d) => (d === "queue" ? undefined : "queue"))}
+              >
+                {delivery === "queue" ? "queued" : "steer"}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className={`chip${preview ? " on" : ""}`}

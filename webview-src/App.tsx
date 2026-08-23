@@ -11,6 +11,8 @@ import {
 import { contextPercent, formatCost, formatTokens } from "./lib/format";
 import { modelKey, resolveDefault, toggleInList } from "./lib/models";
 import { chime } from "./lib/sound";
+import { actionsForEvent } from "./lib/events";
+import { applyDelta, type DeltaEvent } from "./lib/deltas";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -18,6 +20,9 @@ import { ProvidersDrawer } from "./components/ProvidersDrawer";
 import { McpDrawer } from "./components/McpDrawer";
 import { Feed } from "./components/Feed";
 import { FormCard } from "./components/FormCard";
+import { SavedPermissionsDrawer } from "./components/SavedPermissionsDrawer";
+import { InstructionsDrawer } from "./components/InstructionsDrawer";
+import { WorktreesDrawer } from "./components/WorktreesDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 
@@ -33,6 +38,16 @@ interface PermissionCardData {
 export function App() {
   const [conn, setConn] = useState<Conn>("connecting");
   const [forms, setForms] = useState<WireForm[]>([]);
+  const [mcpTick, setMcpTick] = useState(0);
+  const [providersTick, setProvidersTick] = useState(0);
+  const [worktreeTick, setWorktreeTick] = useState(0);
+  const [instructionsTick, setInstructionsTick] = useState(0);
+  const [slashTick, setSlashTick] = useState(0);
+  const [vcsBranch, setVcsBranch] = useState<string | undefined>(undefined);
+  /** Mirror of `messages` so event handlers can merge deltas without stale closures. */
+  const messagesRef = useRef<AnyMessage[]>([]);
+  /** Last message reverted from (so Redo can distinguish itself from Undo). */
+  const revertTargetRef = useRef<string | undefined>(undefined);
   const [connDetail, setConnDetail] = useState<string | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
@@ -54,6 +69,9 @@ export function App() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
+  const [savedPermsOpen, setSavedPermsOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
     undefined,
@@ -163,6 +181,29 @@ export function App() {
     }
   }, []);
 
+  const refreshVcs = useCallback(async () => {
+    try {
+      const info = await rpc.call<{ branch?: string } | undefined>("vcs.info");
+      setVcsBranch(info?.branch || undefined);
+    } catch {
+      setVcsBranch(undefined);
+    }
+  }, []);
+
+  const reloadSlash = useCallback(async () => {
+    setSlashTick((t) => t + 1);
+  }, []);
+
+  // Keep messagesRef in sync for the delta accumulator.
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Branch chip: fetch once per connection + on vcs events.
+  useEffect(() => {
+    if (conn === "connected") void refreshVcs();
+  }, [conn, refreshVcs]);
+
   // ---- push events ---------------------------------------------------------
   useEffect(() => {
     let sessionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -249,19 +290,42 @@ export function App() {
             if (isTerminal) chime("done");
           }
 
-          if (
-            evt.type.startsWith("session.") ||
-            evt.type.startsWith("permission.") ||
-            evt.type.startsWith("execution.") ||
-            evt.type.startsWith("message.")
-          ) {
+          // ---- typed event router (Q18: every valuable V2 event wired) ----
+          const actions = actionsForEvent(evt.type);
+          if (actions.length > 0) {
+            // Deltas are applied immediately below (no refetch); everything else
+            // refreshes through the debounced REST path.
             clearTimeout(sessionTimer);
-            sessionTimer = setTimeout(() => void refreshSessions(), 150);
+            sessionTimer = setTimeout(
+              () => {
+                for (const a of actions) {
+                  if (a === "sessions") void refreshSessions();
+                  if (a === "pickers") void refreshPickers();
+                  if (a === "permissions") void refreshPendingPermissions();
+                  if (a === "forms") void refreshForms();
+                  if (a === "mcp") setMcpTick((t) => t + 1);
+                  if (a === "providers") setProvidersTick((t) => t + 1);
+                  if (a === "vcs") void refreshVcs();
+                  if (a === "worktrees") setWorktreeTick((t) => t + 1);
+                  if (a === "instructions") setInstructionsTick((t) => t + 1);
+                  if (a === "commands") void reloadSlash();
+                }
+              },
+              150,
+            );
           }
 
           if (sid && sid === activeIdRef.current) {
-            clearTimeout(messageTimer);
-            messageTimer = setTimeout(() => void refreshMessages(sid), 120);
+            const wantsMessages = actions.includes("messages");
+            // Try the incremental accumulator first for a smooth stream.
+            const merged = applyDelta(messagesRef.current, { type: evt.type, data: evt.data as DeltaEvent["data"] });
+            if (merged) {
+              messagesRef.current = merged;
+              setMessages(merged);
+            } else if (wantsMessages || isTerminal) {
+              clearTimeout(messageTimer);
+              messageTimer = setTimeout(() => void refreshMessages(sid), 120);
+            }
             if (evt.type === "session.execution.started" || evt.type === "session.status.updated") {
               setBusySessions((b) => ({ ...b, [sid]: true }));
             }
@@ -322,7 +386,7 @@ export function App() {
 
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
-    async (text: string, files?: Array<{ uri: string; name?: string }>) => {
+    async (text: string, files?: Array<{ uri: string; name?: string }>, delivery?: "queue") => {
       if (!activeId || (!text.trim() && (!files || files.length === 0))) return;
       const optimistic: Extract<AnyMessage, { type: "user" }> = {
         type: "user",
@@ -335,6 +399,7 @@ export function App() {
       try {
         const params: Record<string, unknown> = { sessionID: activeId, text: text || "" };
         if (files && files.length) (params as Record<string, unknown>).files = files;
+        if (delivery) params.delivery = delivery;
         await rpc.call("prompt.send", params);
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
@@ -351,6 +416,51 @@ export function App() {
       await rpc.call("prompt.interrupt", { sessionID: activeId });
     } catch {
       /* surfaced by state */
+    }
+  }, [activeId]);
+
+  /** Export the session in V2 transfer format (JSON, re-importable). */
+  const exportSession = useCallback(async () => {
+    if (!activeId) return;
+    try {
+      const data = await rpc.call<unknown>("session.export", { sessionID: activeId });
+      const res = await rpc.call<{ saved: boolean; path?: string }>("dialog.saveText", {
+        content: JSON.stringify(data, null, 2),
+        suggestedName: `${(active?.title ?? "session").replace(/[^\w.-]+/g, "_")}.json`,
+      });
+      if (!res.saved && res.path === undefined) return; // user cancelled
+    } catch (e) {
+      void e; // surfaced by rpc error path
+    }
+  }, [activeId, active?.title]);
+
+  /** Undo the last turn: stage a revert at the newest assistant message + commit. */
+  const undoLastTurn = useCallback(async () => {
+    if (!activeId) return;
+    const lastAssistant = [...messagesRef.current].reverse().find(isAssistant);
+    if (!lastAssistant) return;
+    try {
+      await rpc.call("session.revert.stage", { sessionID: activeId, messageID: lastAssistant.id, files: true });
+      await rpc.call("session.revert.commit", { sessionID: activeId });
+      revertTargetRef.current = lastAssistant.id;
+    } catch {
+      /* surfaced via refresh */
+    }
+  }, [activeId]);
+
+  /**
+   * Redo: restore to the most recent snapshot after an undo — stage + commit at
+   * the latest assistant message again.
+   */
+  const redoRevert = useCallback(async () => {
+    if (!activeId) return;
+    const lastAssistant = [...messagesRef.current].reverse().find(isAssistant);
+    if (!lastAssistant || lastAssistant.id === revertTargetRef.current) return;
+    try {
+      await rpc.call("session.revert.stage", { sessionID: activeId, messageID: lastAssistant.id, files: true });
+      await rpc.call("session.revert.commit", { sessionID: activeId });
+    } catch {
+      /* surfaced via refresh */
     }
   }, [activeId]);
 
@@ -458,6 +568,7 @@ export function App() {
         conn={conn}
         title={active?.title}
         sessionId={activeId}
+        branch={vcsBranch}
         workspaceName={
           active?.location?.directory
             ? active.location.directory.split(/[\\/]/).filter(Boolean).pop()
@@ -472,6 +583,14 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
+        onOpenSavedPermissions={() => setSavedPermsOpen(true)}
+        onOpenInstructions={() => {
+          if (activeId) setInstructionsOpen(true);
+        }}
+        onOpenWorktrees={() => setWorktreesOpen(true)}
+        onExport={() => void exportSession()}
+        onUndo={() => void undoLastTurn()}
+        onRedo={() => void redoRevert()}
         onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
         theme={cfg?.ui.theme ?? "dark"}
         onToggleTheme={() => {
@@ -569,9 +688,15 @@ export function App() {
           />
         )}
 
-        {providersOpen && <ProvidersDrawer onClose={() => setProvidersOpen(false)} />}
+        {providersOpen && <ProvidersDrawer onClose={() => setProvidersOpen(false)} refreshTick={providersTick} />}
 
-        {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} />}
+        {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} refreshTick={mcpTick} />}
+
+        {savedPermsOpen && <SavedPermissionsDrawer onClose={() => setSavedPermsOpen(false)} />}
+        {instructionsOpen && activeId && (
+          <InstructionsDrawer sessionId={activeId} onClose={() => setInstructionsOpen(false)} />
+        )}
+        {worktreesOpen && <WorktreesDrawer onClose={() => setWorktreesOpen(false)} />}
       </main>
 
       {forms.length > 0 && (
@@ -600,6 +725,7 @@ export function App() {
         disabled={!activeId || conn !== "connected"}
         busy={busy}
         sendKey={cfg?.ui.sendKey ?? "enter"}
+        catalogTick={slashTick}
         onSend={(t, files) => void sendMessage(t, files)}
         onSendCommand={async (command, args) => {
           if (!activeId) return;
