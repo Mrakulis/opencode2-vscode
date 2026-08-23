@@ -582,6 +582,28 @@ button:focus-visible {
   border-radius: var(--oc2-radius);
   margin: var(--oc2-space-2) 0;
   overflow: hidden;
+  border-left-width: 3px;
+}
+.tool-card.kind-read {
+  border-left-color: #3794ff;
+}
+.tool-card.kind-edit {
+  border-left-color: #f0a500;
+}
+.tool-card.kind-shell {
+  border-left-color: #89d185;
+}
+.tool-card.kind-other {
+  border-left-color: var(--oc2-border);
+}
+.tool-card.kind-read .tool-head {
+  background: rgba(55, 148, 255, 0.08);
+}
+.tool-card.kind-edit .tool-head {
+  background: rgba(240, 165, 0, 0.1);
+}
+.tool-card.kind-shell .tool-head {
+  background: rgba(137, 209, 133, 0.08);
 }
 .tool-head {
   width: 100%;

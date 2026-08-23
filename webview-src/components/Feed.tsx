@@ -203,6 +203,15 @@ function Reasoning({ text, defaultOpen }: { text: string; defaultOpen: boolean }
 
 const SHELL_TOOLS = new Set(["bash", "shell", "terminal", "exec", "command", "powershell"]);
 const EDIT_TOOLS = new Set(["edit", "write", "apply", "apply_patch", "multiedit", "patch", "create_file", "str_replace"]);
+const READ_TOOLS = new Set(["read", "read_file", "view", "open", "grep", "search", "find", "glob", "glob_search", "list", "ls", "cat", "glob_files", "file_search"]);
+
+function toolKind(name: string): "shell" | "edit" | "read" | "other" {
+  const n = name.toLowerCase();
+  if (/[/.]/.test(n) || SHELL_TOOLS.has(n)) return "shell";
+  if (EDIT_TOOLS.has(n) || /edit|diff|patch/.test(n)) return "edit";
+  if (READ_TOOLS.has(n) || /read|grep|find|glob|search|list/.test(n)) return "read";
+  return "other";
+}
 
 function initiallyExpanded(toolName: string, shellPref: boolean, editPref: boolean): boolean {
   const n = toolName.toLowerCase();
@@ -287,8 +296,9 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
     title = `${part.name} — ${part.state.status}`;
   }
 
+  const kind = toolKind(part.name);
   return (
-    <div className={`tool-card st-${part.state.status}`}>
+    <div className={`tool-card st-${part.state.status} kind-${kind}`}>
       <button type="button" className="tool-head" onClick={() => setExpanded((v) => !v)}>
         <span className={`chev${expanded ? " open" : ""}`}>▸</span> {title}
       </button>
