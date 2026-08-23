@@ -392,10 +392,22 @@ export function App() {
     return texts.join("\n");
   }, [messages]);
   const isQuestion = useMemo(() => {
-    if (permissions.length > 0 || !lastAssistantText) return false;
+    if (!lastAssistantText) return false;
     const t = lastAssistantText.trim();
     return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
-  }, [lastAssistantText, permissions]);
+  }, [lastAssistantText]);
+
+  useEffect(() => {
+    // debug — helps trace why banner doesn't show
+    console.log("[oc2] question check", {
+      len: lastAssistantText.length,
+      preview: lastAssistantText.slice(0, 120),
+      isQuestion,
+      busy,
+      perms: permissions.length,
+      hasActive: !!activeId,
+    });
+  }, [lastAssistantText, isQuestion, busy, permissions.length, activeId]);
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
