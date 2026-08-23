@@ -488,7 +488,8 @@ button:focus-visible {
 .md {
   line-height: 1.58;
   word-break: break-word;
-  color: var(--vscode-sideBar-foreground);
+  color: var(--vscode-editor-foreground, var(--vscode-foreground, var(--vscode-sideBar-foreground)));
+  opacity: 1;
 }
 .md p {
   margin: var(--oc2-space-2) 0;
@@ -506,6 +507,7 @@ button:focus-visible {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 1px);
   background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground, var(--vscode-foreground));
   border-radius: 3px;
   padding: 1px 4px;
   box-shadow: inset 0 0 0 1px var(--oc2-border);
@@ -514,6 +516,7 @@ button:focus-visible {
   padding: 0;
   box-shadow: none;
   background: transparent;
+  color: inherit;
 }
 .md h1,
 .md h2,
@@ -568,8 +571,8 @@ button:focus-visible {
 .reasoning-body {
   padding: 0 var(--oc2-space-3) var(--oc2-space-2);
   white-space: pre-wrap;
-  color: var(--vscode-foreground);
-  opacity: 0.92;
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  opacity: 1;
   font-size: calc(var(--oc2-font-size) - 1px);
 }
 

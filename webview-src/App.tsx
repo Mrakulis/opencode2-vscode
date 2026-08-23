@@ -213,7 +213,8 @@ export function App() {
           if (
             evt.type.startsWith("session.") ||
             evt.type.startsWith("permission.") ||
-            evt.type.startsWith("execution.")
+            evt.type.startsWith("execution.") ||
+            evt.type.startsWith("message.")
           ) {
             clearTimeout(sessionTimer);
             sessionTimer = setTimeout(() => void refreshSessions(), 150);
@@ -266,6 +267,13 @@ export function App() {
     if (conn !== "connected") return;
     void rpc.call("ui.activeSession", { id: activeId }).catch(() => undefined);
   }, [activeId, conn]);
+
+  // Keep the feed in sync even if the event stream stalls (fallback poll while busy).
+  useEffect(() => {
+    if (!busy || !activeId) return;
+    const id = setInterval(() => void refreshMessages(activeId), 1500);
+    return () => clearInterval(id);
+  }, [busy, activeId, refreshMessages]);
 
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
