@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isInbound, isRpcRequest } from "../src/protocol";
+import { isInbound, isRpcRequest, isSettingKey, validateSettingValue } from "../src/protocol";
 
 describe("isInbound", () => {
   it("accepts known inbound shapes", () => {
@@ -31,5 +31,19 @@ describe("isRpcRequest", () => {
     assert.equal(isRpcRequest({ type: "hello" }), false);
     assert.equal(isRpcRequest({ id: 1, method: "x" }), false);
     assert.equal(isRpcRequest(undefined), false);
+  });
+});
+
+describe("settings guards", () => {
+  it("recognises known keys incl. ui.theme", () => {
+    assert.equal(isSettingKey("ui.theme"), true);
+    assert.equal(isSettingKey("ui.density"), true);
+    assert.equal(isSettingKey("ui.nope"), false);
+  });
+  it("validates ui.theme values", () => {
+    assert.deepEqual(validateSettingValue("ui.theme", "dark"), { ok: true });
+    assert.deepEqual(validateSettingValue("ui.theme", "light"), { ok: true });
+    assert.equal(validateSettingValue("ui.theme", "system").ok, false);
+    assert.equal(validateSettingValue("ui.theme", 1).ok, false);
   });
 });

@@ -6,6 +6,7 @@
 // ---- resolved configuration ------------------------------------------------
 
 export type Density = "compact" | "comfortable";
+export type ThemeName = "dark" | "light";
 export type ShowReasoning = "hide" | "collapsed" | "expanded";
 export type SendKey = "enter" | "ctrlEnter";
 export type PermissionMode = "askFirst" | "autoAllow" | "deny";
@@ -21,6 +22,7 @@ export interface ModelPrefs {
 
 export interface UiPrefs {
   density: Density;
+  theme: ThemeName;
   accentTint?: string;
   sounds: boolean;
   showReasoning: ShowReasoning;
@@ -43,6 +45,7 @@ export const SETTING_KEYS = [
   "models.favorites",
   "models.default",
   "ui.density",
+  "ui.theme",
   "ui.sounds",
   "ui.showReasoning",
   "ui.expandShellTools",
@@ -166,6 +169,10 @@ export function validateSettingValue(key: SettingKey, value: unknown): SettingCh
       return value === "compact" || value === "comfortable"
         ? { ok: true }
         : { ok: false, reason: "density must be compact|comfortable" };
+    case "ui.theme":
+      return value === "dark" || value === "light"
+        ? { ok: true }
+        : { ok: false, reason: "theme must be dark|light" };
     case "ui.showReasoning":
       return value === "hide" || value === "collapsed" || value === "expanded"
         ? { ok: true }

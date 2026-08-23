@@ -232,6 +232,19 @@
           "default": "compact",
           "description": "UI density of the sidebar."
         },
+        "opencode2.ui.theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "enumDescriptions": [
+            "OpenCode 2 dark (default)",
+            "OpenCode 2 light"
+          ],
+          "default": "dark",
+          "description": "Color theme of the sidebar. Uses the built-in OpenCode 2 themes, not the VS Code theme."
+        },
         "opencode2.ui.accentTint": {
           "type": "string",
           "default": "",

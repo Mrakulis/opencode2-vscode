@@ -16,6 +16,8 @@ interface Props {
   onOpenProviders(): void;
   onOpenMcp(): void;
   onOpenSettings(): void;
+  theme: "dark" | "light";
+  onToggleTheme(): void;
 }
 
 export function HeaderBar(props: Props) {
@@ -102,6 +104,15 @@ export function HeaderBar(props: Props) {
               </button>
               <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenMcp(); }}>
                 MCP servers…
+              </button>
+              <div className="menu-sep" />
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => { props.onToggleTheme(); }}
+                title="Switch between the OpenCode 2 dark and light themes"
+              >
+                {props.theme === "dark" ? "☾ Dark theme" : "☀ Light theme"}
               </button>
               <div className="menu-sep" />
               <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); void props.onCopyTranscript(); }}>

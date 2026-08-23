@@ -1,26 +1,46 @@
 /*
- * OpenCode 2 design tokens.
- * Base layer = VS Code theme variables (always native to the user's theme).
+ * OpenCode 2 design tokens — first-party (`--oc2-*`). No VS Code theme vars.
+ * Dark is the default; light ships via [data-theme="light"]; official OpenCode
+ * themes land later as additional [data-theme="..."] blocks.
  * Brand layer = shape/typography only; accent is reserved for live states.
  */
 
 :root {
-  --oc2-bg: #252526;
-  --oc2-bg-surface: #2d2d30;
-  --oc2-bg-input: #1e1e1e;
-  --oc2-bg-hover: #2a2d2e;
-  --oc2-bg-active: #37373d;
-  --oc2-bg-menu: #252526;
-  --oc2-border: #3c3c3c;
-  --oc2-border-strong: #454545;
-  --oc2-fg: #d4d4d4;
+  /* surfaces */
+  --oc2-bg: #17171c;
+  --oc2-bg-surface: #1f1f26;
+  --oc2-bg-input: #131318;
+  --oc2-bg-hover: #24242d;
+  --oc2-bg-active: #2c2c37;
+  --oc2-bg-menu: #1f1f26;
+  --oc2-border: #30303b;
+  --oc2-border-strong: #3d3d4a;
+  /* text */
+  --oc2-fg: #e6e6ee;
   --oc2-fg-title: #ffffff;
-  --oc2-fg-muted: #858585;
-  --oc2-fg-subtle: #a8a8a8;
-  --oc2-accent: #89d185;
-  --oc2-link: #4da6ff;
-  --oc2-error: #f48771;
-  --oc2-success: #89d185;
+  --oc2-fg-muted: #8f8fa3;
+  --oc2-fg-subtle: #b0b0c2;
+  /* brand + state */
+  --oc2-accent: #7c5cff;
+  --oc2-link: #9d7cff;
+  --oc2-error: #ff6b6b;
+  --oc2-success: #4ade80;
+
+  /* semantic aliases (component-level, themed) */
+  --oc2-tool-read: #4ade80;
+  --oc2-tool-edit: #61afef;
+  --oc2-tool-shell: #e5c07b;
+  --oc2-tool-read-dim: rgba(74, 222, 128, 0.08);
+  --oc2-tool-edit-dim: rgba(97, 175, 239, 0.1);
+  --oc2-tool-shell-dim: rgba(229, 192, 123, 0.08);
+  --oc2-terminal-bg: #101014;
+  --oc2-terminal-fg: #c8c8d4;
+  --oc2-terminal-cmd: #e5c07b;
+  --oc2-diff-add-bg: rgba(74, 222, 128, 0.16);
+  --oc2-diff-add-fg: #7ee2a0;
+  --oc2-diff-del-bg: rgba(255, 107, 107, 0.14);
+  --oc2-diff-del-fg: #ff9b9b;
+  --oc2-question: #c084fc;
 
   /* density tokens — swapped via [data-density] */
   --oc2-font-size: 13px;
@@ -30,6 +50,41 @@
   --oc2-radius: 6px;
 
   --oc2-mono: ui-monospace, monospace;
+}
+
+/* light theme */
+:root[data-theme="light"] {
+  --oc2-bg: #fafafa;
+  --oc2-bg-surface: #ffffff;
+  --oc2-bg-input: #ffffff;
+  --oc2-bg-hover: #f0eff6;
+  --oc2-bg-active: #e5e3f0;
+  --oc2-bg-menu: #ffffff;
+  --oc2-border: #e2e2ea;
+  --oc2-border-strong: #c9c9d6;
+  --oc2-fg: #23232b;
+  --oc2-fg-title: #000000;
+  --oc2-fg-muted: #6b6b7d;
+  --oc2-fg-subtle: #55556a;
+  --oc2-accent: #6d47f0;
+  --oc2-link: #5b3df0;
+  --oc2-error: #dc2626;
+  --oc2-success: #16a34a;
+
+  --oc2-tool-read: #16a34a;
+  --oc2-tool-edit: #2563eb;
+  --oc2-tool-shell: #b45309;
+  --oc2-tool-read-dim: rgba(22, 163, 74, 0.08);
+  --oc2-tool-edit-dim: rgba(37, 99, 235, 0.08);
+  --oc2-tool-shell-dim: rgba(180, 83, 9, 0.08);
+  --oc2-terminal-bg: #f3f2fa;
+  --oc2-terminal-fg: #33333d;
+  --oc2-terminal-cmd: #92600a;
+  --oc2-diff-add-bg: rgba(22, 163, 74, 0.12);
+  --oc2-diff-add-fg: #15803d;
+  --oc2-diff-del-bg: rgba(220, 38, 38, 0.1);
+  --oc2-diff-del-fg: #b91c1c;
+  --oc2-question: #9333ea;
 }
 
 :root[data-density="comfortable"] {
@@ -78,7 +133,7 @@ button:hover {
 }
 button.primary {
   background: var(--oc2-accent);
-  color: #1e1e1e;
+  color: #ffffff;
 }
 button.primary:hover {
   background: var(--oc2-accent);
@@ -641,25 +696,25 @@ button:focus-visible {
   border-left-width: 3px;
 }
 .tool-card.kind-read {
-  border-left-color: #89d185;
+  border-left-color: var(--oc2-tool-read);
 }
 .tool-card.kind-edit {
-  border-left-color: #61afef;
+  border-left-color: var(--oc2-tool-edit);
 }
 .tool-card.kind-shell {
-  border-left-color: #e5c07b;
+  border-left-color: var(--oc2-tool-shell);
 }
 .tool-card.kind-other {
   border-left-color: var(--oc2-border);
 }
 .tool-card.kind-read .tool-head {
-  background: rgba(137, 209, 133, 0.08);
+  background: var(--oc2-tool-read-dim);
 }
 .tool-card.kind-edit .tool-head {
-  background: rgba(97, 175, 239, 0.1);
+  background: var(--oc2-tool-edit-dim);
 }
 .tool-card.kind-shell .tool-head {
-  background: rgba(229, 192, 123, 0.12);
+  background: var(--oc2-tool-shell-dim);
 }
 .tool-head {
   width: 100%;
@@ -703,8 +758,8 @@ button:focus-visible {
   color: var(--oc2-fg);
 }
 .tool-out.terminal {
-  background: #1e1e1e;
-  color: #cccccc;
+  background: var(--oc2-terminal-bg);
+  color: var(--oc2-terminal-fg);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   padding: var(--oc2-space-2);
@@ -713,8 +768,8 @@ button:focus-visible {
   margin: 0 0 var(--oc2-space-2) 0;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 1px);
-  background: #1e1e1e;
-  color: #dcdcaa;
+  background: var(--oc2-terminal-bg);
+  color: var(--oc2-terminal-cmd);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   padding: var(--oc2-space-1) var(--oc2-space-2);
@@ -737,12 +792,12 @@ button:focus-visible {
   background: var(--oc2-bg-hover);
 }
 .diff .line.add {
-  background: rgba(80, 200, 120, 0.18);
-  color: #81c784;
+  background: var(--oc2-diff-add-bg);
+  color: var(--oc2-diff-add-fg);
 }
 .diff .line.del {
-  background: rgba(220, 80, 80, 0.15);
-  color: #e57373;
+  background: var(--oc2-diff-del-bg);
+  color: var(--oc2-diff-del-fg);
 }
 .diff .line.meta {
   color: var(--oc2-fg-muted);
@@ -877,16 +932,16 @@ button:focus-visible {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 .perm-card[data-action="shell"] {
-  border-left-color: #e5c07b;
+  border-left-color: var(--oc2-tool-shell);
 }
 .perm-card[data-action="edit"] {
-  border-left-color: #61afef;
+  border-left-color: var(--oc2-tool-edit);
 }
 .perm-card[data-action="read"] {
-  border-left-color: #89d185;
+  border-left-color: var(--oc2-tool-read);
 }
 .perm-card[data-action="write"] {
-  border-left-color: #61afef;
+  border-left-color: var(--oc2-tool-edit);
 }
 .perm-header {
   display: flex;
@@ -905,16 +960,16 @@ button:focus-visible {
   text-transform: lowercase;
 }
 .perm-badge.shell {
-  color: #e5c07b;
-  border-color: rgba(229, 192, 123, 0.4);
+  color: var(--oc2-tool-shell);
+  border-color: var(--oc2-tool-shell-dim);
 }
 .perm-badge.edit {
-  color: #61afef;
-  border-color: rgba(97, 175, 239, 0.4);
+  color: var(--oc2-tool-edit);
+  border-color: var(--oc2-tool-edit-dim);
 }
 .perm-badge.read {
-  color: #89d185;
-  border-color: rgba(137, 209, 133, 0.4);
+  color: var(--oc2-tool-read);
+  border-color: var(--oc2-tool-read-dim);
 }
 .perm-title {
   font-family: var(--oc2-mono);
@@ -1018,7 +1073,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   background: var(--oc2-accent);
-  color: #1e1e1e;
+  color: #ffffff;
   font-size: var(--oc2-font-size);
   padding: 0;
   line-height: 1;
@@ -1120,7 +1175,7 @@ button:focus-visible {
   text-transform: lowercase;
 }
 .model-meta.ok {
-  color: #81c784;
+  color: var(--oc2-success);
 }
 .model-meta.err,
 .model-meta.warn {

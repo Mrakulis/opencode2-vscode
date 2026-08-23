@@ -69,6 +69,7 @@ export function App() {
   useEffect(() => {
     if (!cfg) return;
     document.documentElement.dataset.density = cfg.ui.density;
+    document.documentElement.dataset.theme = cfg.ui.theme;
     if (cfg.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
     else document.documentElement.style.removeProperty("--oc2-accent");
     setSounds(cfg.ui.sounds);
@@ -165,6 +166,7 @@ export function App() {
         case "ready": {
           setCfg(msg.config);
           document.documentElement.dataset.density = msg.config.ui.density;
+          document.documentElement.dataset.theme = msg.config.ui.theme;
           if (msg.config.ui.accentTint) {
             document.documentElement.style.setProperty("--oc2-accent", msg.config.ui.accentTint);
           } else {
@@ -488,11 +490,9 @@ export function App() {
   }, [active?.agent, agents]);
 
   useEffect(() => {
-    if (isPlan) {
-      document.documentElement.dataset.plan = "true";
-      document.documentElement.style.setProperty("--oc2-accent", "#f59e0b");
-    } else {
-      document.documentElement.dataset.plan = "false";
+    // CSS owns the plan accent via [data-plan="true"]; JS only manages accentTint.
+    document.documentElement.dataset.plan = isPlan ? "true" : "false";
+    if (!isPlan) {
       if (cfg?.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
       else document.documentElement.style.removeProperty("--oc2-accent");
     }
@@ -520,6 +520,11 @@ export function App() {
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
         onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
+        theme={cfg?.ui.theme ?? "dark"}
+        onToggleTheme={() => {
+          const next = (cfg?.ui.theme ?? "dark") === "dark" ? "light" : "dark";
+          void updateSettings([{ key: "ui.theme", value: next }]);
+        }}
         onCopyTranscript={async () => {
           const md = buildTranscript(messages);
           try {
@@ -630,9 +635,9 @@ export function App() {
 
       {activeQuestion && activeId && (
         <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
             <div className="perm-header">
-              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
                 question
               </span>
               <span>{activeQuestion.text}</span>
@@ -646,7 +651,7 @@ export function App() {
                   style={{
                     textAlign: "left",
                     cursor: opt.toLowerCase().startsWith("other") ? "default" : "pointer",
-                    border: opt === activeQuestion.recommended ? "1px solid #c084fc" : undefined,
+                    border: opt === activeQuestion.recommended ? "1px solid var(--oc2-question)" : undefined,
                     background: opt === activeQuestion.recommended ? "rgba(192,132,252,0.12)" : undefined,
                   }}
                   onClick={() => {
@@ -697,9 +702,9 @@ export function App() {
 
       {questionPerm && activeId && (
         <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
             <div className="perm-header">
-              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
                 question
               </span>
               <span>Agent is asking for input</span>
@@ -722,9 +727,9 @@ export function App() {
 
       {isQuestion && !questionPerm && activeId && (
         <div className="permissions">
-          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "var(--oc2-question)" }}>
             <div className="perm-header">
-              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+              <span className="perm-badge" style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}>
                 question
               </span>
               <span>Agent is waiting for your answer</span>
@@ -742,7 +747,7 @@ export function App() {
                     style={{
                       textAlign: "left",
                       cursor: opt.isOther ? "default" : "pointer",
-                      border: opt.recommended ? "1px solid #c084fc" : undefined,
+                      border: opt.recommended ? "1px solid var(--oc2-question)" : undefined,
                       background: opt.recommended ? "rgba(192,132,252,0.12)" : undefined,
                     }}
                     onClick={() => {
