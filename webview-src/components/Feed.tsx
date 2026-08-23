@@ -232,19 +232,28 @@ type ToolPart = MessagePartTool;
 
 function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: { part: ToolPart; expandShellTools: boolean; expandEditTools: boolean; fullShellOutput: boolean }) {
   const [expanded, setExpanded] = useState(() => initiallyExpanded(part.name, expandShellTools, expandEditTools));
+  const kind = toolKind(part.name);
 
   let title = part.name;
   let body: React.ReactNode = null;
 
   if (part.state.status === "completed") {
-    title = toolTitle(part.name, part.state.input ?? {});
+    // shell header should just say "shell" — command goes inside the body as terminal
+    title = kind === "shell" ? "shell" : toolTitle(part.name, part.state.input ?? {});
+    const shellCmd =
+      kind === "shell" && typeof (part.state.input as Record<string, unknown> | undefined)?.command === "string"
+        ? ((part.state.input as Record<string, unknown>).command as string)
+        : typeof (part.state.input as Record<string, unknown> | undefined)?.cmd === "string"
+          ? ((part.state.input as Record<string, unknown>).cmd as string)
+          : undefined;
     body = (
       <>
+        {kind === "shell" && shellCmd && <pre className="tool-cmd">{`$ ${shellCmd}`}</pre>}
         {part.state.content?.map((c, i) => {
           if (c.type === "text") {
             const txt = String(c.text);
             return (
-              <pre key={i} className={`tool-out${fullShellOutput ? " full" : ""}`} onClick={handleFileClick}>
+              <pre key={i} className={`tool-out terminal${fullShellOutput ? " full" : ""}`} onClick={handleFileClick}>
                 {fullShellOutput ? txt : truncate(txt, 4000)}
               </pre>
             );
@@ -304,7 +313,6 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
     title = `${part.name} — ${part.state.status}`;
   }
 
-  const kind = toolKind(part.name);
   return (
     <div className={`tool-card st-${part.state.status} kind-${kind}`}>
       <button type="button" className="tool-head" onClick={() => setExpanded((v) => !v)}>
