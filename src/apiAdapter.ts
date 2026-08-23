@@ -115,6 +115,29 @@ export function createApi({ getClient }: ApiAdapterDeps) {
 
     // -- misc ----------------------------------------------------------------
     findFiles: (query: string, directory?: string) => getClient().file.find({ query, location: directory ? { directory } : undefined }),
+    commands: async (): Promise<Array<{ name: string; description?: string }>> => {
+      const res = await getClient().command.list();
+      return (res.data ?? []).map((c) => ({
+        name: c.name,
+        description: typeof c.description === "string" ? c.description : undefined,
+      }));
+    },
+    skills: async (): Promise<Array<{ name: string; description?: string; slash?: boolean }>> => {
+      const res = await getClient().skill.list();
+      return (res.data ?? []).map((s) => ({
+        name: s.name,
+        description: typeof s.description === "string" ? s.description : undefined,
+        slash: s.slash === true,
+      }));
+    },
+    sessionCommand: (sessionID: string, command: string, args?: string): Promise<unknown> =>
+      getClient().session.command({
+        sessionID,
+        command,
+        ...(args !== undefined && args.length > 0 ? { arguments: args } : {}),
+      }),
+    sessionSkill: (sessionID: string, skill: string): Promise<void> =>
+      getClient().session.skill({ sessionID, skill }),
     defaultModel: async () => {
       const res = await getClient().model.default();
       return res.data;

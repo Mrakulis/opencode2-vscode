@@ -120,6 +120,11 @@ export type RpcMethod =
   // permissions
   | "permissions.pending"
   | "permission.reply"
+  // commands & skills
+  | "commands.list"
+  | "skills.list"
+  | "session.command"
+  | "session.skill"
   // providers & mcp
   | "providers.list"
   | "providers.authCli"

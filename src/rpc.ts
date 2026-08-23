@@ -111,6 +111,14 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
         p.reply === "always" || p.reply === "reject" ? p.reply : "once",
       ),
     "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
+    "commands.list": () => api.commands(),
+    "skills.list": () => api.skills(),
+    "session.command": (p) => {
+      const command = str(p, "command");
+      const args = p.args as unknown;
+      return api.sessionCommand(str(p, "sessionID"), command, typeof args === "string" ? args : undefined);
+    },
+    "session.skill": (p) => api.sessionSkill(str(p, "sessionID"), str(p, "name")),
     "workspace.directory": async () => preferredDirectory(),
     "settings.update": (p) => {
       const updates = p.updates as Array<{ key?: unknown; value?: unknown }> | undefined;

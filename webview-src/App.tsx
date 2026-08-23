@@ -798,6 +798,26 @@ export function App() {
         busy={busy}
         sendKey={cfg?.ui.sendKey ?? "enter"}
         onSend={(t, files) => void sendMessage(t, files)}
+        onSendCommand={async (command, args) => {
+          if (!activeId) return;
+          setBusySessions((b) => ({ ...b, [activeId]: true }));
+          try {
+            await rpc.call("session.command", { sessionID: activeId, command, args });
+          } catch (e) {
+            setBusySessions((b) => ({ ...b, [activeId]: false }));
+            throw e;
+          }
+        }}
+        onSendSkill={async (name) => {
+          if (!activeId) return;
+          setBusySessions((b) => ({ ...b, [activeId]: true }));
+          try {
+            await rpc.call("session.skill", { sessionID: activeId, name });
+          } catch (e) {
+            setBusySessions((b) => ({ ...b, [activeId]: false }));
+            throw e;
+          }
+        }}
         onStop={() => void interrupt()}
         agents={agents}
         activeAgent={active?.agent}

@@ -4,13 +4,23 @@ import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
 import { rpc } from "../lib/rpc";
+import { filterSlashEntries, type SlashEntry } from "../lib/slash";
 import type { PermissionMode } from "../../src/protocol";
+
+export type { SlashEntry };
+
+interface FileHit {
+  path?: string;
+  name?: string;
+}
 
 interface Props {
   disabled: boolean;
   busy: boolean;
   sendKey: "enter" | "ctrlEnter";
   onSend(text: string, files?: Array<{ uri: string; name?: string }>): Promise<void> | void;
+  onSendCommand(command: string, args: string): Promise<void> | void;
+  onSendSkill(skill: string): Promise<void> | void;
   onStop(): void;
   // selectors moved here from header
   agents: Array<{ id: string; name: string }>;
@@ -41,6 +51,108 @@ export function Composer(props: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<Array<{ id: string; name: string; preview: string; uri: string }>>([]);
   const [modelFilter, setModelFilter] = useState("");
+  // ---- slash / @ popovers ---------------------------------------------------
+  const [slashEntries, setSlashEntries] = useState<SlashEntry[]>([]);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashFilter, setSlashFilter] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [atOpen, setAtOpen] = useState(false);
+  const [atQuery, setAtQuery] = useState("");
+  const [atHits, setAtHits] = useState<FileHit[]>([]);
+  const [atIndex, setAtIndex] = useState(0);
+
+  // Load the V2 command/skill catalog once per mount (cheap list endpoints).
+  useEffect(() => {
+    if (props.disabled) return;
+    void (async () => {
+      try {
+        const [cmds, skills] = await Promise.all([
+          rpc.call<Array<{ name: string; description?: string }>>("commands.list").catch(() => []),
+          rpc.call<Array<{ name: string; description?: string }>>("skills.list").catch(() => []),
+        ]);
+        setSlashEntries([
+          ...cmds.map((c): SlashEntry => ({ kind: "command", name: c.name, description: c.description })),
+          ...skills.map((s): SlashEntry => ({ kind: "skill", name: s.name, description: s.description })),
+        ]);
+      } catch {
+        /* not connected yet — retried on next composer focus */
+      }
+    })();
+  }, [props.disabled]);
+
+  const filteredSlash = useMemo(() => filterSlashEntries(slashEntries, slashFilter), [slashEntries, slashFilter]);
+
+  useEffect(() => setSlashIndex(0), [slashFilter, slashOpen]);
+  useEffect(() => setAtIndex(0), [atQuery, atOpen]);
+
+  /** Detect a leading `/cmd` or trailing `@query` while typing. */
+  const detectTriggers = useCallback((value: string) => {
+    const trimmedStart = value.replace(/^\s+/, "");
+    const slashMatch = /^\/([a-z0-9_-]*)$/i.exec(trimmedStart);
+    if (slashMatch) {
+      setSlashOpen(true);
+      setSlashFilter(slashMatch[1] ?? "");
+      setAtOpen(false);
+      return;
+    }
+    const atMatch = /(?:^|\s)@([^\s@]*)$/.exec(value);
+    if (atMatch && atMatch[1] !== undefined) {
+      setAtOpen(true);
+      setAtQuery(atMatch[1]);
+      setSlashOpen(false);
+      return;
+    }
+    setSlashOpen(false);
+    setAtOpen(false);
+  }, []);
+
+  // Fuzzy file lookup for `@` mentions via the V2 fs.find endpoint.
+  useEffect(() => {
+    if (!atOpen) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      void rpc
+        .call<Array<Record<string, unknown>>>("files.find", { query: atQuery })
+        .then((rows) => {
+          if (cancelled) return;
+          setAtHits(
+            rows.slice(0, 12).map((r) => ({
+              path: typeof r.path === "string" ? r.path : undefined,
+              name: typeof r.name === "string" ? r.name : undefined,
+            })),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setAtHits([]);
+        });
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [atOpen, atQuery]);
+
+  const submitSlash = useCallback(
+    (entry: SlashEntry) => {
+      const rest = text.replace(/^\s*\/[^\s]*$/, "").trim();
+      setText("");
+      setSlashOpen(false);
+      setPreview(false);
+      if (entry.kind === "skill") void props.onSendSkill(entry.name);
+      else void props.onSendCommand(entry.name, rest);
+    },
+    [text, props],
+  );
+
+  const applyMention = useCallback(
+    (hit: FileHit) => {
+      const p = hit.path ?? hit.name ?? "";
+      if (!p) return;
+      setText((prev) => prev.replace(/@([^\s@]*)$/, `@${p} `));
+      setAtOpen(false);
+    },
+    [],
+  );
 
   // auto-grow up to ~40vh
   useEffect(() => {
@@ -235,9 +347,34 @@ export function Composer(props: Props) {
           placeholder={props.disabled ? "Connect to start a session…" : props.busy ? "Agent working…" : "Ask anything..."}
           disabled={props.disabled}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            detectTriggers(e.target.value);
+          }}
           onPaste={handlePaste}
           onKeyDown={(e) => {
+            if (slashOpen && filteredSlash.length > 0) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => Math.min(i + 1, filteredSlash.length - 1)); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setSlashIndex((i) => Math.max(i - 1, 0)); return; }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const entry = filteredSlash[slashIndex];
+                if (entry) submitSlash(entry);
+                return;
+              }
+              if (e.key === "Escape") { e.preventDefault(); setSlashOpen(false); return; }
+            }
+            if (atOpen && atHits.length > 0) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setAtIndex((i) => Math.min(i + 1, atHits.length - 1)); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setAtIndex((i) => Math.max(i - 1, 0)); return; }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const hit = atHits[atIndex];
+                if (hit) applyMention(hit);
+                return;
+              }
+              if (e.key === "Escape") { e.preventDefault(); setAtOpen(false); return; }
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               const allowed = props.sendKey === "enter" || e.ctrlKey || e.metaKey;
               if (!allowed) return;
@@ -246,10 +383,79 @@ export function Composer(props: Props) {
             }
           }}
         />
+        {slashOpen && (
+          <div className="oc2-popover" role="listbox" aria-label="Commands and skills">
+            <div className="oc2-popover-head">commands & skills</div>
+            {filteredSlash.length === 0 ? (
+              <div className="oc2-popover-empty">No matching commands</div>
+            ) : (
+              filteredSlash.map((entry, i) => (
+                <button
+                  key={`${entry.kind}:${entry.name}`}
+                  type="button"
+                  role="option"
+                  aria-selected={i === slashIndex}
+                  className={`oc2-pop-item${i === slashIndex ? " sel" : ""}`}
+                  onMouseEnter={() => setSlashIndex(i)}
+                  onClick={() => submitSlash(entry)}
+                  title={entry.description ?? `/${entry.name}`}
+                >
+                  <span className={`oc2-pop-badge ${entry.kind}`}>{entry.kind === "skill" ? "skill" : "cmd"}</span>
+                  <span className="oc2-pop-name">/{entry.name}</span>
+                  {entry.description && <span className="oc2-pop-desc">{truncate(entry.description, 44)}</span>}
+                </button>
+              ))
+            )}
+            <div className="oc2-popover-hint">↑↓ navigate · Enter run · Esc close</div>
+          </div>
+        )}
+        {atOpen && (
+          <div className="oc2-popover" role="listbox" aria-label="File mentions">
+            <div className="oc2-popover-head">attach a file</div>
+            {atHits.length === 0 ? (
+              <div className="oc2-popover-empty">{atQuery.trim().length === 0 ? "Type to search files…" : "No matching files"}</div>
+            ) : (
+              atHits.map((hit, i) => {
+                const p = hit.path ?? hit.name ?? "";
+                return (
+                  <button
+                    key={`${p}:${i}`}
+                    type="button"
+                    role="option"
+                    aria-selected={i === atIndex}
+                    className={`oc2-pop-item${i === atIndex ? " sel" : ""}`}
+                    onMouseEnter={() => setAtIndex(i)}
+                    onClick={() => applyMention(hit)}
+                    title={p}
+                  >
+                    <span className="oc2-pop-badge file">@</span>
+                    <span className="oc2-pop-name">{truncate(p.split(/[\\/]/).pop() ?? p, 30)}</span>
+                    <span className="oc2-pop-desc">{truncate(p, 40)}</span>
+                  </button>
+                );
+              })
+            )}
+            <div className="oc2-popover-hint">↑↓ navigate · Enter attach · Esc close</div>
+          </div>
+        )}
         <div className="composer-input-actions">
           <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
           <button type="button" className="iconbtn" title="Attach image" disabled={props.disabled} onClick={() => fileInputRef.current?.click()}>
             ＋
+          </button>
+          <button
+            type="button"
+            className={`iconbtn${slashOpen ? " active" : ""}`}
+            title="Commands & skills (/)"
+            disabled={props.disabled}
+            onClick={() => {
+              setAtOpen(false);
+              setSlashFilter("");
+              setSlashOpen((v) => !v);
+              ref.current?.focus();
+            }}
+          >
+            /
           </button>
           <button
             type="button"
