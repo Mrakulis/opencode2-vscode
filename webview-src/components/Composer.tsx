@@ -158,13 +158,19 @@ export function Composer(props: Props) {
       props.activeModel.id)
     : "Model";
 
-  const activeVariantLabel = props.activeModel?.variant ?? "Default";
   const activeModelVariants = useMemo(() => {
     const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
     // filter out synthetic "none" variant — it maps to Default (no reasoning)
     const all = m?.variants ?? [];
     return all.filter((v) => v.id !== "none");
   }, [props.models, props.activeModel]);
+  const defaultVariantId = useMemo(() => {
+    if (activeModelVariants.length === 0) return undefined;
+    const ids = activeModelVariants.map((v) => v.id);
+    for (const cand of ["high", "medium", "low", "xhigh", "minimal", "max"]) if (ids.includes(cand)) return cand;
+    return ids[0];
+  }, [activeModelVariants]);
+  const activeVariantLabel = props.activeModel?.variant ?? (defaultVariantId ? `Default (${defaultVariantId})` : "Default");
   const activeModelContext = useMemo(() => {
     const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
     return (m as unknown as { context?: number; limit?: { context?: number } })?.context ??
@@ -371,7 +377,7 @@ export function Composer(props: Props) {
                 className={`menu-item${!props.activeModel?.variant ? " selected" : ""}`}
                 onClick={() => { setMenu(undefined); void props.onPickVariant(""); }}
               >
-                Default
+                Default{defaultVariantId ? ` (${defaultVariantId})` : ""}
               </button>
               {activeModelVariants.map((v) => (
                 <button
