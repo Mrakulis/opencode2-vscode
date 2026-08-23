@@ -25,6 +25,14 @@ export function Feed({
   const pinnedRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
 
+  // Ensure chronological order: oldest at top, newest at bottom.
+  const sortedMessages = [...messages].sort((a, b) => {
+    const ta = (a as unknown as { time?: { created?: number } }).time?.created ?? 0;
+    const tb = (b as unknown as { time?: { created?: number } }).time?.created ?? 0;
+    if (ta === 0 && tb === 0) return 0;
+    return ta - tb;
+  });
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -40,9 +48,9 @@ export function Feed({
   useEffect(() => {
     const el = scrollRef.current;
     if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [sortedMessages]);
 
-  if (messages.length === 0 && !busy) {
+  if (sortedMessages.length === 0 && !busy) {
     return (
       <div className="feed-scroll" ref={scrollRef}>
         <div className="feed-empty">
@@ -56,7 +64,7 @@ export function Feed({
 
   return (
     <div className="feed-scroll" ref={scrollRef}>
-      {messages.map((m) => (
+      {sortedMessages.map((m) => (
         <MessageGroup
           key={m.id}
           message={m}
