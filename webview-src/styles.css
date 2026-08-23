@@ -5,8 +5,22 @@
  */
 
 :root {
-  --oc2-accent: var(--vscode-focusBorder, #0078d4);
-  --oc2-border: var(--vscode-panel-border, transparent);
+  --oc2-bg: #252526;
+  --oc2-bg-surface: #2d2d30;
+  --oc2-bg-input: #1e1e1e;
+  --oc2-bg-hover: #2a2d2e;
+  --oc2-bg-active: #37373d;
+  --oc2-bg-menu: #252526;
+  --oc2-border: #3c3c3c;
+  --oc2-border-strong: #454545;
+  --oc2-fg: #d4d4d4;
+  --oc2-fg-title: #ffffff;
+  --oc2-fg-muted: #858585;
+  --oc2-fg-subtle: #a8a8a8;
+  --oc2-accent: #89d185;
+  --oc2-link: #4da6ff;
+  --oc2-error: #f48771;
+  --oc2-success: #89d185;
 
   /* density tokens — swapped via [data-density] */
   --oc2-font-size: 13px;
@@ -15,7 +29,7 @@
   --oc2-space-3: 10px;
   --oc2-radius: 6px;
 
-  --oc2-mono: var(--vscode-editor-font-family), ui-monospace, monospace;
+  --oc2-mono: ui-monospace, monospace;
 }
 
 :root[data-density="comfortable"] {
@@ -39,10 +53,10 @@ body,
 }
 
 body {
-  font-family: var(--vscode-font-family);
+  font-family: system-ui, sans-serif;
   font-size: var(--oc2-font-size);
-  color: var(--vscode-sideBar-foreground);
-  background: var(--vscode-sideBar-background);
+  color: var(--oc2-fg);
+  background: var(--oc2-bg);
 }
 
 button {
@@ -56,20 +70,20 @@ button {
   cursor: pointer;
 }
 button:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+  background: var(--oc2-bg-hover);
 }
 button.primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--oc2-accent);
+  color: #1e1e1e;
 }
 button.primary:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: var(--oc2-accent);
 }
 button.primary.stop {
-  background: var(--vscode-errorForeground, #b91c1c);
+  background: var(--oc2-error);
 }
 button.danger {
-  color: var(--vscode-errorForeground, #f66);
+  color: var(--oc2-error);
 }
 button:disabled {
   opacity: 0.5;
@@ -80,9 +94,9 @@ input,
 textarea {
   font-family: inherit;
   font-size: inherit;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, var(--oc2-border)));
+  color: var(--oc2-fg);
+  background: var(--oc2-bg-input);
+  border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
 }
 input:focus-visible,
@@ -118,8 +132,8 @@ button:focus-visible {
   background: transparent;
 }
 .iconbtn.active {
-  background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-foreground);
+  background: var(--oc2-bg-hover);
+  color: var(--oc2-fg);
   box-shadow: inset 0 0 0 1px var(--oc2-border);
 }
 
@@ -139,13 +153,13 @@ button:focus-visible {
   font-weight: 600;
   font-size: calc(var(--oc2-font-size) + 0.5px);
   letter-spacing: -0.01em;
-  color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #cccccc));
+  color: var(--oc2-fg);
 }
 
 .ws-chip {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   background: transparent;
   border: 1px solid var(--oc2-border);
   border-radius: 999px;
@@ -172,18 +186,18 @@ button:focus-visible {
   padding: 1px var(--oc2-space-2);
   border-radius: 999px;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   border: 1px solid var(--oc2-border);
   white-space: nowrap;
 }
 .conn-connected {
-  color: var(--vscode-foreground);
+  color: var(--oc2-fg);
   border-color: var(--oc2-accent);
-  background: var(--vscode-badge-background);
+  background: var(--oc2-bg-surface);
 }
 .conn-error {
-  border-color: var(--vscode-errorForeground, #f66);
-  color: var(--vscode-errorForeground, #f66);
+  border-color: var(--oc2-error);
+  color: var(--oc2-error);
   background: transparent;
 }
 
@@ -191,8 +205,8 @@ button:focus-visible {
   position: relative;
 }
 .chip {
-  background: var(--vscode-button-secondaryBackground, #3c3c3c);
-  color: var(--vscode-button-secondaryForeground, #cccccc);
+  background: var(--oc2-bg-surface);
+  color: var(--oc2-fg);
   border-radius: 999px;
   padding: 2px var(--oc2-space-2);
   box-shadow: inset 0 0 0 1px var(--oc2-border);
@@ -205,7 +219,7 @@ button:focus-visible {
 }
 .chip:hover,
 .chip.on {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .menu {
   position: absolute;
@@ -217,9 +231,9 @@ button:focus-visible {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-menu-background, var(--vscode-dropdown-background, #252526));
-  color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground, #cccccc));
-  border: 1px solid var(--vscode-widget-border, var(--vscode-menu-border, var(--oc2-border)));
+  background: var(--oc2-bg-menu);
+  color: var(--oc2-fg);
+  border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   padding: var(--oc2-space-1);
@@ -231,11 +245,11 @@ button:focus-visible {
   border-radius: 4px;
 }
 .menu-item:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .menu-item.selected {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+  background: var(--oc2-bg-active);
+  color: var(--oc2-fg-title);
 }
 .menu-item:focus-visible {
   outline: 1px solid var(--oc2-accent);
@@ -246,7 +260,7 @@ button:focus-visible {
   font-size: calc(var(--oc2-font-size) - 2px);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   padding: var(--oc2-space-1) var(--oc2-space-2) 0;
 }
 .menu-sep {
@@ -285,7 +299,7 @@ button:focus-visible {
 }
 .row-star:hover {
   opacity: 1;
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .prov-head {
   display: flex;
@@ -296,10 +310,10 @@ button:focus-visible {
   user-select: none;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .prov-head:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .prov-head .chev {
   display: inline-block;
@@ -317,7 +331,7 @@ button:focus-visible {
 .menu-item.manage {
   border-top: 1px solid var(--oc2-border);
   margin-top: var(--oc2-space-1);
-  color: var(--vscode-textLink-foreground);
+  color: var(--oc2-link);
 }
 
 /* model manager */
@@ -343,7 +357,7 @@ button:focus-visible {
   padding: var(--oc2-space-1) var(--oc2-space-3);
 }
 .model-row:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .model-row.dim .model-name {
   opacity: 0.45;
@@ -359,7 +373,7 @@ button:focus-visible {
 .model-meta {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .rowicon {
   background: transparent;
@@ -402,7 +416,7 @@ button:focus-visible {
   gap: var(--oc2-space-2);
   text-align: center;
   padding: var(--oc2-space-3);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .feed-empty-icon {
   font-size: 28px;
@@ -412,7 +426,7 @@ button:focus-visible {
 .feed-empty-title {
   font-size: calc(var(--oc2-font-size) + 1px);
   font-weight: 600;
-  color: var(--vscode-sideBar-foreground);
+  color: var(--oc2-fg);
 }
 .feed-empty-hint {
   font-size: calc(var(--oc2-font-size) - 1px);
@@ -429,17 +443,17 @@ button:focus-visible {
   gap: var(--oc2-space-2);
   text-align: center;
   padding: var(--oc2-space-3);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .empty h2 {
   margin: 0;
   font-size: calc(var(--oc2-font-size) + 2px);
   font-weight: 600;
-  color: var(--vscode-sideBar-foreground);
+  color: var(--oc2-fg);
 }
 .empty code {
   font-family: var(--oc2-mono);
-  background: var(--vscode-textCodeBlock-background);
+  background: var(--oc2-bg-input);
   border-radius: 3px;
   padding: 0 3px;
 }
@@ -447,8 +461,8 @@ button:focus-visible {
   display: block;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-errorForeground, #f66);
-  background: var(--vscode-textCodeBlock-background);
+  color: var(--oc2-error);
+  background: var(--oc2-bg-input);
   padding: var(--oc2-space-1) var(--oc2-space-2);
   border-radius: var(--oc2-radius);
   max-width: 90%;
@@ -461,7 +475,7 @@ button:focus-visible {
 }
 .bubble {
   max-width: 88%;
-  background: var(--vscode-input-background);
+  background: var(--oc2-bg-input);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius) var(--oc2-radius) 2px var(--oc2-radius);
   padding: var(--oc2-space-2) var(--oc2-space-3);
@@ -472,7 +486,7 @@ button:focus-visible {
 .msg.assistant .msg-head {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   margin-bottom: var(--oc2-space-1);
 }
 
@@ -482,21 +496,21 @@ button:focus-visible {
   margin-top: var(--oc2-space-1);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 
 /* markdown */
 .md {
   line-height: 1.58;
   word-break: break-word;
-  color: var(--vscode-editor-foreground, var(--vscode-foreground, var(--vscode-sideBar-foreground)));
+  color: var(--oc2-fg);
   opacity: 1;
 }
 .md p {
   margin: var(--oc2-space-2) 0;
 }
 .md pre {
-  background: var(--vscode-textCodeBlock-background);
+  background: var(--oc2-bg-input);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   padding: var(--oc2-space-2) var(--oc2-space-3);
@@ -507,8 +521,8 @@ button:focus-visible {
 .md code {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 1px);
-  background: var(--vscode-textCodeBlock-background);
-  color: var(--vscode-textPreformat-foreground, var(--vscode-foreground));
+  background: var(--oc2-bg-input);
+  color: var(--oc2-fg);
   border-radius: 3px;
   padding: 1px 4px;
   box-shadow: inset 0 0 0 1px var(--oc2-border);
@@ -525,7 +539,7 @@ button:focus-visible {
   margin: var(--oc2-space-3) 0 var(--oc2-space-1);
 }
 .md a {
-  color: var(--vscode-textLink-foreground);
+  color: var(--oc2-link);
 }
 .md ul,
 .md ol {
@@ -544,7 +558,7 @@ button:focus-visible {
   border-left: 2px solid var(--oc2-accent);
   margin-left: 0;
   padding-left: var(--oc2-space-3);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 
 .preview {
@@ -556,8 +570,8 @@ button:focus-visible {
 
 /* reasoning */
 .reasoning {
-  border-left: 2px solid var(--vscode-descriptionForeground);
-  background: var(--vscode-editorWidget-background, transparent);
+  border-left: 2px solid var(--oc2-fg-muted);
+  background: var(--oc2-bg-surface);
   border-radius: 0 var(--oc2-radius) var(--oc2-radius) 0;
   margin: var(--oc2-space-2) 0;
 }
@@ -565,14 +579,14 @@ button:focus-visible {
   cursor: pointer;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   padding: var(--oc2-space-1) var(--oc2-space-2);
   user-select: none;
 }
 .reasoning-body {
   padding: 0 var(--oc2-space-3) var(--oc2-space-2);
   white-space: pre-wrap;
-  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  color: var(--oc2-fg);
   opacity: 1;
   font-size: calc(var(--oc2-font-size) - 1px);
 }
@@ -637,7 +651,7 @@ button:focus-visible {
   font-size: calc(var(--oc2-font-size) - 1px);
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  color: var(--oc2-fg);
   max-height: 420px;
   overflow-y: auto;
 }
@@ -645,13 +659,13 @@ button:focus-visible {
   max-height: 80vh;
 }
 .tool-out:hover {
-  color: var(--vscode-foreground);
+  color: var(--oc2-fg);
 }
 .md a {
-  color: var(--vscode-textLink-foreground);
+  color: var(--oc2-link);
   cursor: pointer;
   text-decoration: none;
-  border-bottom: 1px dotted var(--vscode-textLink-foreground);
+  border-bottom: 1px dotted var(--oc2-link);
 }
 .md a:hover {
   text-decoration: underline;
@@ -660,18 +674,18 @@ button:focus-visible {
   cursor: pointer;
 }
 .md code:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .diff .line.add {
-  background: var(--vscode-diffEditor-insertedTextBackground, rgba(80, 200, 120, 0.18));
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81c784);
+  background: rgba(80, 200, 120, 0.18);
+  color: #81c784;
 }
 .diff .line.del {
-  background: var(--vscode-diffEditor-removedTextBackground, rgba(220, 80, 80, 0.15));
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #e57373);
+  background: rgba(220, 80, 80, 0.15);
+  color: #e57373;
 }
 .diff .line.meta {
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .diff {
   font-family: var(--oc2-mono);
@@ -679,7 +693,7 @@ button:focus-visible {
   overflow-x: auto;
 }
 .tool-error {
-  color: var(--vscode-errorForeground, #f66);
+  color: var(--oc2-error);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 1px);
   white-space: pre-wrap;
@@ -703,7 +717,7 @@ button:focus-visible {
   transform: translateX(-50%);
   border-radius: 999px;
   box-shadow: inset 0 0 0 1px var(--oc2-border);
-  background: var(--vscode-editorWidget-background);
+  background: var(--oc2-bg-surface);
 }
 
 /* ---------- sessions drawer ---------- */
@@ -711,7 +725,7 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 20;
-  background: var(--vscode-sideBar-background);
+  background: var(--oc2-bg);
   display: flex;
   flex-direction: column;
 }
@@ -740,11 +754,11 @@ button:focus-visible {
   border-bottom: 1px solid var(--oc2-border);
 }
 .session-row:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--oc2-bg-hover);
 }
 .session-row.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--oc2-bg-active);
+  color: var(--oc2-fg-title);
 }
 .session-title {
   font-weight: 500;
@@ -777,13 +791,13 @@ button:focus-visible {
 }
 .drawer-empty {
   padding: var(--oc2-space-3);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 
 /* ---------- permissions ---------- */
 .permissions {
   border-top: 1px solid var(--oc2-border);
-  background: var(--vscode-editorWidget-background);
+  background: var(--oc2-bg-surface);
 }
 .perm-card {
   padding: var(--oc2-space-2) var(--oc2-space-3);
@@ -798,7 +812,7 @@ button:focus-visible {
 .perm-res {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   word-break: break-all;
 }
 .perm-actions {
@@ -840,14 +854,14 @@ button:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--oc2-accent);
+  color: #1e1e1e;
   font-size: var(--oc2-font-size);
   padding: 0;
   line-height: 1;
 }
 .sendbtn:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: var(--oc2-accent);
 }
 .sendbtn.disabled {
   opacity: 0.4;
@@ -876,8 +890,8 @@ button:focus-visible {
   max-width: 100%;
   min-width: 0;
   width: auto;
-  background: var(--vscode-button-secondaryBackground, var(--vscode-dropdown-background, #3c3c3c));
-  color: var(--vscode-button-secondaryForeground, var(--vscode-dropdown-foreground, #cccccc));
+  background: var(--oc2-bg-surface);
+  color: var(--oc2-fg);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   padding: calc(var(--oc2-space-1) + 1px) var(--oc2-space-2);
@@ -885,7 +899,7 @@ button:focus-visible {
   cursor: pointer;
 }
 .selector:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+  background: var(--oc2-bg-hover);
 }
 .selector-label {
   overflow: hidden;
@@ -920,11 +934,11 @@ button:focus-visible {
 }
 .menu-empty {
   padding: var(--oc2-space-2);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
   font-size: calc(var(--oc2-font-size) - 1px);
 }
 .composer-error {
-  color: var(--vscode-errorForeground, #f66);
+  color: var(--oc2-error);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
 }
@@ -943,11 +957,11 @@ button:focus-visible {
   text-transform: lowercase;
 }
 .model-meta.ok {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81c784);
+  color: #81c784;
 }
 .model-meta.err,
 .model-meta.warn {
-  color: var(--vscode-errorForeground, #e57373);
+  color: var(--oc2-error);
 }
 .model-meta.dim {
   opacity: 0.6;
@@ -965,7 +979,7 @@ button:focus-visible {
   gap: 2px;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .mcp-form input,
 .mcp-form select {
@@ -988,23 +1002,23 @@ button:focus-visible {
   flex: none;
 }
 .dot.off {
-  background: var(--vscode-descriptionForeground);
+  background: var(--oc2-fg-muted);
 }
 .micro {
-  color: var(--vscode-descriptionForeground);
+  color: var(--oc2-fg-muted);
 }
 .micro.stat {
   min-width: 0;
 }
 .micro.total {
-  color: var(--vscode-sideBar-foreground);
+  color: var(--oc2-fg);
   font-weight: 600;
 }
 .meter {
   width: 64px;
   height: 4px;
   border-radius: 999px;
-  background: var(--vscode-progressBar-background, var(--oc2-border));
+  background: var(--oc2-border);
   overflow: hidden;
   display: inline-block;
 }
@@ -1014,7 +1028,7 @@ button:focus-visible {
   background: var(--oc2-accent);
 }
 .meter .fill.hot {
-  background: var(--vscode-errorForeground, #e57373);
+  background: var(--oc2-error);
 }
 .spacer {
   flex: 1;
