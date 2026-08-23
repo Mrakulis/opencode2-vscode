@@ -355,16 +355,14 @@ export function Composer(props: Props) {
           <button
             type="button"
             className="selector"
-            disabled={!hasVariants}
-            style={!hasVariants ? { opacity: 0.45, cursor: "default" } : undefined}
-            onClick={() => hasVariants && setMenu(menu === "variant" ? undefined : "variant")}
+            onClick={() => setMenu(menu === "variant" ? undefined : "variant")}
             title={
               !hasVariants
                 ? `No reasoning levels — model ${activeModelLabel} does not expose variants${activeModelContext ? ` (context ${Math.round(activeModelContext / 1000)}k)` : ""}`
                 : `${activeVariantLabel}${activeModelContext ? ` · ${Math.round(activeModelContext / 1000)}k ctx` : ""}`
             }
           >
-            <span className="selector-label">{hasVariants ? activeVariantLabel : "Default"}</span> <span className="chevron">▾</span>
+            <span className="selector-label">{activeVariantLabel}</span> <span className="chevron">▾</span>
           </button>
           {menu === "variant" && (
             <div className="menu">
