@@ -397,9 +397,12 @@ export function App() {
     if (questionPerm) return true;
     if (busy) return false;
     if (!lastAssistantText) return false;
+    // only recent questions (last 2 minutes) to avoid stale 0.2.32 text showing as question
+    const lastTime = ([...messages].reverse().find(isAssistant) as unknown as { time?: { created?: number } })?.time?.created;
+    if (lastTime && Date.now() - lastTime > 2 * 60 * 1000) return false;
     const t = lastAssistantText.trim();
     return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
-  }, [lastAssistantText, questionPerm, busy]);
+  }, [lastAssistantText, questionPerm, busy, messages]);
 
   const questionOptions = useMemo(() => {
     if (!isQuestion || !lastAssistantText) return null;
@@ -412,10 +415,17 @@ export function App() {
         line.match(/^\s*\d+[\.)]\s*(.+)/);
       if (m) {
         const raw = m[1]!.trim();
+        // filter out long descriptive bullets like the 0.2.32 release notes
+        if (raw.length > 40 || raw.includes("`") || raw.toLowerCase().includes("permission")) continue;
         const isRec = /\(recommended\)/i.test(raw) || /★/.test(raw);
         const label = raw.replace(/\s*\(recommended\)\s*/i, "").replace(/\s*★.*/, "").trim();
-        if (!label) continue;
+        if (!label || label.length > 30) continue;
         const isOther = /^other$/i.test(label) || label.toLowerCase().startsWith("other");
+        // only keep plausible short options (Yes/No/Other/Continue/Stop etc.)
+        if (!/^(yes|no|other|continue|stop|cancel|proceed)$/i.test(label) && !isOther) {
+          // keep generic short labels like "Yes" but not long sentences
+          if (label.split(/\s+/).length > 3) continue;
+        }
         opts.push({ label, recommended: isRec, isOther });
       }
     }
