@@ -132,6 +132,16 @@ textarea:focus-visible {
   cursor: text;
 }
 
+.ws-chip {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-badge-background);
+  border-radius: 999px;
+  padding: 1px var(--oc2-space-2);
+  white-space: nowrap;
+}
+
 .rename {
   flex: 1;
   min-width: 0;
@@ -375,6 +385,17 @@ textarea:focus-visible {
   background: var(--vscode-textCodeBlock-background);
   border-radius: 3px;
   padding: 0 3px;
+}
+.err-detail {
+  display: block;
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--vscode-errorForeground, #f66);
+  background: var(--vscode-textCodeBlock-background);
+  padding: var(--oc2-space-1) var(--oc2-space-2);
+  border-radius: var(--oc2-radius);
+  max-width: 90%;
+  word-break: break-word;
 }
 
 .msg.user {

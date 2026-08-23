@@ -14,6 +14,7 @@ interface Props {
   conn: "connected" | "connecting" | "error";
   title?: string;
   sessionId?: string;
+  workspaceName?: string;
   activeModel?: { id: string; providerID: string };
   activeAgent?: string;
   agentName?: string;
@@ -170,6 +171,11 @@ export function HeaderBar(props: Props) {
           }}
         >
           {truncate(props.title ?? "New session", 34)}
+        </span>
+      )}
+      {props.workspaceName && (
+        <span className="ws-chip" title={props.workspaceName}>
+          {truncate(props.workspaceName, 18)}
         </span>
       )}
 

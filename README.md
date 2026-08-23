@@ -60,6 +60,10 @@ A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on 
 | `notifications.errors` | `false` | Failed-run notifications |
 | `agent.autoCompactThreshold` | `0` | Percent of context that triggers auto-compact |
 
+## Workspaces
+
+Open a folder, and every **new** session is anchored to it — the agent reads/edits inside that directory, exactly like running `opencode2` from a terminal already cd'd there. The header shows the bound folder as a chip. The sessions drawer defaults to the same scope; flip `this folder` ⇄ `all projects` to see history across projects. (Under the hood: one shared background service per machine; each session carries its own directory anchor.)
+
 ## Development
 
 ```sh

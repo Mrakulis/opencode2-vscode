@@ -17,3 +17,8 @@ plan.md
 .env.*
 graphify-out/**
 **/.DS_Store
+agents.md
+.gitignore
+tsconfig.json
+tsconfig.webview.json
+*.mjs

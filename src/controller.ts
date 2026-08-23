@@ -1,10 +1,11 @@
 import { OpenCode, type OpenCodeClient, type OpenCodeEvent } from "@opencode-ai/client";
 import { Service, type Endpoint, type EnsureReason } from "@opencode-ai/client/service";
 import * as vscode from "vscode";
-import type { ResolvedCli } from "./cli";
+import { spawnArgv, type ResolvedCli } from "./cli";
 import { Log } from "./log";
 
 export type ConnectionState = "connected" | "connecting" | "error";
+export type CliResolver = () => Promise<ResolvedCli | undefined>;
 
 /**
  * Owns the connection to the OpenCode V2 background service.
@@ -28,7 +29,10 @@ export class OpenCodeController implements vscode.Disposable {
   private generation = 0;
   private pumpToken = 0;
 
-  constructor(private readonly log: Log) {}
+  constructor(
+    private readonly log: Log,
+    private readonly resolveCli: CliResolver = () => Promise.resolve(undefined),
+  ) {}
 
   readonly onDidChangeState = this.emitter.event;
 
@@ -47,6 +51,11 @@ export class OpenCodeController implements vscode.Disposable {
 
   get baseUrl(): string | undefined {
     return this.activeBaseUrl;
+  }
+
+  /** Human-readable failure from the most recent connect attempt. */
+  get lastErrorDetail(): string | undefined {
+    return this.lastError;
   }
 
   private lastError?: string;
@@ -179,17 +188,28 @@ export class OpenCodeController implements vscode.Disposable {
       this.log.debug(`discovered registered service at ${discovered.url}`);
       return this.makeFor(discovered);
     }
-    // 3) Start one via the CLI's `serve --service` mode.
+    // 3) Start one via the CLI's `serve --service` mode (CLI required here).
     if (!autoStart) {
       throw new Error(
         "No running OpenCode service found and auto-start is disabled (opencode2.server.autoStart).",
       );
     }
 
-    const command = cli?.command ?? "opencode2";
-    this.log.debug(`ensuring service via command: ${command}`);
+    let spawnCommand: string[];
+    if (cli) {
+      spawnCommand = [...spawnArgv(cli), "serve", "--service"];
+    } else {
+      const resolved = await this.resolveCli();
+      if (!resolved) {
+        throw new Error(
+          "OpenCode CLI not found for auto-start. Run 'OpenCode 2: Install CLI' or set opencode2.cliPath.",
+        );
+      }
+      spawnCommand = [...spawnArgv(resolved, "serve", "--service")];
+    }
+    this.log.debug(`ensuring service via command: ${spawnCommand.join(" ")}`);
     const endpoint = await Service.ensure({
-      command: [command, "serve", "--service"],
+      command: spawnCommand,
       onStart: (reason: EnsureReason, previousVersion?: string) =>
         this.log.info(`starting background service (${reason}${previousVersion ? `, was ${previousVersion}` : ""})`),
     });

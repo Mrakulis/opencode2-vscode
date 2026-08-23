@@ -86,7 +86,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
 
     this.controller.onDidChangeState(
-      (state) => this.post({ type: "connection", state } satisfies InboundMessage),
+      (state) =>
+        this.post({
+          type: "connection",
+          state,
+          detail: state === "error" ? this.controller.lastErrorDetail : undefined,
+        } satisfies InboundMessage),
       null,
       this.disposables,
     );

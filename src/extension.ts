@@ -9,7 +9,7 @@ import { SidebarProvider, SIDEBAR_VIEW_ID } from "./sidebarProvider";
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = new Log();
-  const controller = new OpenCodeController(log);
+  const controller = new OpenCodeController(log, () => resolveCli(log));
   const rpc = createRpcDispatcher(controller, log);
   const provider = new SidebarProvider(context.extensionUri, controller, rpc);
   const autoCompact = new AutoCompactWatcher(controller, log);
@@ -46,17 +46,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const connect = (): void => {
-    void (async () => {
-      try {
-        const cli = await resolveCli(log);
-        if (!cli) {
-          throw new Error("OpenCode CLI not found. Run 'OpenCode 2: Install CLI' or set opencode2.cliPath.");
-        }
-        await controller.connect(cli);
-      } catch (error) {
-        log.error("activation connect failed", error);
-      }
-    })();
+    void controller.connect().catch(() => {
+      /* error state already broadcast; details in output channel */
+    });
   };
 
   context.subscriptions.push(
@@ -95,7 +87,7 @@ export function activate(context: vscode.ExtensionContext): void {
         cwd: folder?.uri.fsPath,
       });
       terminal.show();
-      terminal.sendText(cli?.command ?? "opencode2", true);
+      terminal.sendText(cli?.display ?? "opencode2", true);
     }),
     vscode.commands.registerCommand("opencode2.installCli", () => installCli(log)),
     vscode.commands.registerCommand("opencode2.newSession", async () => {

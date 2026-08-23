@@ -31,6 +31,7 @@ interface PermissionCardData {
 
 export function App() {
   const [conn, setConn] = useState<Conn>("connecting");
+  const [connDetail, setConnDetail] = useState<string | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<AnyMessage[]>([]);
@@ -150,6 +151,7 @@ export function App() {
         }
         case "connection": {
           setConn(msg.state);
+          setConnDetail(msg.detail);
           if (msg.state === "connected") {
             void (async () => {
               const list = await refreshSessions();
@@ -354,6 +356,11 @@ export function App() {
         conn={conn}
         title={active?.title}
         sessionId={activeId}
+        workspaceName={
+          active?.location?.directory
+            ? active.location.directory.split(/[\\/]/).filter(Boolean).pop()
+            : undefined
+        }
         agentName={agents.find((a) => a.id === active?.agent)?.name}
         models={models}
         agents={agents}
@@ -427,6 +434,7 @@ export function App() {
             ) : (
               <>
                 <h2>Service unreachable</h2>
+                {connDetail && <code className="err-detail">{connDetail}</code>}
                 <p>Run “OpenCode 2: Restart Background Service” from the command palette.</p>
               </>
             )}
