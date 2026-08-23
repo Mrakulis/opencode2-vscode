@@ -46,6 +46,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             showReasoning: cfg.get<"hide" | "collapsed" | "expanded">("ui.showReasoning", "collapsed"),
             expandShellTools: cfg.get<boolean>("ui.expandShellTools", false),
             expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
+            fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
             messageStats: cfg.get<boolean>("ui.messageStats", true),
             sendKey: cfg.get<"enter" | "ctrlEnter">("composer.sendKey", "enter"),
           },

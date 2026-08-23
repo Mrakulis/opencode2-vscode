@@ -421,6 +421,7 @@ export function App() {
             showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
             expandShellTools={cfg?.ui.expandShellTools ?? false}
             expandEditTools={cfg?.ui.expandEditTools ?? false}
+            fullShellOutput={cfg?.ui.fullShellOutput ?? false}
             messageStats={cfg?.ui.messageStats ?? true}
           />
         )}

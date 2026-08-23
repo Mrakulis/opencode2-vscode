@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "license": "MIT",
   "publisher": "Mrakulis",
   "repository": {
@@ -145,6 +145,11 @@
           "type": "boolean",
           "default": false,
           "description": "Expand edit/diff tool cards by default."
+        },
+        "opencode2.ui.fullShellOutput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show full shell output without truncation (4000 char limit). When disabled, long output is truncated."
         },
         "opencode2.ui.messageStats": {
           "type": "boolean",

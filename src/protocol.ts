@@ -25,6 +25,7 @@ export interface UiPrefs {
   showReasoning: ShowReasoning;
   expandShellTools: boolean;
   expandEditTools: boolean;
+  fullShellOutput: boolean;
   messageStats: boolean;
   sendKey: SendKey;
 }
@@ -44,6 +45,7 @@ export const SETTING_KEYS = [
   "ui.showReasoning",
   "ui.expandShellTools",
   "ui.expandEditTools",
+  "ui.fullShellOutput",
   "ui.messageStats",
   "composer.sendKey",
 ] as const;
@@ -125,7 +127,8 @@ export type RpcMethod =
   | "transcript.copy"
   | "ui.activeSession"
   | "settings.update"
-  | "workspace.directory";
+  | "workspace.directory"
+  | "file.open";
 
 export function isInbound(value: unknown): value is InboundMessage {
   return (
@@ -167,6 +170,7 @@ export function validateSettingValue(key: SettingKey, value: unknown): SettingCh
     case "ui.sounds":
     case "ui.expandShellTools":
     case "ui.expandEditTools":
+    case "ui.fullShellOutput":
     case "ui.messageStats":
       return typeof value === "boolean" ? { ok: true } : { ok: false, reason: `${key} must be boolean` };
   }

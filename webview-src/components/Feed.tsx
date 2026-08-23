@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAssistant, isUser, type AnyMessage, type MessagePartText, type MessagePartReasoning, type MessagePartTool } from "../lib/rpc";
 import { renderMarkdown } from "../lib/markdown";
 import { diffLines, formatCost, formatTokens, toolTitle, truncate } from "../lib/format";
+import { rpc } from "../lib/rpc";
 
 export function Feed({
   messages,
@@ -9,6 +10,7 @@ export function Feed({
   showReasoning,
   expandShellTools,
   expandEditTools,
+  fullShellOutput,
   messageStats,
 }: {
   messages: AnyMessage[];
@@ -16,6 +18,7 @@ export function Feed({
   showReasoning: "hide" | "collapsed" | "expanded";
   expandShellTools: boolean;
   expandEditTools: boolean;
+  fullShellOutput: boolean;
   messageStats: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -60,6 +63,7 @@ export function Feed({
           showReasoning={showReasoning}
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
+          fullShellOutput={fullShellOutput}
           messageStats={messageStats}
         />
       ))}
@@ -88,12 +92,14 @@ function MessageGroup({
   showReasoning,
   expandShellTools,
   expandEditTools,
+  fullShellOutput,
   messageStats,
 }: {
   message: AnyMessage;
   showReasoning: "hide" | "collapsed" | "expanded";
   expandShellTools: boolean;
   expandEditTools: boolean;
+  fullShellOutput: boolean;
   messageStats: boolean;
 }) {
   if (isUser(message)) {
@@ -111,7 +117,7 @@ function MessageGroup({
         {message.agent} · {message.model?.id ?? ""}
       </header>
       {message.content?.map((part, i) => (
-        <Part key={i} part={part} showReasoning={showReasoning} expandShellTools={expandShellTools} expandEditTools={expandEditTools} />
+        <Part key={i} part={part} showReasoning={showReasoning} expandShellTools={expandShellTools} expandEditTools={expandEditTools} fullShellOutput={fullShellOutput} />
       ))}
       {messageStats && (message.cost !== undefined || message.tokens !== undefined) && (
         <footer className="msg-foot">
@@ -131,26 +137,55 @@ function MessageGroup({
   );
 }
 
+function handleFileClick(e: React.MouseEvent) {
+  const target = e.target as HTMLElement;
+  // 1) markdown links <a href="...">
+  const anchor = target.closest("a") as HTMLAnchorElement | null;
+  if (anchor) {
+    const href = anchor.getAttribute("href");
+    if (href && !/^(https?:|mailto:|vscode:)/.test(href)) {
+      e.preventDefault();
+      let p = href.replace(/^file:\/\//, "");
+      try { p = decodeURIComponent(p); } catch {}
+      void rpc.call("file.open", { path: p }).catch(() => undefined);
+      return;
+    }
+  }
+  // 2) inline <code> file paths like `src/foo.ts:12`
+  const code = target.closest("code");
+  if (code) {
+    const txt = (code.textContent ?? "").trim();
+    if (/^[\w\-./\\]+:\d+/.test(txt) || /^[\w\-./\\]+\.(ts|tsx|js|json|md|css|rs|py|go)\b/.test(txt)) {
+      e.preventDefault();
+      const m = txt.match(/^(.+?)(?::\d+.*)?$/);
+      const p = m ? m[1] : txt;
+      void rpc.call("file.open", { path: p }).catch(() => undefined);
+    }
+  }
+}
+
 function Part({
   part,
   showReasoning,
   expandShellTools,
   expandEditTools,
+  fullShellOutput,
 }: {
   part: MessagePartText | MessagePartReasoning | MessagePartTool;
   showReasoning: "hide" | "collapsed" | "expanded";
   expandShellTools: boolean;
   expandEditTools: boolean;
+  fullShellOutput: boolean;
 }) {
   if (part.type === "text") {
-    return <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }} />;
+    return <div className="md" onClick={handleFileClick} dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }} />;
   }
   if (part.type === "reasoning") {
     if (showReasoning === "hide") return null;
     return <Reasoning text={part.text} defaultOpen={showReasoning === "expanded"} />;
   }
   if (part.type === "tool") {
-    return <ToolCard part={part} expandShellTools={expandShellTools} expandEditTools={expandEditTools} />;
+    return <ToolCard part={part} expandShellTools={expandShellTools} expandEditTools={expandEditTools} fullShellOutput={fullShellOutput} />;
   }
   return null;
 }
@@ -178,7 +213,7 @@ function initiallyExpanded(toolName: string, shellPref: boolean, editPref: boole
 
 type ToolPart = MessagePartTool;
 
-function ToolCard({ part, expandShellTools, expandEditTools }: { part: ToolPart; expandShellTools: boolean; expandEditTools: boolean }) {
+function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: { part: ToolPart; expandShellTools: boolean; expandEditTools: boolean; fullShellOutput: boolean }) {
   const [expanded, setExpanded] = useState(() => initiallyExpanded(part.name, expandShellTools, expandEditTools));
 
   let title = part.name;
@@ -190,9 +225,10 @@ function ToolCard({ part, expandShellTools, expandEditTools }: { part: ToolPart;
       <>
         {part.state.content?.map((c, i) => {
           if (c.type === "text") {
+            const txt = String(c.text);
             return (
-              <pre key={i} className="tool-out">
-                {truncate(String(c.text), 4000)}
+              <pre key={i} className={`tool-out${fullShellOutput ? " full" : ""}`} onClick={handleFileClick}>
+                {fullShellOutput ? txt : truncate(txt, 4000)}
               </pre>
             );
           }

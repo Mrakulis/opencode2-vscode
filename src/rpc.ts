@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "node:path";
 import { createApi } from "./apiAdapter";
 import type { OpenCodeController } from "./controller";
 import { isSettingKey, validateSettingValue, type RpcMethod, type RpcRequest } from "./protocol";
@@ -127,6 +128,33 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       terminal.sendText(`opencode2 auth login${name ? ` ${name}` : ""}`, true);
       log.info(`provider auth handoff: opencode2 auth login${name ? ` ${name}` : ""}`);
       return Promise.resolve(true);
+    },
+    "file.open": async (p) => {
+      const raw = str(p, "path");
+      // handle file:line or file:line:col suffix
+      const m = raw.match(/^(.+?):(\d+)(?::(\d+))?$/);
+      const filePart: string = m?.[1] ?? raw;
+      const line = m?.[2] ? parseInt(m[2], 10) : undefined;
+      const col = m?.[3] ? parseInt(m[3], 10) : undefined;
+      // resolve relative to workspace
+      let uri: vscode.Uri;
+      if (/^[a-zA-Z]:[\\/]/.test(filePart) || filePart.startsWith("/") || filePart.startsWith("\\")) {
+        uri = vscode.Uri.file(filePart);
+      } else {
+        const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!base) throw new Error(`Cannot resolve relative path: ${raw}`);
+        const joined = path.join(base, filePart);
+        uri = vscode.Uri.file(joined);
+      }
+      // try to open, reveal line
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      if (line !== undefined) {
+        const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, (col ?? 1) - 1));
+        editor.selection = new vscode.Selection(pos, pos);
+        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+      }
+      return true;
     },
   };
 

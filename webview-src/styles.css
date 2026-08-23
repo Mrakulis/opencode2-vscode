@@ -486,8 +486,9 @@ button:focus-visible {
 
 /* markdown */
 .md {
-  line-height: 1.55;
+  line-height: 1.58;
   word-break: break-word;
+  color: var(--vscode-sideBar-foreground);
 }
 .md p {
   margin: var(--oc2-space-2) 0;
@@ -567,7 +568,8 @@ button:focus-visible {
 .reasoning-body {
   padding: 0 var(--oc2-space-3) var(--oc2-space-2);
   white-space: pre-wrap;
-  color: var(--vscode-descriptionForeground);
+  color: var(--vscode-foreground);
+  opacity: 0.92;
   font-size: calc(var(--oc2-font-size) - 1px);
 }
 
@@ -609,7 +611,30 @@ button:focus-visible {
   font-size: calc(var(--oc2-font-size) - 1px);
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--vscode-descriptionForeground);
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  max-height: 420px;
+  overflow-y: auto;
+}
+.tool-out.full {
+  max-height: 80vh;
+}
+.tool-out:hover {
+  color: var(--vscode-foreground);
+}
+.md a {
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--vscode-textLink-foreground);
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md code {
+  cursor: pointer;
+}
+.md code:hover {
+  background: var(--vscode-list-hoverBackground);
 }
 .diff .line.add {
   background: var(--vscode-diffEditor-insertedTextBackground, rgba(80, 200, 120, 0.18));
