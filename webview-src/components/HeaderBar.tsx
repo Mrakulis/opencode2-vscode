@@ -25,23 +25,31 @@ interface Props {
   onOpenProviders(): void;
   onOpenMcp(): void;
   onOpenSettings(): void;
-  theme: "dark" | "light";
-  onToggleTheme(): void;
+  theme: string;
+  onToggleTheme(id?: string): void;
+  themes?: Array<{ id: string; label: string }>;
 }
 
 export function HeaderBar(props: Props) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !themeMenuOpen) return;
     const close = (e: MouseEvent): void => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      if (!menuRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setThemeMenuOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        setThemeMenuOpen(false);
+      }
     };
     window.addEventListener("mousedown", close);
     window.addEventListener("keydown", onKey);
@@ -49,7 +57,7 @@ export function HeaderBar(props: Props) {
       window.removeEventListener("mousedown", close);
       window.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
+  }, [menuOpen, themeMenuOpen]);
 
   return (
     <header className="header">
@@ -147,11 +155,38 @@ export function HeaderBar(props: Props) {
               <div className="menu-sep" />
               <button
                 type="button"
+                className="menu-item manage"
+                onClick={() => setThemeMenuOpen((v) => !v)}
+                title="Switch between the OpenCode 2 themes and presets"
+              >
+                {props.theme === "dark" ? "☾ Theme" : props.theme === "light" ? "☀ Theme" : `◈ Theme — ${props.theme}`} ▸
+              </button>
+              {themeMenuOpen && (
+                <div className="oc2-theme-sub">
+                  {(props.themes ?? []).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`menu-item${props.theme === t.id ? " selected" : ""}`}
+                      onClick={() => {
+                        props.onToggleTheme(t.id);
+                        setThemeMenuOpen(false);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {props.theme === t.id ? "● " : "○ "}
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
                 className="menu-item"
                 onClick={() => { props.onToggleTheme(); }}
-                title="Switch between the OpenCode 2 dark and light themes"
+                title="Cycle to the next theme"
               >
-                {props.theme === "dark" ? "☾ Dark theme" : "☀ Light theme"}
+                ↻ Cycle theme
               </button>
               <div className="menu-sep" />
               <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); void props.onCopyTranscript(); }}>

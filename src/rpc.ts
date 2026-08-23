@@ -162,6 +162,7 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "permissions.saved.remove": (p) => api.savedPermissionRemove(str(p, "id")),
 
     // -- provider connect ---------------------------------------------------------
+    "integration.get": (p) => api.integrationGet(str(p, "integrationID")),
     "integration.connectKey": (p) => api.connectKey(str(p, "integrationID"), str(p, "key")),
     "integration.oauthConnect": (p) => {
       const methodID = optStr(p, "methodID");
@@ -171,6 +172,10 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "integration.oauthComplete": (p) => api.oauthComplete(str(p, "integrationID"), str(p, "attemptID")),
     "integration.oauthCancel": (p) => api.oauthCancel(str(p, "integrationID"), str(p, "attemptID")),
     "integration.commandConnect": (p) => api.commandConnect(str(p, "integrationID"), str(p, "methodID")),
+    "credentials.update": (p) => api.credentialUpdate(str(p, "credentialID"), str(p, "label")),
+    "credentials.remove": (p) => api.credentialRemove(str(p, "credentialID")),
+    "plugins.list": () => api.pluginList(),
+    "websearch.providers": () => api.websearchProviders(),
 
     // -- vcs & worktrees ------------------------------------------------------------
     "vcs.info": () => api.vcsInfo(),
@@ -188,6 +193,10 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "worktree.remove": (p) => api.worktreeRemove(str(p, "projectID"), str(p, "directory"), p.force === true),
     "worktree.refresh": (p) => api.worktreeRefresh(str(p, "projectID")),
     "workspace.directory": async () => preferredDirectory(),
+    "pick.folder": async () => {
+      const pick = await vscode.window.showWorkspaceFolderPick({ placeHolder: "Move session to which folder?" });
+      return pick?.uri.fsPath;
+    },
     "project.current": async () => {
       try {
         const res = await api.projectCurrent();

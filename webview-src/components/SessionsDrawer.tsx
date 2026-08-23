@@ -10,10 +10,11 @@ interface Props {
   onSelect(id: string): void;
   onNew(): void;
   onDelete(id: string): Promise<void>;
+  onMove(id: string): Promise<void>;
 }
 
 /** Slides over the feed; Esc closes (handled in App). */
-export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, onSelect, onNew, onDelete }: Props) {
+export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, onSelect, onNew, onDelete, onMove }: Props) {
   const [query, setQuery] = useState("");
   const [confirming, setConfirming] = useState<string | undefined>(undefined);
 
@@ -102,6 +103,19 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
                 </button>
               </span>
             ) : (
+              <>
+              <button
+                type="button"
+                className="rowdel"
+                style={{ right: "26px" }}
+                title="Move to another workspace folder"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onMove(s.id);
+                }}
+              >
+                ⇄
+              </button>
               <button
                 type="button"
                 className="rowdel"
@@ -113,6 +127,7 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
               >
                 ×
               </button>
+              </>
             )}
           </div>
         ))}

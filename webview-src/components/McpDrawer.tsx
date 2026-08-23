@@ -28,6 +28,7 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   const [error, setError] = useState<string | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
 
   // add form state
   const [name, setName] = useState("");
@@ -102,6 +103,45 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
     }
   };
 
+  /** Store a labeled credential reference for this server (V2 credentials API). */
+  const storeCredential = async (s: McpServerRow): Promise<void> => {
+    if (!s.integrationID) return;
+    const secret = secrets[s.name]?.trim();
+    if (!secret) return;
+    try {
+      await rpc.call("credentials.update", { credentialID: s.integrationID, label: `${s.name} api key` });
+      // With the reference stored, route through the integration connect flow
+      // (key first; falls back to OAuth browser flow when no key method).
+      await rpc.call("integration.connectKey", { integrationID: s.integrationID, key: secret });
+      setSecrets((d) => ({ ...d, [s.name]: "" }));
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  /** Clear the stored credential reference for this server. */
+  const clearCredential = async (s: McpServerRow): Promise<void> => {
+    if (!s.integrationID) return;
+    try {
+      await rpc.call("credentials.remove", { credentialID: s.integrationID });
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  /** Open the OAuth browser flow using the server's integration id. */
+  const oauthConnect = async (s: McpServerRow): Promise<void> => {
+    if (!s.integrationID) return;
+    try {
+      const attempt = await rpc.call<{ url?: string }>("integration.oauthConnect", { integrationID: s.integrationID });
+      if (attempt.url) window.open(attempt.url, "_blank");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <div className="drawer">
       <div className="drawer-head">
@@ -159,7 +199,8 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
           const badge = statusBadge(s.status);
           const isOpen = expanded === s.name;
           return (
-            <div key={s.name} className="model-row mcp-row">
+            <div key={s.name} style={{ display: "flex", flexDirection: "column" }}>
+            <div className="model-row mcp-row">
               <button
                 type="button"
                 className={`rowicon${isOpen ? " on" : ""}`}
@@ -207,6 +248,33 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
               >
                 ✕
               </button>
+            </div>
+            {isOpen && s.status.status === "needs_auth" && s.integrationID && (
+              <div className="oc2-mcp-auth">
+                <input
+                  className="search"
+                  style={{ flex: 1 }}
+                  type="password"
+                  placeholder={`${s.name} API key…`}
+                  value={secrets[s.name] ?? ""}
+                  onChange={(e) => setSecrets((d) => ({ ...d, [s.name]: e.target.value }))}
+                />
+                <button type="button" className="primary" onClick={() => void storeCredential(s)}>
+                  Set key
+                </button>
+                <button type="button" className="chip" title="Sign in via browser (OAuth)" onClick={() => void oauthConnect(s)}>
+                  OAuth
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  title="Clear the stored credential reference for this server"
+                  onClick={() => void clearCredential(s)}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             </div>
           );
         })}

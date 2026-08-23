@@ -624,8 +624,18 @@ export function App() {
         onOpenWorkingDiff={() => void openWorkingDiff()}
         onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
         theme={cfg?.ui.theme ?? "dark"}
-        onToggleTheme={() => {
-          const next = (cfg?.ui.theme ?? "dark") === "dark" ? "light" : "dark";
+        themes={[
+          { id: "dark", label: "OpenCode Dark" },
+          { id: "light", label: "OpenCode Light" },
+          { id: "tokyonight", label: "Tokyo Night" },
+          { id: "gruvbox", label: "Gruvbox Dark" },
+          { id: "nord", label: "Nord" },
+          { id: "catppuccin", label: "Catppuccin Mocha" },
+        ]}
+        onToggleTheme={(id) => {
+          const ids = ["dark", "light", "tokyonight", "gruvbox", "nord", "catppuccin"];
+          const current = cfg?.ui.theme ?? "dark";
+          const next = id ?? ids[(ids.indexOf(current) + 1) % ids.length] ?? "dark";
           void updateSettings([{ key: "ui.theme", value: next }]);
         }}
         onCopyTranscript={async () => {
@@ -702,6 +712,12 @@ export function App() {
             onDelete={async (id) => {
               await rpc.call("session.remove", { sessionID: id }).catch(() => undefined);
               if (id === activeId) selectSession(undefined);
+              await refreshSessions();
+            }}
+            onMove={async (id) => {
+              const dir = await rpc.call<string | undefined>("pick.folder").catch(() => undefined);
+              if (!dir) return;
+              await rpc.call("session.move", { sessionID: id, directory: dir }).catch(() => undefined);
               await refreshSessions();
             }}
           />

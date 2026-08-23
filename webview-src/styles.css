@@ -99,6 +99,146 @@
   --oc2-accent: #f59e0b;
 }
 
+/* ---------- OpenCode-flavored theme presets ----------
+ * Palettes follow the canonical published values of the themes OpenCode
+ * ships, mapped onto our --oc2-* tokens. */
+
+/* Tokyo Night */
+:root[data-theme="tokyonight"] {
+  --oc2-bg: #1a1b26;
+  --oc2-bg-surface: #16161e;
+  --oc2-bg-input: #1f2335;
+  --oc2-bg-hover: #292e42;
+  --oc2-bg-active: #2f334d;
+  --oc2-bg-menu: #1f2335;
+  --oc2-border: #2f334d;
+  --oc2-border-strong: #3b4261;
+  --oc2-fg: #c0caf5;
+  --oc2-fg-title: #ffffff;
+  --oc2-fg-muted: #565f89;
+  --oc2-fg-subtle: #a9b1d6;
+  --oc2-accent: #7aa2f7;
+  --oc2-link: #7dcfff;
+  --oc2-error: #f7768e;
+  --oc2-success: #9ece6a;
+  --oc2-tool-read: #9ece6a;
+  --oc2-tool-edit: #7aa2f7;
+  --oc2-tool-shell: #e0af68;
+  --oc2-tool-read-dim: rgba(158, 206, 106, 0.09);
+  --oc2-tool-edit-dim: rgba(122, 162, 247, 0.11);
+  --oc2-tool-shell-dim: rgba(224, 175, 104, 0.09);
+  --oc2-terminal-bg: #16161e;
+  --oc2-terminal-fg: #a9b1d6;
+  --oc2-terminal-cmd: #e0af68;
+  --oc2-diff-add-bg: rgba(158, 206, 106, 0.15);
+  --oc2-diff-add-fg: #9ece6a;
+  --oc2-diff-del-bg: rgba(247, 118, 142, 0.13);
+  --oc2-diff-del-fg: #f7768e;
+  --oc2-question: #bb9af7;
+}
+
+/* Gruvbox Dark */
+:root[data-theme="gruvbox"] {
+  --oc2-bg: #282828;
+  --oc2-bg-surface: #1d2021;
+  --oc2-bg-input: #32302f;
+  --oc2-bg-hover: #3c3836;
+  --oc2-bg-active: #504945;
+  --oc2-bg-menu: #32302f;
+  --oc2-border: #3c3836;
+  --oc2-border-strong: #504945;
+  --oc2-fg: #ebdbb2;
+  --oc2-fg-title: #fbf1c7;
+  --oc2-fg-muted: #928374;
+  --oc2-fg-subtle: #bdae93;
+  --oc2-accent: #fabd2f;
+  --oc2-link: #83a598;
+  --oc2-error: #fb4934;
+  --oc2-success: #b8bb26;
+  --oc2-tool-read: #b8bb26;
+  --oc2-tool-edit: #83a598;
+  --oc2-tool-shell: #fe8019;
+  --oc2-tool-read-dim: rgba(184, 187, 38, 0.1);
+  --oc2-tool-edit-dim: rgba(131, 165, 152, 0.1);
+  --oc2-tool-shell-dim: rgba(254, 128, 25, 0.1);
+  --oc2-terminal-bg: #1d2021;
+  --oc2-terminal-fg: #ebdbb2;
+  --oc2-terminal-cmd: #fabd2f;
+  --oc2-diff-add-bg: rgba(184, 187, 38, 0.16);
+  --oc2-diff-add-fg: #b8bb26;
+  --oc2-diff-del-bg: rgba(251, 73, 52, 0.14);
+  --oc2-diff-del-fg: #fb4934;
+  --oc2-question: #d3869b;
+}
+
+/* Nord */
+:root[data-theme="nord"] {
+  --oc2-bg: #2e3440;
+  --oc2-bg-surface: #3b4252;
+  --oc2-bg-input: #272c36;
+  --oc2-bg-hover: #434c5e;
+  --oc2-bg-active: #4c566a;
+  --oc2-bg-menu: #3b4252;
+  --oc2-border: #434c5e;
+  --oc2-border-strong: #4c566a;
+  --oc2-fg: #d8dee9;
+  --oc2-fg-title: #eceff4;
+  --oc2-fg-muted: #7b88a1;
+  --oc2-fg-subtle: #a7b1c2;
+  --oc2-accent: #88c0d0;
+  --oc2-link: #81a1c1;
+  --oc2-error: #bf616a;
+  --oc2-success: #a3be8c;
+  --oc2-tool-read: #a3be8c;
+  --oc2-tool-edit: #81a1c1;
+  --oc2-tool-shell: #ebcb8b;
+  --oc2-tool-read-dim: rgba(163, 190, 140, 0.1);
+  --oc2-tool-edit-dim: rgba(129, 161, 193, 0.11);
+  --oc2-tool-shell-dim: rgba(235, 203, 139, 0.1);
+  --oc2-terminal-bg: #272c36;
+  --oc2-terminal-fg: #d8dee9;
+  --oc2-terminal-cmd: #ebcb8b;
+  --oc2-diff-add-bg: rgba(163, 190, 140, 0.16);
+  --oc2-diff-add-fg: #a3be8c;
+  --oc2-diff-del-bg: rgba(191, 97, 106, 0.14);
+  --oc2-diff-del-fg: #bf616a;
+  --oc2-question: #b48ead;
+}
+
+/* Catppuccin Mocha */
+:root[data-theme="catppuccin"] {
+  --oc2-bg: #1e1e2e;
+  --oc2-bg-surface: #181825;
+  --oc2-bg-input: #11111b;
+  --oc2-bg-hover: #313244;
+  --oc2-bg-active: #45475a;
+  --oc2-bg-menu: #181825;
+  --oc2-border: #313244;
+  --oc2-border-strong: #45475a;
+  --oc2-fg: #cdd6f4;
+  --oc2-fg-title: #ffffff;
+  --oc2-fg-muted: #7f849c;
+  --oc2-fg-subtle: #bac2de;
+  --oc2-accent: #89b4fa;
+  --oc2-link: #89dceb;
+  --oc2-error: #f38ba8;
+  --oc2-success: #a6e3a1;
+  --oc2-tool-read: #a6e3a1;
+  --oc2-tool-edit: #89b4fa;
+  --oc2-tool-shell: #f9e2af;
+  --oc2-tool-read-dim: rgba(166, 227, 161, 0.09);
+  --oc2-tool-edit-dim: rgba(137, 180, 250, 0.11);
+  --oc2-tool-shell-dim: rgba(249, 226, 175, 0.09);
+  --oc2-terminal-bg: #11111b;
+  --oc2-terminal-fg: #bac2de;
+  --oc2-terminal-cmd: #f9e2af;
+  --oc2-diff-add-bg: rgba(166, 227, 161, 0.14);
+  --oc2-diff-add-fg: #a6e3a1;
+  --oc2-diff-del-bg: rgba(243, 139, 168, 0.12);
+  --oc2-diff-del-fg: #f38ba8;
+  --oc2-question: #cba6f7;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1322,6 +1462,20 @@ button:focus-visible {
 }
 .spacer {
   flex: 1;
+}
+
+.oc2-mcp-auth {
+  display: flex;
+  gap: var(--oc2-space-1);
+  align-items: center;
+  padding: 0 0 var(--oc2-space-2) 26px;
+}
+.oc2-theme-sub {
+  display: flex;
+  flex-direction: column;
+  padding-left: 10px;
+  border-left: 1px solid var(--oc2-border);
+  margin: 2px 0;
 }
 
 /* ---------- slash / @ popovers ---------- */

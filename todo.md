@@ -16,7 +16,7 @@ Audit complete 2026-08-23; plan APPROVED (all Open Questions resolved). Mileston
 - [x] **M7**: typed event router covering ALL valuable events (lib/events.ts); true delta streaming with REST fallback (lib/deltas.ts); export/import (V2 transfer JSON via dialogs); undo/redo via revert.stage+commit; VCS branch chip; instructions drawer; saved-permissions manager; worktrees drawer; queue-vs-steer composer chip; in-app provider connect (key/OAuth, CLI fallback); MCP drawer auto-refresh; binary-name fix (ResolvedCli).
 - [x] **M8**: tool file/image outputs + user image attachments rendered; meta message types deliberately handled; README rewritten for accuracy; version 0.3.0; vsix packaged.
 
-Deferred (documented): MCP credential (secrets) UI — needs live credential IDs from a connected server; config passes through env/secrets today. Official OpenCode theme presets — next drop (theme switcher infrastructure already in place).
+Deferred: none. Previously deferred items are now complete: official OpenCode theme presets shipped (tokyonight/gruvbox/nord/catppuccin + theme completeness checker in scripts/check-themes.mjs) and MCP credentials UI shipped (needs_auth rows expose Set key / OAuth / Clear via the V2 credentials API). Not applicable: share/unshare (no V2 API endpoints exist).
 
 
 

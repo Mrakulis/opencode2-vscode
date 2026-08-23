@@ -6,7 +6,13 @@
 // ---- resolved configuration ------------------------------------------------
 
 export type Density = "compact" | "comfortable";
-export type ThemeName = "dark" | "light";
+/**
+ * Built-in theme ids: our two first-party themes plus OpenCode-flavored
+ * presets (canonical published palettes). Selected via `opencode2.ui.theme`
+ * and applied as `[data-theme="<id>"]`.
+ */
+export const THEME_IDS = ["dark", "light", "tokyonight", "gruvbox", "nord", "catppuccin"] as const;
+export type ThemeName = (typeof THEME_IDS)[number];
 export type ShowReasoning = "hide" | "collapsed" | "expanded";
 export type SendKey = "enter" | "ctrlEnter";
 export type PermissionMode = "askFirst" | "autoAllow" | "deny";
@@ -171,12 +177,19 @@ export type RpcMethod =
   | "permissions.saved"
   | "permissions.saved.remove"
   // provider connect
+  | "integration.get"
   | "integration.connectKey"
   | "integration.oauthConnect"
   | "integration.oauthStatus"
   | "integration.oauthComplete"
   | "integration.oauthCancel"
   | "integration.commandConnect"
+  // credentials
+  | "credentials.update"
+  | "credentials.remove"
+  // environment surfaces
+  | "plugins.list"
+  | "websearch.providers"
   // vcs & worktrees
   | "vcs.info"
   | "vcs.diff"
@@ -203,6 +216,7 @@ export type RpcMethod =
   | "project.current"
   | "dialog.saveText"
   | "dialog.openText"
+  | "pick.folder"
   | "file.open"
   | "diff.open"
   | "image.save";
@@ -237,9 +251,9 @@ export function validateSettingValue(key: SettingKey, value: unknown): SettingCh
         ? { ok: true }
         : { ok: false, reason: "density must be compact|comfortable" };
     case "ui.theme":
-      return value === "dark" || value === "light"
+      return typeof value === "string" && (THEME_IDS as readonly string[]).includes(value)
         ? { ok: true }
-        : { ok: false, reason: "theme must be dark|light" };
+        : { ok: false, reason: `theme must be one of ${THEME_IDS.join("|")}` };
     case "ui.showReasoning":
       return value === "hide" || value === "collapsed" || value === "expanded"
         ? { ok: true }

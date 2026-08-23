@@ -43,6 +43,8 @@ describe("settings guards", () => {
   it("validates ui.theme values", () => {
     assert.deepEqual(validateSettingValue("ui.theme", "dark"), { ok: true });
     assert.deepEqual(validateSettingValue("ui.theme", "light"), { ok: true });
+    assert.deepEqual(validateSettingValue("ui.theme", "tokyonight"), { ok: true });
+    assert.deepEqual(validateSettingValue("ui.theme", "catppuccin"), { ok: true });
     assert.equal(validateSettingValue("ui.theme", "system").ok, false);
     assert.equal(validateSettingValue("ui.theme", 1).ok, false);
   });

@@ -21,7 +21,7 @@ A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on 
 - **Providers drawer** with in-app connect: API key or OAuth browser flow
 - **Cost, token and context telemetry** with an optional auto-compact threshold
 - **Queue or steer** follow-ups while the agent is working (composer chip)
-- **Own theme system** — dark & light themes designed for this extension (not the VS Code theme); compact/comfortable density; official OpenCode theme presets planned
+- **Own theme system** — OpenCode Dark & Light plus Tokyo Night, Gruvbox, Nord and Catppuccin presets (cycle from the `⋯` menu or pick in settings); compact/comfortable density
 
 ## Requirements
 

@@ -212,7 +212,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return {
       ui: {
         density: cfg.get<"compact" | "comfortable">("ui.density", "compact"),
-        theme: cfg.get<"dark" | "light">("ui.theme", "dark"),
+        theme: cfg.get<"dark" | "light" | "tokyonight" | "gruvbox" | "nord" | "catppuccin">("ui.theme", "dark"),
         accentTint: cfg.get<string>("ui.accentTint") || undefined,
         sounds: cfg.get<boolean>("ui.sounds", true),
         showReasoning: cfg.get<"hide" | "collapsed" | "expanded">("ui.showReasoning", "collapsed"),

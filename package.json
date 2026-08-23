@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "publisher": "Mrakulis",
   "repository": {
@@ -232,14 +232,22 @@
           "type": "string",
           "enum": [
             "dark",
-            "light"
+            "light",
+            "tokyonight",
+            "gruvbox",
+            "nord",
+            "catppuccin"
           ],
           "enumDescriptions": [
             "OpenCode 2 dark (default)",
-            "OpenCode 2 light"
+            "OpenCode 2 light",
+            "Tokyo Night preset",
+            "Gruvbox Dark preset",
+            "Nord preset",
+            "Catppuccin Mocha preset"
           ],
           "default": "dark",
-          "description": "Color theme of the sidebar. Uses the built-in OpenCode 2 themes, not the VS Code theme."
+          "description": "Color theme of the sidebar. Uses the built-in OpenCode 2 themes and presets, not the VS Code theme."
         },
         "opencode2.ui.accentTint": {
           "type": "string",

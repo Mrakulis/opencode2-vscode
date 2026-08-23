@@ -29,6 +29,8 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
   const [error, setError] = useState<string | undefined>(undefined);
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | undefined>(undefined);
+  const [plugins, setPlugins] = useState<Array<Record<string, unknown>>>([]);
+  const [websearch, setWebsearch] = useState<Array<Record<string, unknown>>>([]);
 
   // Reload on mount and whenever the event router bumps refreshTick
   // (integration.updated / integration.connection.updated).
@@ -44,6 +46,9 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
+      // Read-only environment surfaces (best-effort).
+      rpc.call<Array<Record<string, unknown>>>("plugins.list").then(setPlugins).catch(() => undefined);
+      rpc.call<Array<Record<string, unknown>>>("websearch.providers").then(setWebsearch).catch(() => undefined);
     })();
   }, [refreshTick]);
 
@@ -156,6 +161,30 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
             <span className="model-meta act">{p.activation ?? "?"}</span>
           </div>
         ))}
+
+        {plugins.length > 0 && (
+          <>
+            <div className="menu-section">plugins</div>
+            {plugins.map((pl, i) => (
+              <div key={i} className="model-row">
+                <span className="model-name">{String(pl.name ?? pl.id ?? "plugin")}</span>
+                <span className="model-meta act">loaded</span>
+              </div>
+            ))}
+          </>
+        )}
+
+        {websearch.length > 0 && (
+          <>
+            <div className="menu-section">web search</div>
+            {websearch.map((w, i) => (
+              <div key={i} className="model-row">
+                <span className="model-name">{String(w.name ?? w.id ?? "provider")}</span>
+                <span className="model-meta act">{w.enabled === false ? "off" : "ready"}</span>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

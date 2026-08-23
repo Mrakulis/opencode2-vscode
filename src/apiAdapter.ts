@@ -221,6 +221,17 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       const res = await getClient().integration.get({ integrationID });
       return res.data as unknown as Record<string, unknown> | undefined;
     },
+    credentialUpdate: (credentialID: string, label: string): Promise<void> =>
+      getClient().credential.update({ credentialID, label }),
+    credentialRemove: (credentialID: string): Promise<void> => getClient().credential.remove({ credentialID }),
+    pluginList: async (): Promise<Array<Record<string, unknown>>> => {
+      const res = await getClient().plugin.list();
+      return ((res.data ?? []) as unknown[]).map((r) => r as Record<string, unknown>);
+    },
+    websearchProviders: async (): Promise<Array<Record<string, unknown>>> => {
+      const res = await getClient().websearch.providers();
+      return ((res.data ?? []) as unknown[]).map((r) => r as Record<string, unknown>);
+    },
     connectKey: (integrationID: string, key: string): Promise<void> =>
       getClient().integration.connect.key({ integrationID, key }),
     oauthConnect: async (
