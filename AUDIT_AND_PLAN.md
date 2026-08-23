@@ -23,7 +23,7 @@ The extension is **solid and works** for its core loop: auto-connect → chat �
 5. **Documented-but-unsurfaced**: README claims "Queue or steer follow-ups while the agent is working" — `delivery: queue|steer` exists in the adapter but **no UI** lets the user choose it.
 6. **Latent bug**: `rpc.ts` hard-codes `opencode2 auth login` and `extension.ts` falls back to `"opencode2"`, but `installCli` installs `opencode-ai@beta` whose binary is **`opencode`** — so on a machine with only the npm binary, provider auth and "Open Terminal" fail.
 
-**Theming pivot:** we are **not** following the VS Code theme. `plan.md §9` is superseded. We ship **our own design language** now; official OpenCode themes come later as selectable presets. The current `styles.css` is built almost entirely on `--vscode-*` tokens, so a first-party token system is required (see §5 Q1–Q7, §6 M-theme).
+**Theming pivot:** we are **not** following the VS Code theme. `plan.md §9` is superseded. We ship **our own design language** now; official OpenCode themes come later as selectable presets. **Verified:** `styles.css` already uses a first-party `--oc2-*` token system (`:root` + `[data-density]` + `[data-plan]`), with **0** `--vscode-*` references — token *values* are just hardcoded to the VS Code Dark+ palette. So M-theme is a **rebrand + light-theme + switcher**, NOT a token-system rewrite (see §4, §5 Q1–Q7, §6 M-theme).
 
 ---
 
@@ -130,7 +130,43 @@ A **bespoke VS Code GUI sidebar**, not a terminal clone:
 
 ---
 
-## 4. (Reserved)
+## 4. Retained design vs. changes required (impact of the audit plan on v0.2.37)
+
+> **Answer to "how much of my design stays vs. changes":** the vast majority survives. Only two change-categories exist: (A) a **contained theme rebrand** — the token system already exists as `--oc2-*` (verified **0** `--vscode-*` refs), so it is rebrand + light theme + switcher, *not* a rewrite; and (B) **additive feature layers** (M5–M8) on top of stable components. A handful of specific logic spots get *replaced* (heuristic/bug fixes). See the table.
+
+### 4.1 What stays (unchanged or lightly extended)
+| # | Existing design decision | Disposition |
+|---|---|---|
+| 1 | Architecture: host/UI split, RPC-over-postMessage, all server I/O in `apiAdapter`/`controller` | **STAY** |
+| 2 | Connection: `Service.discover/ensure`, explicit baseUrl, auto-start, backoff, volatile-event resync | **STAY** |
+| 3 | Styling token *system* (`--oc2-*` `:root` + `[data-density]` + `[data-plan]`) | **STAY** (structure); values rebranded (A) |
+| 4 | Density system (`data-density` compact/comfortable, `--oc2-space/font`) | **STAY** |
+| 5 | Accent tint (`opencode2.ui.accentTint` → `--oc2-accent`) | **STAY** |
+| 6 | React webview component architecture (`components/`, `lib/`, hooks) | **STAY** |
+| 7 | Composer (auto-grow textarea, Enter/ctrlEnter, markdown preview, model/agent/variant/permission pickers) | **STAY + EXTEND** (slash popover, `@` mention, queue/steer chip) |
+| 8 | Feed (user bubble, collapsible reasoning, tool cards + diff, streaming caret, jump-to-latest) | **STAY + EXTEND** (FormCard, tool file/image parts, meta-message handling) |
+| 9 | Drawers (Sessions, ModelManager, Providers, Mcp) | **STAY + EXTEND** (Providers in-app connect, Mcp credentials, instructions drawer) |
+| 10 | Permission cards / `permissions.mode` | **STAY + EXTEND** (saved-permission manager, server alignment) |
+| 11 | RPC protocol (`RpcMethod` union, `SETTING_KEYS`, validation) | **STAY + EXTEND** (new methods) |
+| 12 | `apiAdapter` (single client-call module) | **STAY + EXTEND** (new V2 calls) |
+| 13 | Event pump / controller (subscribe loop, drop detection, resync) | **STAY + EXTEND** (typed router in webview) |
+| 14 | `autoCompact` watcher | **STAY** |
+| 15 | Notifications + sounds | **STAY + EXTEND** (new event types) |
+| 16 | Settings schema (`opencode2.*`) | **STAY + EXTEND** (theme selection) |
+| 17 | esbuild dual-target build, tsconfigs, tests | **STAY** |
+| 18 | `cli.ts` detection | **STAY + FIX** (use `ResolvedCli.display`, Q25) |
+| 19 | Command contributions / keybindings | **STAY** (− `showTestQuestion`, Q26) |
+
+### 4.2 What gets replaced (not just extended)
+- **`App.tsx` `isQuestion` regex heuristic** → real `form.*` UI (M6).
+- **`App.tsx` coarse `startsWith("session.")` event refresh** → explicit typed event router (M7).
+- **Literal `opencode2` in `rpc.ts:145` / `extension.ts:90`** → `ResolvedCli.display` (Q25; preserves your `opencode2`).
+- **`App.tsx` inline hex `#c084fc`** (question cards) → route through a token.
+- **`styles.css:3` stale comment** ("Base layer = VS Code theme variables…") → fix.
+- **`plan.md §9` + README claims** ("follows VS Code theme", queue/steer) → corrected docs (M8/Q30).
+
+### 4.3 Effort reality check
+The originally-estimated "rip out `--vscode-*`" rework **does not apply** (there are none). M-theme is effectively: edit the `:root` palette block (~20 lines), add a `[data-theme="light"]` block, add a theme switcher (settings + overflow), fix one comment + a few inline hex. That is a small, contained change — not a stylesheet rewrite. All of M5–M8 is additive on top of the stable components above.
 
 ---
 
@@ -141,9 +177,9 @@ A **bespoke VS Code GUI sidebar**, not a terminal clone:
 ### A. Theming (our own theme + later official OpenCode themes)
 
 **Q1. Transition strategy for the styling layer.**
-Context: `styles.css` is almost entirely `--vscode-*`. We are not following VS Code themes.
-Recommendation: **Rip out `--vscode-*` now** and replace with a first-party token system — cleanest base for our theme and for later OpenCode presets.
-ANSWER: ___
+Context: Verified — `styles.css` has **0** `--vscode-*` references; it already uses a first-party `--oc2-*` token system (`:root` + `[data-density]` + `[data-plan]`), with values currently hardcoded to the VS Code Dark+ palette. No TS reads the VS Code theme. The plumbing is already ours.
+Recommendation: No rip-out needed (nothing to remove). Rebrand the `:root` palette to our brand (dark + light via `[data-theme]`), add a theme switcher (settings + overflow), and later add official OpenCode presets as `[data-theme="..."]` blocks. Route the few inline hardcoded hex (e.g., `App.tsx` `#c084fc`) through tokens.
+ANSWER: Obsolete as rip-out/shim — token system already first-party; rebrand palette + add light theme + switcher (per above).
 
 **Q2. Default theme coverage.**
 Context: Do we ship dark-only, light-only, or both from day one?
@@ -318,7 +354,7 @@ ANSWER: ___
 > Architecture intact: **all new server I/O in `apiAdapter.ts`**, new RPC in `protocol.ts` + `rpc.ts`, new UI in `webview-src/`. Gate every milestone with `npm run typecheck` + `npm test`; update `todo.md`/`MEMORY.md`; commit (conventional); verify `graphify-out/` refresh. GUI-first + own-theme direction throughout.
 
 ### M-theme — Own theme system + later official OpenCode themes
-- [ ] Define first-party design tokens (colors, spacing, radii, typography, motion) replacing `--vscode-*` in `styles.css` (keep `data-density` + `accentTint` hooks). *(Q1 strategy)*
+- [ ] Rebrand the existing first-party `--oc2-*` token system: replace the hardcoded VS Code Dark+ palette values in `:root` with our brand palette (dark + light via `[data-theme]`); keep `data-density` + `accentTint` hooks. *(No `--vscode-*` to remove — verified 0 refs; Q1 obsolete as rip-out.)*
 - [ ] Ship our default theme (dark + light). *(Q2/Q3)*
 - [ ] Theme switcher UI (settings + overflow menu). *(Q7)*
 - [ ] Later: add **official OpenCode themes** as static CSS presets (light/dark/high-contrast). *(Q6)*
