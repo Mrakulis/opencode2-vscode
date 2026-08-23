@@ -388,14 +388,14 @@ export function App() {
     const m = [...messages].reverse().find(isAssistant) as unknown as
       | { content?: Array<{ type: string; text?: string }> }
       | undefined;
-    const t = m?.content?.find((p) => p.type === "text")?.text ?? "";
-    return t;
+    const texts = m?.content?.filter((p) => p.type === "text").map((p) => p.text ?? "") ?? [];
+    return texts.join("\n");
   }, [messages]);
   const isQuestion = useMemo(() => {
-    if (busy || permissions.length > 0 || !lastAssistantText) return false;
+    if (permissions.length > 0 || !lastAssistantText) return false;
     const t = lastAssistantText.trim();
-    return t.endsWith("?") || /\?\s*$/.test(t) || /please (confirm|let me know|choose)/i.test(t);
-  }, [lastAssistantText, busy, permissions]);
+    return t.includes("?") || /please (confirm|let me know|choose|select)/i.test(t);
+  }, [lastAssistantText, permissions]);
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
