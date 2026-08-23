@@ -384,6 +384,19 @@ export function App() {
     [lastAssistant, active, ctxLimit],
   );
 
+  const lastAssistantText = useMemo(() => {
+    const m = [...messages].reverse().find(isAssistant) as unknown as
+      | { content?: Array<{ type: string; text?: string }> }
+      | undefined;
+    const t = m?.content?.find((p) => p.type === "text")?.text ?? "";
+    return t;
+  }, [messages]);
+  const isQuestion = useMemo(() => {
+    if (busy || permissions.length > 0 || !lastAssistantText) return false;
+    const t = lastAssistantText.trim();
+    return t.endsWith("?") || /\?\s*$/.test(t) || /please (confirm|let me know|choose)/i.test(t);
+  }, [lastAssistantText, busy, permissions]);
+
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
     if (id.includes("plan")) return true;
@@ -528,6 +541,20 @@ export function App() {
         </div>
       )}
 
+      {isQuestion && permissions.length === 0 && activeId && (
+        <div className="permissions">
+          <div className="perm-card" data-action="question" style={{ borderLeftColor: "#c084fc" }}>
+            <div className="perm-header">
+              <span className="perm-badge" style={{ color: "#c084fc", borderColor: "rgba(192,132,252,0.4)" }}>
+                question
+              </span>
+              <span>Agent is waiting for your answer</span>
+            </div>
+            <div className="perm-hint">Reply in the composer below — it will be sent as the answer. Other agents show this as an inline prompt with quick-reply buttons; we surface it here so it never gets lost in the feed.</div>
+          </div>
+        </div>
+      )}
+
       <Composer
         disabled={!activeId || conn !== "connected"}
         busy={busy}
@@ -594,18 +621,38 @@ function PermissionRow({
   perm: PermissionCardData;
   onReply: (reply: "once" | "always" | "reject") => void;
 }) {
+  const kind = perm.action.toLowerCase().includes("shell")
+    ? "shell"
+    : perm.action.toLowerCase().includes("edit") || perm.action.toLowerCase().includes("write")
+      ? "edit"
+      : perm.action.toLowerCase().includes("read")
+        ? "read"
+        : "other";
   return (
-    <div className="perm-card">
-      <div className="perm-title">Permission · {perm.action}</div>
-      {perm.resources.length > 0 && <code className="perm-res">{perm.resources.join(", ")}</code>}
+    <div className="perm-card" data-action={perm.action.toLowerCase().includes("shell") ? "shell" : perm.action.toLowerCase().includes("edit") ? "edit" : perm.action.toLowerCase().includes("read") ? "read" : "other"}>
+      <div className="perm-header">
+        <span className={`perm-badge ${kind}`}>{perm.action}</span>
+        <span>Permission required</span>
+      </div>
+      {perm.resources.length > 0 ? (
+        <div className="perm-resources">
+          {perm.resources.map((r, i) => (
+            <code key={i} className="perm-res">
+              {r}
+            </code>
+          ))}
+        </div>
+      ) : (
+        <div className="perm-hint">Agent wants to perform this action.</div>
+      )}
       <div className="perm-actions">
-        <button type="button" className="primary" onClick={() => onReply("once")}>
+        <button type="button" className="primary" onClick={() => onReply("once")} title="Allow this time (Enter)">
           Allow once
         </button>
-        <button type="button" onClick={() => onReply("always")}>
+        <button type="button" onClick={() => onReply("always")} title="Always allow this action/resource">
           Always allow
         </button>
-        <button type="button" className="danger" onClick={() => onReply("reject")}>
+        <button type="button" className="danger" onClick={() => onReply("reject")} title="Deny (Esc)">
           Deny
         </button>
       </div>

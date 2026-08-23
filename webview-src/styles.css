@@ -857,27 +857,93 @@ button:focus-visible {
 /* ---------- permissions ---------- */
 .permissions {
   border-top: 1px solid var(--oc2-border);
-  background: var(--oc2-bg-surface);
-}
-.perm-card {
-  padding: var(--oc2-space-2) var(--oc2-space-3);
+  background: var(--oc2-bg);
   display: flex;
   flex-direction: column;
-  gap: var(--oc2-space-1);
+  gap: 1px;
+  max-height: 38vh;
+  overflow-y: auto;
+}
+.perm-card {
+  margin: var(--oc2-space-2);
+  padding: var(--oc2-space-3);
+  background: var(--oc2-bg-surface);
+  border: 1px solid var(--oc2-border);
+  border-left: 3px solid var(--oc2-accent);
+  border-radius: var(--oc2-radius);
+  display: flex;
+  flex-direction: column;
+  gap: var(--oc2-space-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.perm-card[data-action="shell"] {
+  border-left-color: #e5c07b;
+}
+.perm-card[data-action="edit"] {
+  border-left-color: #61afef;
+}
+.perm-card[data-action="read"] {
+  border-left-color: #89d185;
+}
+.perm-card[data-action="write"] {
+  border-left-color: #61afef;
+}
+.perm-header {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  font-weight: 600;
+  font-size: calc(var(--oc2-font-size) - 0.5px);
+}
+.perm-badge {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--oc2-bg-input);
+  border: 1px solid var(--oc2-border);
+  text-transform: lowercase;
+}
+.perm-badge.shell {
+  color: #e5c07b;
+  border-color: rgba(229, 192, 123, 0.4);
+}
+.perm-badge.edit {
+  color: #61afef;
+  border-color: rgba(97, 175, 239, 0.4);
+}
+.perm-badge.read {
+  color: #89d185;
+  border-color: rgba(137, 209, 133, 0.4);
 }
 .perm-title {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-subtle);
+}
+.perm-resources {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .perm-res {
   font-family: var(--oc2-mono);
-  font-size: calc(var(--oc2-font-size) - 3px);
-  color: var(--oc2-fg-muted);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  background: var(--oc2-bg-input);
+  border: 1px solid var(--oc2-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--oc2-fg);
   word-break: break-all;
+}
+.perm-hint {
+  font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-muted);
 }
 .perm-actions {
   display: flex;
   gap: var(--oc2-space-2);
+  flex-wrap: wrap;
 }
 
 /* ---------- composer ---------- */
