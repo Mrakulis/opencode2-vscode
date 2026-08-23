@@ -68,6 +68,7 @@ export function Feed({
         <MessageGroup
           key={m.id}
           message={m}
+          busy={busy}
           showReasoning={showReasoning}
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
@@ -97,6 +98,7 @@ export function Feed({
 
 function MessageGroup({
   message,
+  busy,
   showReasoning,
   expandShellTools,
   expandEditTools,
@@ -104,6 +106,7 @@ function MessageGroup({
   messageStats,
 }: {
   message: AnyMessage;
+  busy: boolean;
   showReasoning: "hide" | "collapsed" | "expanded";
   expandShellTools: boolean;
   expandEditTools: boolean;
@@ -125,7 +128,7 @@ function MessageGroup({
         {message.agent} · {message.model?.id ?? ""}
       </header>
       {message.content?.map((part, i) => (
-        <Part key={i} part={part} showReasoning={showReasoning} expandShellTools={expandShellTools} expandEditTools={expandEditTools} fullShellOutput={fullShellOutput} />
+        <Part key={i} part={part} busy={busy} showReasoning={showReasoning} expandShellTools={expandShellTools} expandEditTools={expandEditTools} fullShellOutput={fullShellOutput} />
       ))}
       {messageStats && (message.cost !== undefined || message.tokens !== undefined) && (
         <footer className="msg-foot">
@@ -174,12 +177,14 @@ function handleFileClick(e: React.MouseEvent) {
 
 function Part({
   part,
+  busy,
   showReasoning,
   expandShellTools,
   expandEditTools,
   fullShellOutput,
 }: {
   part: MessagePartText | MessagePartReasoning | MessagePartTool;
+  busy: boolean;
   showReasoning: "hide" | "collapsed" | "expanded";
   expandShellTools: boolean;
   expandEditTools: boolean;
@@ -190,7 +195,7 @@ function Part({
   }
   if (part.type === "reasoning") {
     if (showReasoning === "hide") return null;
-    return <Reasoning text={part.text} defaultOpen={showReasoning === "expanded"} />;
+    return <Reasoning text={part.text} defaultOpen={showReasoning === "expanded"} busy={busy} />;
   }
   if (part.type === "tool") {
     return <ToolCard part={part} expandShellTools={expandShellTools} expandEditTools={expandEditTools} fullShellOutput={fullShellOutput} />;
@@ -198,13 +203,16 @@ function Part({
   return null;
 }
 
-function Reasoning({ text, defaultOpen }: { text: string; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+function Reasoning({ text, defaultOpen, busy }: { text: string; defaultOpen: boolean; busy: boolean }) {
+  const [open, setOpen] = useState(defaultOpen || busy);
   useEffect(() => setOpen(defaultOpen), [defaultOpen]);
+  useEffect(() => {
+    if (busy && text.trim()) setOpen(true);
+  }, [busy, text]);
   if (!text.trim()) return null;
   return (
     <details className="reasoning" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>thinking</summary>
+      <summary>thinking{busy ? " · streaming" : ""}</summary>
       <div className="reasoning-body">{text}</div>
     </details>
   );
