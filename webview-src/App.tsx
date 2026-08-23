@@ -366,7 +366,11 @@ export function App() {
 
   // ---- derived -------------------------------------------------------------
   const lastAssistant = useMemo(() => [...messages].reverse().find(isAssistant), [messages]);
-  const effectiveModel = lastAssistant?.model ?? serverDefault ?? undefined;
+  const effectiveModel =
+    (active as unknown as { model?: { id: string; providerID: string; variant?: string } })?.model ??
+    lastAssistant?.model ??
+    serverDefault ??
+    undefined;
   const ctxLimit = useMemo(() => {
     const ref = effectiveModel;
     if (!ref) return undefined;
@@ -524,6 +528,9 @@ export function App() {
           const key = modelKey(m);
           setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
           if (activeId) {
+            setSessions((prev) =>
+              prev.map((s) => (s.id === activeId ? ({ ...s, model: { id: m.id, providerID: m.providerID } } as SessionSummary) : s)),
+            );
             await rpc.call("model.switch", { sessionID: activeId, model: m }).catch(() => undefined);
           }
           void refreshSessions();
@@ -531,6 +538,12 @@ export function App() {
         onPickVariant={async (variant) => {
           const am = effectiveModel;
           if (activeId && am) {
+            const nextModel = variant
+              ? { id: am.id, providerID: am.providerID, variant }
+              : { id: am.id, providerID: am.providerID };
+            setSessions((prev) =>
+              prev.map((s) => (s.id === activeId ? ({ ...s, model: nextModel } as SessionSummary) : s)),
+            );
             await rpc.call("model.switch", {
               sessionID: activeId,
               model: { id: am.id, providerID: am.providerID, variant },

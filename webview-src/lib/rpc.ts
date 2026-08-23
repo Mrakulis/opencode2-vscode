@@ -80,6 +80,7 @@ export interface SessionSummary {
   id: string;
   title?: string;
   agent?: string;
+  model?: { id: string; providerID: string; variant?: string };
   cost: number;
   tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } };
   time: { created: number; updated: number; idle?: number; archived?: number };
@@ -114,7 +115,7 @@ export type AnyMessage =
       type: "assistant";
       id: string;
       agent: string;
-      model?: { id: string; providerID: string };
+      model?: { id: string; providerID: string; variant?: string };
       time: { created: number; completed?: number };
       content: Array<MessagePartText | MessagePartReasoning | MessagePartTool>;
       cost?: number;
