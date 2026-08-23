@@ -200,6 +200,7 @@ function Part({
 
 function Reasoning({ text, defaultOpen }: { text: string; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => setOpen(defaultOpen), [defaultOpen]);
   if (!text.trim()) return null;
   return (
     <details className="reasoning" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
@@ -232,6 +233,7 @@ type ToolPart = MessagePartTool;
 
 function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: { part: ToolPart; expandShellTools: boolean; expandEditTools: boolean; fullShellOutput: boolean }) {
   const [expanded, setExpanded] = useState(() => initiallyExpanded(part.name, expandShellTools, expandEditTools));
+  useEffect(() => setExpanded(initiallyExpanded(part.name, expandShellTools, expandEditTools)), [part.name, expandShellTools, expandEditTools]);
   const kind = toolKind(part.name);
 
   let title = part.name;
