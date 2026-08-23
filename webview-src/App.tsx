@@ -419,13 +419,12 @@ export function App() {
         if (raw.length > 40 || raw.includes("`") || raw.toLowerCase().includes("permission")) continue;
         const isRec = /\(recommended\)/i.test(raw) || /★/.test(raw);
         const label = raw.replace(/\s*\(recommended\)\s*/i, "").replace(/\s*★.*/, "").trim();
-        if (!label || label.length > 30) continue;
+        if (!label) continue;
         const isOther = /^other$/i.test(label) || label.toLowerCase().startsWith("other");
-        // only keep plausible short options (Yes/No/Other/Continue/Stop etc.)
-        if (!/^(yes|no|other|continue|stop|cancel|proceed)$/i.test(label) && !isOther) {
-          // keep generic short labels like "Yes" but not long sentences
-          if (label.split(/\s+/).length > 3) continue;
-        }
+        // allow any plausible option — paths, short phrases, not long sentences
+        if (!isOther && label.length > 60) continue;
+        if (!isOther && label.split(/\s+/).length > 8) continue;
+        if (!isOther && label.includes("`")) continue;
         opts.push({ label, recommended: isRec, isOther });
       }
     }
