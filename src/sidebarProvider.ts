@@ -56,6 +56,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           },
         },
       });
+      // Always include live connection state — it may have changed while the
+      // webview was still loading.
+      this.post({
+        type: "connection",
+        state: this.controller.state,
+      } satisfies InboundMessage);
     };
 
     view.onDidDispose(
