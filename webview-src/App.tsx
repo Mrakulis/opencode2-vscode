@@ -384,8 +384,27 @@ export function App() {
     [lastAssistant, active, ctxLimit],
   );
 
+  const isPlan = useMemo(() => {
+    const id = active?.agent?.toLowerCase() ?? "";
+    if (id.includes("plan")) return true;
+    const ag = agents.find((a) => a.id === active?.agent);
+    return ag?.name?.toLowerCase().includes("plan") ?? false;
+  }, [active?.agent, agents]);
+
+  useEffect(() => {
+    if (isPlan) {
+      document.documentElement.dataset.plan = "true";
+      document.documentElement.style.setProperty("--oc2-accent", "#f59e0b");
+    } else {
+      document.documentElement.dataset.plan = "false";
+      if (cfg?.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
+      else document.documentElement.style.removeProperty("--oc2-accent");
+    }
+  }, [isPlan, cfg?.ui.accentTint]);
+
   return (
     <div className="app">
+      <div className="busy-bar" data-busy={busy ? "true" : "false"} aria-hidden />
       <HeaderBar
         conn={conn}
         title={active?.title}

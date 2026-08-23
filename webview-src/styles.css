@@ -40,6 +40,10 @@
   --oc2-radius: 8px;
 }
 
+:root[data-plan="true"] {
+  --oc2-accent: #f59e0b;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -114,6 +118,43 @@ button:focus-visible {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  position: relative;
+}
+
+.busy-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.busy-bar[data-busy="true"] {
+  opacity: 1;
+}
+.busy-bar[data-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--oc2-accent), transparent);
+  animation: busy-shimmer 1.2s infinite;
+}
+@keyframes busy-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-bar[data-busy="true"]::after {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 /* ---------- header ---------- */
