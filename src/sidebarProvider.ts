@@ -35,27 +35,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     };
 
     const pushState = (): void => {
-      const cfg = vscode.workspace.getConfiguration("opencode2");
       this.post({
         type: "ready",
-        config: {
-          ui: {
-            density: cfg.get<"compact" | "comfortable">("ui.density", "compact"),
-            accentTint: cfg.get<string>("ui.accentTint") || undefined,
-            sounds: cfg.get<boolean>("ui.sounds", true),
-            showReasoning: cfg.get<"hide" | "collapsed" | "expanded">("ui.showReasoning", "collapsed"),
-            expandShellTools: cfg.get<boolean>("ui.expandShellTools", false),
-            expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
-            fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
-            messageStats: cfg.get<boolean>("ui.messageStats", true),
-            sendKey: cfg.get<"enter" | "ctrlEnter">("composer.sendKey", "enter"),
-          },
-          models: {
-            hidden: cfg.get<string[]>("models.hidden", []),
-            favorites: cfg.get<string[]>("models.favorites", []),
-            default: cfg.get<string>("models.default", ""),
-          },
-        },
+        config: this.getConfig(),
       });
       // Always include live connection state — it may have changed while the
       // webview was still loading.
@@ -176,10 +158,33 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
+  private getConfig(): import("./protocol").ResolvedConfig {
+    const cfg = vscode.workspace.getConfiguration("opencode2");
+    return {
+      ui: {
+        density: cfg.get<"compact" | "comfortable">("ui.density", "compact"),
+        accentTint: cfg.get<string>("ui.accentTint") || undefined,
+        sounds: cfg.get<boolean>("ui.sounds", true),
+        showReasoning: cfg.get<"hide" | "collapsed" | "expanded">("ui.showReasoning", "collapsed"),
+        expandShellTools: cfg.get<boolean>("ui.expandShellTools", false),
+        expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
+        fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
+        messageStats: cfg.get<boolean>("ui.messageStats", true),
+        sendKey: cfg.get<"enter" | "ctrlEnter">("composer.sendKey", "enter"),
+      },
+      models: {
+        hidden: cfg.get<string[]>("models.hidden", []),
+        favorites: cfg.get<string[]>("models.favorites", []),
+        default: cfg.get<string>("models.default", ""),
+      },
+    };
+  }
+
   private renderHtml(webview: vscode.Webview): string {
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.js"));
     const styles = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.css"));
     const nonce = getNonce();
+    const initialConfig = JSON.stringify(this.getConfig()).replace(/</g, "\\u003c");
 
     return /* html */ `<!doctype html>
 <html lang="en">
@@ -192,6 +197,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
 <div id="root"></div>
+<script id="oc2-initial-config" type="application/json">${initialConfig}</script>
 <script nonce="${nonce}" src="${script}"></script>
 </body>
 </html>`;

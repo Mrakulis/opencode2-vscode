@@ -41,7 +41,14 @@ export function App() {
   const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sounds, setSounds] = useState(true);
-  const [cfg, setCfg] = useState<ResolvedConfig | undefined>(undefined);
+  const getInitialConfig = (): ResolvedConfig | undefined => {
+    try {
+      const el = document.getElementById("oc2-initial-config");
+      if (el?.textContent) return JSON.parse(el.textContent) as ResolvedConfig;
+    } catch {}
+    return undefined;
+  };
+  const [cfg, setCfg] = useState<ResolvedConfig | undefined>(() => getInitialConfig());
   const [managerOpen, setManagerOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
@@ -49,6 +56,15 @@ export function App() {
   const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
     undefined,
   );
+
+  // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
+  useEffect(() => {
+    if (!cfg) return;
+    document.documentElement.dataset.density = cfg.ui.density;
+    if (cfg.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
+    else document.documentElement.style.removeProperty("--oc2-accent");
+    setSounds(cfg.ui.sounds);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = useMemo(() => sessions.find((s) => s.id === activeId), [sessions, activeId]);
   const busy = activeId ? busySessions[activeId] === true : false;
