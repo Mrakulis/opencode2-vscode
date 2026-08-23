@@ -128,7 +128,8 @@ export type RpcMethod =
   | "ui.activeSession"
   | "settings.update"
   | "workspace.directory"
-  | "file.open";
+  | "file.open"
+  | "diff.open";
 
 export function isInbound(value: unknown): value is InboundMessage {
   return (

@@ -234,15 +234,46 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
           }
           const maybeDiff = (c as { diff?: unknown }).diff;
           if (typeof maybeDiff === "string") {
+            const input = (part.state as { input?: Record<string, unknown> }).input;
+            const fileHint =
+              (typeof input === "object" &&
+                input !== null &&
+                (typeof input.filePath === "string"
+                  ? (input.filePath as string)
+                  : typeof input.path === "string"
+                    ? (input.path as string)
+                    : typeof input.file === "string"
+                      ? (input.file as string)
+                      : undefined)) || "edit.diff";
             return (
-              <pre key={i} className="diff">
-                {diffLines(maybeDiff).map((l, j) => (
-                  <span key={j} className={`line ${l.cls}`}>
-                    {l.text}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
+              <div key={i}>
+                <pre className="diff">
+                  {diffLines(maybeDiff).map((l, j) => (
+                    <span key={j} className={`line ${l.cls}`}>
+                      {l.text}
+                      {"\n"}
+                    </span>
+                  ))}
+                </pre>
+                <button
+                  type="button"
+                  className="chip"
+                  style={{ marginTop: "6px" }}
+                  onClick={() => void rpc.call("diff.open", { file: fileHint, diff: maybeDiff }).catch(() => undefined)}
+                  title="Open diff in editor"
+                >
+                  ↔ Open diff
+                </button>
+                <button
+                  type="button"
+                  className="chip"
+                  style={{ marginLeft: "6px" }}
+                  onClick={() => void rpc.call("file.open", { path: fileHint }).catch(() => undefined)}
+                  title="Open file"
+                >
+                  ↗ Open file
+                </button>
+              </div>
             );
           }
           return null;

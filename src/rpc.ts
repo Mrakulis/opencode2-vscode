@@ -156,6 +156,27 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log) {
       }
       return true;
     },
+    "diff.open": async (p) => {
+      const file = str(p, "file");
+      const diff = str(p, "diff");
+      // show diff as a diff-language document
+      const doc = await vscode.workspace.openTextDocument({ language: "diff", content: diff });
+      await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
+      // also try to open the actual file alongside for reference
+      try {
+        const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        let fileUri: vscode.Uri;
+        if (/^[a-zA-Z]:[\\/]/.test(file) || file.startsWith("/") || file.startsWith("\\")) fileUri = vscode.Uri.file(file);
+        else if (base) fileUri = vscode.Uri.file(path.join(base, file));
+        else throw new Error("no base");
+        // open as second editor if file exists
+        await vscode.workspace.openTextDocument(fileUri).then(
+          () => vscode.commands.executeCommand("workbench.action.splitEditor"),
+          () => undefined,
+        );
+      } catch {}
+      return true;
+    },
   };
 
   /** Handle one request; never throws — failures become RpcResponse errors. */
