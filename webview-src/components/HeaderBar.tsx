@@ -28,8 +28,15 @@ export function HeaderBar(props: Props) {
     const close = (e: MouseEvent): void => {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
     };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [menuOpen]);
 
   return (

@@ -518,7 +518,7 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
       />
 
-      <StatusStrip connected={conn === "connected"} cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} />
+      {conn === "connected" && <StatusStrip connected cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} />}
     </div>
   );
 }

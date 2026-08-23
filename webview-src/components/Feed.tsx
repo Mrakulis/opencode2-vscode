@@ -39,6 +39,18 @@ export function Feed({
     if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  if (messages.length === 0 && !busy) {
+    return (
+      <div className="feed-scroll" ref={scrollRef}>
+        <div className="feed-empty">
+          <div className="feed-empty-icon">✦</div>
+          <div className="feed-empty-title">Start a conversation</div>
+          <div className="feed-empty-hint">Ask anything about this workspace — explain a file, fix a bug, or plan a feature. Your context is the open folder.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="feed-scroll" ref={scrollRef}>
       {messages.map((m) => (

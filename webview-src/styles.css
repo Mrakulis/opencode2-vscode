@@ -82,11 +82,15 @@ textarea {
   font-size: inherit;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
-  border: 1px solid var(--oc2-border);
+  border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, var(--oc2-border)));
   border-radius: var(--oc2-radius);
 }
 input:focus-visible,
 textarea:focus-visible {
+  outline: 1px solid var(--oc2-accent);
+  outline-offset: -1px;
+}
+button:focus-visible {
   outline: 1px solid var(--oc2-accent);
   outline-offset: -1px;
 }
@@ -95,6 +99,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 /* ---------- header ---------- */
@@ -113,8 +118,9 @@ textarea:focus-visible {
   background: transparent;
 }
 .iconbtn.active {
-  background: var(--vscode-list-activeSelectionBackground, var(--oc2-accent));
-  color: var(--vscode-list-activeSelectionForeground, inherit);
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+  box-shadow: inset 0 0 0 1px var(--oc2-border);
 }
 
 .brand {
@@ -130,13 +136,17 @@ textarea:focus-visible {
   min-width: 0;
   flex: 1;
   cursor: text;
+  font-weight: 600;
+  font-size: calc(var(--oc2-font-size) + 0.5px);
+  letter-spacing: -0.01em;
 }
 
 .ws-chip {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
   color: var(--vscode-descriptionForeground);
-  background: var(--vscode-badge-background);
+  background: transparent;
+  border: 1px solid var(--oc2-border);
   border-radius: 999px;
   padding: 1px var(--oc2-space-2);
   white-space: nowrap;
@@ -160,16 +170,20 @@ textarea:focus-visible {
   font-size: calc(var(--oc2-font-size) - 3px);
   padding: 1px var(--oc2-space-2);
   border-radius: 999px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--oc2-border);
   white-space: nowrap;
 }
 .conn-connected {
-  box-shadow: inset 0 0 0 1px var(--oc2-accent);
+  color: var(--vscode-foreground);
+  border-color: var(--oc2-accent);
+  background: var(--vscode-badge-background);
 }
 .conn-error {
-  box-shadow: inset 0 0 0 1px var(--vscode-errorForeground, #f66);
+  border-color: var(--vscode-errorForeground, #f66);
   color: var(--vscode-errorForeground, #f66);
+  background: transparent;
 }
 
 .picker {
@@ -219,7 +233,12 @@ textarea:focus-visible {
   background: var(--vscode-list-hoverBackground);
 }
 .menu-item.selected {
-  color: var(--oc2-accent);
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+}
+.menu-item:focus-visible {
+  outline: 1px solid var(--oc2-accent);
+  outline-offset: -1px;
 }
 .menu-section {
   font-family: var(--oc2-mono);
@@ -247,8 +266,16 @@ textarea:focus-visible {
 }
 .row-star,
 .row-default {
-  opacity: 0.35;
+  opacity: 0.6;
   padding: 0 2px;
+}
+.row-star {
+  border-radius: 3px;
+}
+.row-star:focus-visible {
+  outline: 1px solid var(--oc2-accent);
+  outline-offset: 1px;
+  opacity: 1;
 }
 .row-star.on,
 .row-default {
@@ -257,6 +284,7 @@ textarea:focus-visible {
 }
 .row-star:hover {
   opacity: 1;
+  background: var(--vscode-list-hoverBackground);
 }
 .prov-head {
   display: flex;
@@ -354,6 +382,7 @@ textarea:focus-visible {
   flex: 1;
   position: relative;
   overflow: hidden;
+  min-height: 0;
 }
 .feed-scroll {
   height: 100%;
@@ -362,6 +391,32 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--oc2-space-3);
+}
+.feed-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--oc2-space-2);
+  text-align: center;
+  padding: var(--oc2-space-3);
+  color: var(--vscode-descriptionForeground);
+}
+.feed-empty-icon {
+  font-size: 28px;
+  line-height: 1;
+  opacity: 0.8;
+}
+.feed-empty-title {
+  font-size: calc(var(--oc2-font-size) + 1px);
+  font-weight: 600;
+  color: var(--vscode-sideBar-foreground);
+}
+.feed-empty-hint {
+  font-size: calc(var(--oc2-font-size) - 1px);
+  max-width: 320px;
+  line-height: 1.5;
 }
 
 .empty {

@@ -54,8 +54,15 @@ export function Composer(props: Props) {
       if (menuRef.current?.contains(target)) return;
       setMenu(undefined);
     };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setMenu(undefined);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [menu]);
 
   const submit = useCallback(async () => {
@@ -79,9 +86,14 @@ export function Composer(props: Props) {
     return props.favorites.map((k) => byKey.get(k)).filter((m): m is PickerModel => Boolean(m));
   }, [props.models, props.favorites]);
   const recentRows = useMemo(() => {
+    const favSet = new Set(props.favorites);
     const byKey = new Map(visibleModels.map((m) => [modelKey(m), m] as const));
-    return props.recents.map((k) => byKey.get(k)).filter((m): m is PickerModel => Boolean(m)).slice(0, 4);
-  }, [visibleModels, props.recents]);
+    return props.recents
+      .filter((k) => !favSet.has(k))
+      .map((k) => byKey.get(k))
+      .filter((m): m is PickerModel => Boolean(m))
+      .slice(0, 4);
+  }, [visibleModels, props.recents, props.favorites]);
 
   const activeModelLabel = props.activeModel
     ? (props.models.find((m) => m.id === props.activeModel?.id && m.providerID === props.activeModel?.providerID)?.name ??
@@ -108,9 +120,19 @@ export function Composer(props: Props) {
       <span className="row-label">{opts?.compact ? truncate(m.name ?? m.id, 26) : (m.name ?? m.id)}</span>
       {props.defaultKey === modelKey(m) && <span className="row-default" title="default">◉</span>}
       <span
+        role="button"
+        tabIndex={0}
         className={`row-star${props.favorites.includes(modelKey(m)) ? " on" : ""}`}
         title={props.favorites.includes(modelKey(m)) ? "Unstar" : "Star"}
+        aria-label={props.favorites.includes(modelKey(m)) ? "Unstar" : "Star"}
         onClick={(e) => { e.stopPropagation(); props.onToggleFavorite(modelKey(m)); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            props.onToggleFavorite(modelKey(m));
+          }
+        }}
       >
         {props.favorites.includes(modelKey(m)) ? "★" : "☆"}
       </span>
