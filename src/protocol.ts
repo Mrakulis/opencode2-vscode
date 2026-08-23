@@ -8,6 +8,7 @@
 export type Density = "compact" | "comfortable";
 export type ShowReasoning = "hide" | "collapsed" | "expanded";
 export type SendKey = "enter" | "ctrlEnter";
+export type PermissionMode = "askFirst" | "autoAllow" | "deny";
 
 export interface ModelPrefs {
   /** `"providerID/modelID"` keys hidden from the picker. */
@@ -33,6 +34,7 @@ export interface UiPrefs {
 export interface ResolvedConfig {
   ui: UiPrefs;
   models: ModelPrefs;
+  permissions: { mode: PermissionMode };
 }
 
 /** Settings keys the webview may mutate through `settings.update`. */
@@ -48,6 +50,7 @@ export const SETTING_KEYS = [
   "ui.fullShellOutput",
   "ui.messageStats",
   "composer.sendKey",
+  "permissions.mode",
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
@@ -177,5 +180,9 @@ export function validateSettingValue(key: SettingKey, value: unknown): SettingCh
     case "ui.fullShellOutput":
     case "ui.messageStats":
       return typeof value === "boolean" ? { ok: true } : { ok: false, reason: `${key} must be boolean` };
+    case "permissions.mode":
+      return value === "askFirst" || value === "autoAllow" || value === "deny"
+        ? { ok: true }
+        : { ok: false, reason: "permissions.mode must be askFirst|autoAllow|deny" };
   }
 }

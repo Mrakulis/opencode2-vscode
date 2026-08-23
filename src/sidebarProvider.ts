@@ -181,6 +181,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         favorites: cfg.get<string[]>("models.favorites", []),
         default: cfg.get<string>("models.default", ""),
       },
+      permissions: {
+        mode: cfg.get<"askFirst" | "autoAllow" | "deny">("permissions.mode", "askFirst"),
+      },
     };
   }
 

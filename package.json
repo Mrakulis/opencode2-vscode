@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.2.36",
+  "version": "0.2.37",
   "license": "MIT",
   "publisher": "Mrakulis",
   "repository": {
@@ -253,6 +253,21 @@
           "type": "boolean",
           "default": true,
           "description": "Notify when the agent finishes or fails."
+        },
+        "opencode2.permissions.mode": {
+          "type": "string",
+          "enum": [
+            "askFirst",
+            "autoAllow",
+            "deny"
+          ],
+          "enumDescriptions": [
+            "Ask first — prompt for approval (default, shows banner with Allow once / Always allow / Reject)",
+            "Auto allow — automatically approve permissions that are not explicitly denied",
+            "Deny — block the action"
+          ],
+          "default": "askFirst",
+          "description": "How to handle permission requests. Like the Plan/Build menu at the bottom."
         }
       }
     }

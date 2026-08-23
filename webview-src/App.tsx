@@ -63,6 +63,7 @@ export function App() {
     recommended?: string;
     hasOther?: boolean;
   } | null>(null);
+  const permissionMode = cfg?.permissions.mode ?? "askFirst";
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -380,6 +381,17 @@ export function App() {
     [permissions],
   );
 
+  // Auto-handle like Desktop/TUI auto-approve: when not in Ask first, auto reply without banner
+  useEffect(() => {
+    if (permissions.length === 0) return;
+    if (permissionMode === "askFirst") return;
+    for (const p of permissions) {
+      if (p.action.toLowerCase() === "question") continue;
+      const reply = permissionMode === "autoAllow" ? "once" : "reject";
+      void replyPermission(p.requestID, reply as "once" | "always" | "reject");
+    }
+  }, [permissions, permissionMode, replyPermission]);
+
   // ---- derived -------------------------------------------------------------
   const lastAssistant = useMemo(() => [...messages].reverse().find(isAssistant), [messages]);
   const effectiveModel =
@@ -604,15 +616,17 @@ export function App() {
         {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} />}
       </main>
 
-      {permissions.filter((p) => p.action.toLowerCase() !== "question").length > 0 && activeId && (
-        <div className="permissions">
-          {permissions
-            .filter((p) => p.action.toLowerCase() !== "question")
-            .map((p) => (
-              <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
-            ))}
-        </div>
-      )}
+      {permissionMode === "askFirst" &&
+        permissions.filter((p) => p.action.toLowerCase() !== "question").length > 0 &&
+        activeId && (
+          <div className="permissions">
+            {permissions
+              .filter((p) => p.action.toLowerCase() !== "question")
+              .map((p) => (
+                <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
+              ))}
+          </div>
+        )}
 
       {activeQuestion && activeId && (
         <div className="permissions">
@@ -789,6 +803,8 @@ export function App() {
         defaultKey={cfg?.models.default ?? ""}
         recents={recents}
         activeModel={effectiveModel}
+        permissionMode={permissionMode}
+        onPickPermissionMode={(mode) => void updateSettings([{ key: "permissions.mode", value: mode }])}
         onPickModel={async (m) => {
           const key = modelKey(m);
           setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
@@ -846,15 +862,30 @@ function PermissionRow({
       ? "edit"
       : perm.action.toLowerCase().includes("read")
         ? "read"
-        : "other";
+        : perm.action.toLowerCase().includes("question")
+          ? "question"
+          : "other";
   return (
-    <div className="perm-card" data-action={perm.action.toLowerCase().includes("shell") ? "shell" : perm.action.toLowerCase().includes("edit") ? "edit" : perm.action.toLowerCase().includes("read") ? "read" : "other"}>
+    <div
+      className="perm-card"
+      data-action={
+        perm.action.toLowerCase().includes("shell")
+          ? "shell"
+          : perm.action.toLowerCase().includes("edit")
+            ? "edit"
+            : perm.action.toLowerCase().includes("read")
+              ? "read"
+              : perm.action.toLowerCase().includes("question")
+                ? "question"
+                : "other"
+      }
+    >
       <div className="perm-header">
         <span className={`perm-badge ${kind}`}>{perm.action}</span>
         <span>Permission required</span>
       </div>
       {perm.resources.length > 0 ? (
-        <div className="perm-resources">
+        <div className="perm-resources" style={{ maxHeight: "160px", overflowY: "auto", paddingRight: "4px" }}>
           {perm.resources.map((r, i) => (
             <code key={i} className="perm-res">
               {r}
@@ -864,15 +895,15 @@ function PermissionRow({
       ) : (
         <div className="perm-hint">Agent wants to perform this action.</div>
       )}
-      <div className="perm-actions">
+      <div className="perm-actions" style={{ borderTop: "1px solid var(--oc2-border)", paddingTop: "8px", marginTop: "4px" }}>
+        <button type="button" className="danger" onClick={() => onReply("reject")} title="Deny (Esc)">
+          Reject
+        </button>
+        <button type="button" onClick={() => onReply("always")} title="Always allow — saves pattern for this project">
+          Allow always
+        </button>
         <button type="button" className="primary" onClick={() => onReply("once")} title="Allow this time (Enter)">
           Allow once
-        </button>
-        <button type="button" onClick={() => onReply("always")} title="Always allow this action/resource">
-          Always allow
-        </button>
-        <button type="button" className="danger" onClick={() => onReply("reject")} title="Deny (Esc)">
-          Deny
         </button>
       </div>
     </div>

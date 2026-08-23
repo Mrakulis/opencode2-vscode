@@ -4,6 +4,7 @@ import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
 import { rpc } from "../lib/rpc";
+import type { PermissionMode } from "../../src/protocol";
 
 interface Props {
   disabled: boolean;
@@ -26,13 +27,15 @@ interface Props {
   onPickAgent(a: string): Promise<void>;
   onToggleFavorite(key: string): void;
   onOpenManager(): void;
+  permissionMode?: PermissionMode;
+  onPickPermissionMode?(mode: PermissionMode): void;
 }
 
 export function Composer(props: Props) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [menu, setMenu] = useState<"agent" | "model" | "variant" | undefined>(undefined);
+  const [menu, setMenu] = useState<"agent" | "model" | "variant" | "permission" | undefined>(undefined);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -171,6 +174,7 @@ export function Composer(props: Props) {
     return ids[0];
   }, [activeModelVariants]);
   const activeVariantLabel = props.activeModel?.variant ?? (defaultVariantId ? `Default (${defaultVariantId})` : "Default");
+  const permissionModeLabel = props.permissionMode === "autoAllow" ? "Auto allow" : props.permissionMode === "deny" ? "Deny" : "Ask first";
   const activeModelContext = useMemo(() => {
     const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
     return (m as unknown as { context?: number; limit?: { context?: number } })?.context ??
@@ -392,6 +396,52 @@ export function Composer(props: Props) {
               {activeModelVariants.length === 0 && (
                 <div className="menu-empty">No thinking levels for this model</div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Permissions */}
+        <div className="picker">
+          <button
+            type="button"
+            className="selector"
+            onClick={() => setMenu(menu === "permission" ? undefined : "permission")}
+            title="Permission mode"
+          >
+            <span className="selector-label">{permissionModeLabel}</span> <span className="chevron">▾</span>
+          </button>
+          {menu === "permission" && (
+            <div className="menu">
+              <button
+                type="button"
+                className={`menu-item${props.permissionMode === "askFirst" ? " selected" : ""}`}
+                onClick={() => {
+                  setMenu(undefined);
+                  props.onPickPermissionMode?.("askFirst");
+                }}
+              >
+                Ask first
+              </button>
+              <button
+                type="button"
+                className={`menu-item${props.permissionMode === "autoAllow" ? " selected" : ""}`}
+                onClick={() => {
+                  setMenu(undefined);
+                  props.onPickPermissionMode?.("autoAllow");
+                }}
+              >
+                Auto allow
+              </button>
+              <button
+                type="button"
+                className={`menu-item${props.permissionMode === "deny" ? " selected" : ""}`}
+                onClick={() => {
+                  setMenu(undefined);
+                  props.onPickPermissionMode?.("deny");
+                }}
+              >
+                Deny
+              </button>
             </div>
           )}
         </div>
