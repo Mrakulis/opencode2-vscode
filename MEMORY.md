@@ -7,6 +7,7 @@
 - **v0.3.37 (2026-08-25)** — full V2 GUI parity shipped. Docs consolidated: `plan.md`/`todo.md`/`AUDIT_AND_PLAN.md` deleted after completion (git history retains them). Living docs = this file + `agents.md` + `README.md`.
 - **Gates:** typecheck · 65/65 unit tests · build · `npm run audit` · live smoke (`scripts/smoke.mjs`)
 - **Maintenance:** client re-pinned to `@opencode-ai/client@beta-18050` in v0.4.0, matching the live server (typecheck + 65 tests + full smoke green against it). Future server betas: bump the pin deliberately and re-run gates + `scripts/smoke.mjs`. `vsce` not on PATH → `npx --yes @vscode/vsce package`.
+- **Support policy:** end users run their own CLI at whatever version they have — version skew is inherent. CI carries a non-blocking **beta-drift canary** (floating `@beta` install + gates) to catch upstream breakage early; the adapter's defensive normalization is the compatibility layer.
 - **Version note:** v0.4.0 (2026-08-25) — docs consolidation + client re-pin.
 
 ## Current architecture facts

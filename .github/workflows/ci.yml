@@ -22,3 +22,24 @@ jobs:
         run: npm test
       - name: Build (extension + webview)
         run: npm run build
+
+  # Non-blocking canary: re-installs the FLOATING @beta client over the pin
+  # and runs the gates. If upstream beta drift breaks our surface, this job
+  # goes red early — before end users hit it — and the fix lands in
+  # apiAdapter.ts.
+  beta-drift:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install floating @beta client
+        run: npm install --no-save @opencode-ai/client@beta
+      - name: Typecheck against latest beta
+        run: npm run typecheck
+      - name: Build against latest beta
+        run: npm run build

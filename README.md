@@ -28,6 +28,15 @@ A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on 
 - VS Code 1.96+
 - An OpenCode V2 CLI installed locally (`opencode2`, or `opencode` from npm). The extension can install it via the command palette (`OpenCode 2: Install CLI`).
 
+### Version compatibility
+
+The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18050**. Because OpenCode itself moves fast on the beta channel:
+
+- Newer/older server betas generally work — all API access goes through a defensive adapter layer that normalizes known shape drift, and missing optional features degrade quietly.
+- Explicit server `deny` rules are always enforced by the server regardless of extension version.
+- CI includes a non-blocking **beta-drift canary** that runs the gates against the floating `@beta` client; when it goes red we re-pin and adapt.
+- If something breaks after a CLI update: check the `OpenCode 2` output channel, and try `OpenCode 2: Restart Background Service` first.
+
 ## Getting started
 
 1. Open a workspace folder.
