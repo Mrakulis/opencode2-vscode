@@ -90,7 +90,7 @@ export function Feed({
     const content = contentRef.current;
     if (!el || !content) return;
     const ro = new ResizeObserver(() => {
-      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+      if (pinnedRef.current) scrollToBottom(el);
     });
     ro.observe(content);
     return () => ro.disconnect();
@@ -99,9 +99,23 @@ export function Feed({
   // Follow output only while the user stays pinned to the bottom.
   // Resumes automatically after the user clicks "Jump to latest".
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+    if (pinnedRef.current) scrollToBottom(scrollRef.current);
   }, [sortedMessages]);
+
+  /**
+   * Exact, guarded scroll-to-bottom.
+   *
+   * Assigning `scrollTop = scrollHeight` over-assigns (the browser clamps)
+   * and re-assigning every render combined with the browser's scroll
+   * anchoring produced the end-of-feed jitter. Now: compute the real max,
+   * skip entirely when already within 1px, and disable scroll anchoring on
+   * the scroller via CSS.
+   */
+  function scrollToBottom(el: HTMLDivElement | null): void {
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max - el.scrollTop > 1) el.scrollTop = max;
+  }
 
   // A newly sent prompt ALWAYS jumps into view and re-pins the feed —
   // even if the user was scrolled up reading earlier messages.
@@ -161,7 +175,7 @@ export function Feed({
               pinnedRef.current = true;
               setShowJump(false);
               if (el) {
-                el.scrollTop = el.scrollHeight;
+                el.scrollTop = el.scrollHeight - el.clientHeight;
                 lastScrollTopRef.current = el.scrollTop;
               }
             }}

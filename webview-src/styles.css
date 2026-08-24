@@ -683,6 +683,9 @@ button:focus-visible {
 .feed-scroll {
   height: 100%;
   overflow-y: auto;
+  /* We own scroll positioning (pinned-follow); browser scroll anchoring
+     fights our bottom-glue and causes end-of-feed jitter. */
+  overflow-anchor: none;
   padding: var(--oc2-space-3);
 }
 .feed-content {
