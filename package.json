@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.3.37",
+  "version": "0.4.0",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -300,7 +300,7 @@
     "package": "npm run build && npx --yes @vscode/vsce package"
   },
   "dependencies": {
-    "@opencode-ai/client": "0.0.0-beta-17927",
+    "@opencode-ai/client": "0.0.0-beta-18050",
     "dompurify": "^3.4.14",
     "marked": "^18.0.10",
     "react": "^19.2.8",

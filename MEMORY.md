@@ -6,7 +6,8 @@
 
 - **v0.3.37 (2026-08-25)** — full V2 GUI parity shipped. Docs consolidated: `plan.md`/`todo.md`/`AUDIT_AND_PLAN.md` deleted after completion (git history retains them). Living docs = this file + `agents.md` + `README.md`.
 - **Gates:** typecheck · 65/65 unit tests · build · `npm run audit` · live smoke (`scripts/smoke.mjs`)
-- **Maintenance:** client pinned `@opencode-ai/client@beta-17927`, server runs newer betas (interoperable — re-pin deliberately). `vsce` not on PATH → `npx --yes @vscode/vsce package`.
+- **Maintenance:** client re-pinned to `@opencode-ai/client@beta-18050` in v0.4.0, matching the live server (typecheck + 65 tests + full smoke green against it). Future server betas: bump the pin deliberately and re-run gates + `scripts/smoke.mjs`. `vsce` not on PATH → `npx --yes @vscode/vsce package`.
+- **Version note:** v0.4.0 (2026-08-25) — docs consolidation + client re-pin.
 
 ## Current architecture facts
 
@@ -23,7 +24,7 @@
 
 ## Gotchas
 
-- Client pinned exact (`@opencode-ai/client@beta-17927`); route all calls through `apiAdapter.ts`.
+- Client pinned exact (`@opencode-ai/client@beta-18050` since v0.4.0 — matches live server); route all calls through `apiAdapter.ts`.
 - Several list endpoints return BARE arrays (`form.list`, `session.export/import`, `inbox.list`, `permission.saved.list`, `worktree.list`) while others wrap `{data}` — adapter normalizes both shapes.
 - Tool file parts are `{type:"file", uri, mime, name?}`; delta events key messages by `assistantMessageID` (+`ordinal`).
 - V2 CLI binary is `opencode2` locally; npm `opencode-ai@beta` names its bin `opencode` — resolve dynamically, never hardcode.
