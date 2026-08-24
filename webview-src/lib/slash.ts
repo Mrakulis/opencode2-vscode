@@ -9,9 +9,12 @@ export interface SlashEntry {
   description?: string;
 }
 
-/** Filter/sort slash entries for the composer popover. */
-export function filterSlashEntries(entries: SlashEntry[], query: string): SlashEntry[] {
+export type SlashKind = "all" | "command" | "skill";
+
+/** Filter/sort slash entries by free-text query and entry kind. */
+export function filterSlashEntries(entries: SlashEntry[], query: string, kind: SlashKind = "all"): SlashEntry[] {
   const q = query.trim().toLowerCase();
-  const rows = q.length === 0 ? entries : entries.filter((e) => e.name.toLowerCase().includes(q));
+  let rows = q.length === 0 ? entries : entries.filter((e) => e.name.toLowerCase().includes(q));
+  if (kind !== "all") rows = rows.filter((e) => e.kind === kind);
   return rows.slice(0, 40);
 }

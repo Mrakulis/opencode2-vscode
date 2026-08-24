@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { filterSlashEntries } from "../webview-src/lib/slash";
-import type { SlashEntry } from "../webview-src/lib/slash";
+import { filterSlashEntries, type SlashEntry } from "../webview-src/lib/slash";
 
 const entries: SlashEntry[] = [
   { kind: "command", name: "review", description: "Review changes" },
@@ -25,8 +24,18 @@ describe("filterSlashEntries", () => {
     assert.ok(got.some((e) => e.kind === "skill"));
     assert.ok(got.some((e) => e.kind === "command"));
   });
+  it("filters by kind", () => {
+    assert.deepEqual(filterSlashEntries(entries, "", "command").map((e) => e.name), ["review", "init"]);
+    assert.deepEqual(filterSlashEntries(entries, "", "skill").map((e) => e.name), ["deep-research", "testgen"]);
+    assert.equal(filterSlashEntries(entries, "", "all").length, 4);
+    // query + kind compose
+    assert.deepEqual(filterSlashEntries(entries, "re", "skill").map((e) => e.name), ["deep-research"]);
+    assert.equal(filterSlashEntries(entries, "re", "command").length, 1); // review
+    assert.equal(filterSlashEntries(entries, "zzz", "skill").length, 0);
+  });
   it("caps results at 40", () => {
     const many: SlashEntry[] = Array.from({ length: 60 }, (_, i) => ({ kind: "command", name: `cmd${i}` }));
     assert.equal(filterSlashEntries(many, "").length, 40);
+    assert.equal(filterSlashEntries(many, "", "skill").length, 0);
   });
 });

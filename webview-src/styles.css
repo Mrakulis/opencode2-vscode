@@ -1506,11 +1506,39 @@ button:focus-visible {
   padding: 4px;
 }
 .oc2-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--oc2-space-2);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
   text-transform: lowercase;
   color: var(--oc2-fg-muted);
   padding: var(--oc2-space-1) var(--oc2-space-2) 2px;
+}
+.oc2-pop-filters {
+  display: inline-flex;
+  gap: 4px;
+}
+.oc2-pop-fchip {
+  background: transparent;
+  border: 1px solid var(--oc2-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  line-height: 1.4;
+  color: var(--oc2-fg-muted);
+  cursor: pointer;
+}
+.oc2-pop-fchip:hover {
+  color: var(--oc2-fg);
+  border-color: var(--oc2-border-strong);
+}
+.oc2-pop-fchip.on {
+  color: var(--oc2-accent);
+  border-color: var(--oc2-accent);
+  background: var(--oc2-bg-input);
 }
 .oc2-popover-empty {
   color: var(--oc2-fg-muted);

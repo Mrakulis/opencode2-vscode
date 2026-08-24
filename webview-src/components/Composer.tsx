@@ -4,7 +4,7 @@ import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
 import { rpc } from "../lib/rpc";
-import { filterSlashEntries, type SlashEntry } from "../lib/slash";
+import { filterSlashEntries, type SlashEntry, type SlashKind } from "../lib/slash";
 import type { PermissionMode } from "../../src/protocol";
 
 export type { SlashEntry };
@@ -56,6 +56,7 @@ export function Composer(props: Props) {
   const [slashEntries, setSlashEntries] = useState<SlashEntry[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState("");
+  const [slashKind, setSlashKind] = useState<SlashKind>("all");
   const [slashIndex, setSlashIndex] = useState(0);
   const [atOpen, setAtOpen] = useState(false);
   const [atQuery, setAtQuery] = useState("");
@@ -83,9 +84,9 @@ export function Composer(props: Props) {
     })();
   }, [props.disabled, props.catalogTick]);
 
-  const filteredSlash = useMemo(() => filterSlashEntries(slashEntries, slashFilter), [slashEntries, slashFilter]);
+  const filteredSlash = useMemo(() => filterSlashEntries(slashEntries, slashFilter, slashKind), [slashEntries, slashFilter, slashKind]);
 
-  useEffect(() => setSlashIndex(0), [slashFilter, slashOpen]);
+  useEffect(() => setSlashIndex(0), [slashFilter, slashOpen, slashKind]);
   useEffect(() => setAtIndex(0), [atQuery, atOpen]);
 
   /** Detect a leading `/cmd` or trailing `@query` while typing. */
@@ -389,9 +390,24 @@ export function Composer(props: Props) {
         />
         {slashOpen && (
           <div className="oc2-popover" role="listbox" aria-label="Commands and skills">
-            <div className="oc2-popover-head">commands & skills</div>
+            <div className="oc2-popover-head">
+              <span>commands &amp; skills</span>
+              <span className="oc2-pop-filters" role="group" aria-label="Filter by type">
+                {(["all", "command", "skill"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={`oc2-pop-fchip${slashKind === k ? " on" : ""}`}
+                    aria-pressed={slashKind === k}
+                    onClick={() => setSlashKind(k)}
+                  >
+                    {k === "all" ? "All" : k === "command" ? "Commands" : "Skills"}
+                  </button>
+                ))}
+              </span>
+            </div>
             {filteredSlash.length === 0 ? (
-              <div className="oc2-popover-empty">No matching commands</div>
+              <div className="oc2-popover-empty">No matching {slashKind === "all" ? "entries" : `${slashKind}s`}</div>
             ) : (
               filteredSlash.map((entry, i) => (
                 <button
@@ -402,7 +418,7 @@ export function Composer(props: Props) {
                   className={`oc2-pop-item${i === slashIndex ? " sel" : ""}`}
                   onMouseEnter={() => setSlashIndex(i)}
                   onClick={() => submitSlash(entry)}
-                  title={entry.description ?? `/${entry.name}`}
+                  title={`${entry.kind === "skill" ? "Skill" : "Command"} /${entry.name}${entry.description ? ` — ${entry.description}` : ""}`}
                 >
                   <span className={`oc2-pop-badge ${entry.kind}`}>{entry.kind === "skill" ? "skill" : "cmd"}</span>
                   <span className="oc2-pop-name">/{entry.name}</span>
