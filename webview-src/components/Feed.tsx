@@ -36,7 +36,9 @@ export function Feed({
   messageStats: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const pinnedRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
   const [showJump, setShowJump] = useState(false);
 
   // Ensure chronological order: oldest at top, newest at bottom.
@@ -52,20 +54,46 @@ export function Feed({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    lastScrollTopRef.current = el.scrollTop;
+    /**
+     * Only a real upward scroll unpins. Growing content (shell blocks,
+     * images, streaming text) increases scrollHeight WITHOUT firing a
+     * scroll event, so it can never be mistaken for the user scrolling —
+     * that was the miscalculation with the old distance-only heuristic.
+     */
     const onScroll = (): void => {
-      // Pin tolerance scales with the feed viewport height instead of a fixed
-      // pixel count: ~5% of the visible feed. A tall shell block (~420px) only
-      // looks like "scrolled away" when it is over 5% of the viewport, and a
-      // fixed floor keeps short feeds from jittering.
+      const prev = lastScrollTopRef.current;
+      lastScrollTopRef.current = el.scrollTop;
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (el.scrollTop < prev - 1) {
+        // scrolled up → unpin
+        pinnedRef.current = false;
+        setShowJump(true);
+        return;
+      }
       const threshold = Math.max(48, el.clientHeight * 0.05);
-      const isPinned = distance < threshold;
-      pinnedRef.current = isPinned;
-      setShowJump(!isPinned);
+      if (distance < threshold) {
+        if (!pinnedRef.current) pinnedRef.current = true;
+        setShowJump(false);
+      }
+      // otherwise: keep the current pin state (downward drift while reading)
     };
     el.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
     return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Glue to the bottom whenever the CONTENT resizes while pinned — this
+  // catches everything React misses: image loads, details expansion,
+  // code-block wrapping, streaming growth between renders.
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content) return;
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
   }, []);
 
   // Follow output only while the user stays pinned to the bottom.
@@ -92,34 +120,39 @@ export function Feed({
 
   return (
     <div className="feed-scroll" ref={scrollRef}>
-      {sortedMessages.map((m) => (
-        <MessageGroup
-          key={m.id}
-          message={m}
-          busy={busy}
-          showReasoning={showReasoning}
-          expandShellTools={expandShellTools}
-          expandEditTools={expandEditTools}
-          fullShellOutput={fullShellOutput}
-          messageStats={messageStats}
-        />
-      ))}
-      {busy && <div className="streaming-caret" aria-label="working" />}
+      <div className="feed-content" ref={contentRef}>
+        {sortedMessages.map((m) => (
+          <MessageGroup
+            key={m.id}
+            message={m}
+            busy={busy}
+            showReasoning={showReasoning}
+            expandShellTools={expandShellTools}
+            expandEditTools={expandEditTools}
+            fullShellOutput={fullShellOutput}
+            messageStats={messageStats}
+          />
+        ))}
+        {busy && <div className="streaming-caret" aria-label="working" />}
 
-      {showJump && (
-        <button
-          type="button"
-          className="jump"
-          onClick={() => {
-            const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-            pinnedRef.current = true;
-            setShowJump(false);
-          }}
-        >
-          ↓ Jump to latest
-        </button>
-      )}
+        {showJump && (
+          <button
+            type="button"
+            className="jump"
+            onClick={() => {
+              const el = scrollRef.current;
+              pinnedRef.current = true;
+              setShowJump(false);
+              if (el) {
+                el.scrollTop = el.scrollHeight;
+                lastScrollTopRef.current = el.scrollTop;
+              }
+            }}
+          >
+            ↓ Jump to latest
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -695,6 +695,8 @@ button:focus-visible {
   height: 100%;
   overflow-y: auto;
   padding: var(--oc2-space-3);
+}
+.feed-content {
   display: flex;
   flex-direction: column;
   gap: var(--oc2-space-3);
