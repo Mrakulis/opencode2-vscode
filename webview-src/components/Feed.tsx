@@ -53,10 +53,13 @@ export function Feed({
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = (): void => {
-      // Shell/terminal blocks can be ~420px tall; a small threshold made a
-      // pinned user look "scrolled up" as soon as a shell expanded.
+      // Pin tolerance scales with the feed viewport height instead of a fixed
+      // pixel count: ~5% of the visible feed. A tall shell block (~420px) only
+      // looks like "scrolled away" when it is over 5% of the viewport, and a
+      // fixed floor keeps short feeds from jittering.
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      const isPinned = distance < 150;
+      const threshold = Math.max(48, el.clientHeight * 0.05);
+      const isPinned = distance < threshold;
       pinnedRef.current = isPinned;
       setShowJump(!isPinned);
     };
