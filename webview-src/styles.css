@@ -966,6 +966,7 @@ button:focus-visible {
   margin: 0;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 1px);
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--oc2-fg);
@@ -975,15 +976,15 @@ button:focus-visible {
 .tool-out.full {
   max-height: 80vh;
 }
-.tool-out:hover {
-  color: var(--oc2-fg);
-}
+/* Shell output: cap at ~8 visible lines (internally scrollable) so long
+   running commands don't swallow the whole feed. */
 .tool-out.terminal {
   background: var(--oc2-terminal-bg);
   color: var(--oc2-terminal-fg);
   border: 1px solid var(--oc2-border);
   border-radius: var(--oc2-radius);
   padding: var(--oc2-space-2);
+  max-height: calc(8 * 1.45em + var(--oc2-space-2) * 2);
 }
 .tool-cmd {
   margin: 0 0 var(--oc2-space-2) 0;

@@ -67,9 +67,10 @@ export function Feed({
       const dy = el.scrollTop - prev;
       lastScrollTopRef.current = el.scrollTop;
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      // Only a deliberate upward gesture (with a little hysteresis) unpins;
-      // 1px rounding shifts from layout changes must not.
-      if (dy < -2) {
+      // Only a deliberate upward gesture unpins — one wheel notch / one
+      // line (~19px) must not flash the pill. Hysteresis: >24px up (or 2%
+      // of the feed, whichever is larger).
+      if (dy < -Math.max(24, el.clientHeight * 0.02)) {
         pinnedRef.current = false;
         setShowJump(true);
         return;
