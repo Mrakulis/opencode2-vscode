@@ -504,15 +504,17 @@ button:focus-visible {
 }
 .menu-section {
   position: sticky;
-  top: 0;
-  z-index: 1;
+  top: calc(-1 * var(--oc2-space-1));
+  z-index: 2;
   background: var(--oc2-bg-menu);
+  margin: 0 calc(-1 * var(--oc2-space-1));
+  padding: var(--oc2-space-1) var(--oc2-space-3);
+  border-bottom: 1px solid var(--oc2-border);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--oc2-fg-muted);
-  padding: var(--oc2-space-1) var(--oc2-space-2) 0;
 }
 .menu-sep {
   height: 1px;
@@ -574,17 +576,18 @@ button:focus-visible {
 .prov-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   background: var(--oc2-bg);
   display: flex;
   align-items: center;
   gap: var(--oc2-space-1);
-  padding: var(--oc2-space-1) var(--oc2-space-2);
+  padding: var(--oc2-space-1) var(--oc2-space-3);
   cursor: pointer;
   user-select: none;
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
   color: var(--oc2-fg-muted);
+  border-bottom: 1px solid var(--oc2-border);
 }
 .prov-head:hover {
   background: var(--oc2-bg-hover);
