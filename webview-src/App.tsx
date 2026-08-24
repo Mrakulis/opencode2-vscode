@@ -379,6 +379,9 @@ export function App() {
 
           if (sid && sid === activeIdRef.current) {
             const wantsMessages = actions.includes("messages");
+            const isDelta =
+              evt.type === "session.text.delta" ||
+              evt.type === "session.reasoning.delta";
             // Try the incremental accumulator first for a smooth stream.
             const merged = applyDelta(messagesRef.current, {
               type: evt.type,
@@ -387,9 +390,14 @@ export function App() {
             if (merged) {
               messagesRef.current = merged;
               setMessages(merged);
-            } else if (wantsMessages || isTerminal) {
+            } else if (wantsMessages || isTerminal || isDelta) {
+              // Deltas that can't be merged (message not loaded yet / shape
+              // drift) still deserve a poll so partial content shows up.
               clearTimeout(messageTimer);
-              messageTimer = setTimeout(() => void refreshMessages(sid), 120);
+              messageTimer = setTimeout(
+                () => void refreshMessages(sid),
+                isDelta ? 250 : 120,
+              );
             }
             if (
               evt.type === "session.execution.started" ||

@@ -89,4 +89,87 @@ describe("applyDelta", () => {
       null,
     );
   });
+
+  // V2 deltas carry assistantMessageID + ordinal (NOT messageID).
+  const v2Delta = (
+    over: Partial<DeltaEvent["data"]>,
+    type = "session.text.delta",
+  ): DeltaEvent => ({ type, data: { assistantMessageID: "m1", ...over } });
+
+  it("merges using the V2 assistantMessageID key", () => {
+    const out = applyDelta(base, v2Delta({ delta: "lo" }));
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal((m.content[0] as { text: string }).text, "Hello");
+  });
+  it("targets the part by ordinal when it matches the delta kind", () => {
+    const withReasoning: AnyMessage[] = [
+      base[0]!,
+      {
+        type: "assistant",
+        id: "m1",
+        agent: "build",
+        time: { created: 2 },
+        content: [
+          { type: "text", text: "Hel" },
+          { type: "reasoning", text: "hmm" },
+        ],
+      } as unknown as AnyMessage,
+    ];
+    const out = applyDelta(
+      withReasoning,
+      v2Delta({ delta: "m" }, "session.reasoning.delta"),
+    );
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal((m.content[1] as { text: string }).text, "hmmm");
+    // text ordinal still appends to text
+    const out2 = applyDelta(
+      withReasoning,
+      v2Delta({ delta: "lo", ordinal: 0 }),
+    );
+    assert.ok(out2);
+    const m2 = out2![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal((m2.content[0] as { text: string }).text, "Hello");
+  });
+  it("creates a part at the ordinal slot when it is beyond the end", () => {
+    const onlyText: AnyMessage[] = [
+      base[0]!,
+      {
+        type: "assistant",
+        id: "m1",
+        agent: "build",
+        time: { created: 2 },
+        content: [{ type: "text", text: "Hel" }],
+      } as unknown as AnyMessage,
+    ];
+    const out = applyDelta(
+      onlyText,
+      v2Delta({ delta: "we", ordinal: 1 }, "session.reasoning.delta"),
+    );
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal(m.content[1]!.type, "reasoning");
+    assert.equal((m.content[1] as { text: string }).text, "we");
+  });
+  it("falls back to matching part when ordinal points at a different kind", () => {
+    const withBoth: AnyMessage[] = [
+      base[0]!,
+      {
+        type: "assistant",
+        id: "m1",
+        agent: "build",
+        time: { created: 2 },
+        content: [
+          { type: "reasoning", text: "think" },
+          { type: "text", text: "Hel" },
+        ],
+      } as unknown as AnyMessage,
+    ];
+    // text delta with ordinal 0 (which is the reasoning part) → must append to text
+    const out = applyDelta(withBoth, v2Delta({ delta: "lo", ordinal: 0 }));
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal((m.content[1] as { text: string }).text, "Hello");
+  });
 });

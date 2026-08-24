@@ -830,6 +830,21 @@ button:focus-visible {
   padding: var(--oc2-space-1) var(--oc2-space-2);
   user-select: none;
 }
+.reasoning[data-busy="true"] {
+  border-left-color: var(--oc2-accent);
+}
+.reasoning-caret {
+  display: inline-block;
+  width: 0.55em;
+  margin-left: 2px;
+  animation: oc2-caret-blink 1s steps(1) infinite;
+  color: var(--oc2-accent);
+}
+@keyframes oc2-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
 .reasoning-body {
   padding: 0 var(--oc2-space-3) var(--oc2-space-2);
   white-space: pre-wrap;

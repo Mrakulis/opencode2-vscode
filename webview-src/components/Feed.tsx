@@ -321,10 +321,14 @@ function Reasoning({
   return (
     <details
       className="reasoning"
+      data-busy={busy ? "true" : "false"}
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary>thinking{busy ? " · streaming" : ""}</summary>
+      <summary>
+        thinking{busy ? " · streaming" : ""}
+        {busy && <span className="reasoning-caret" aria-hidden />}
+      </summary>
       <div className="reasoning-body">{text}</div>
     </details>
   );
