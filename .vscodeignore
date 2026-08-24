@@ -1,24 +1,33 @@
+# sources & tests (shipped bundle is dist/ + media/webview/ only)
 src/**
 webview-src/**
 test/**
+scripts/**
 esbuild.mjs
 *.ts
 *.tsx
+*.mjs
+tsconfig.json
+tsconfig.webview.json
+
+# repo / tooling
+.github/**
 .vscode/**
 .vscode-test/**
 node_modules/**
 out/**
 dist/*.map
 media/webview/main.css.map
-todo.md
-MEMORY.md
-plan.md
-.env
-.env.*
 graphify-out/**
 **/.DS_Store
-agents.md
 .gitignore
-tsconfig.json
-tsconfig.webview.json
-*.mjs
+
+# internal docs (README.md + LICENSE are packaged on purpose)
+todo.md
+MEMORY.md
+agents.md
+AUDIT_AND_PLAN.md
+
+# secrets
+.env
+.env.*

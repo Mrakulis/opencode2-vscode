@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
+    tags: ["v*"]
   pull_request:
     branches: [master]
 
@@ -78,10 +79,17 @@ jobs:
           OPENCODE_BASE_URL: http://127.0.0.1:18100
         run: node scripts/smoke.mjs
 
-  # Tag-driven packaging: push a v* tag to get a buildable .vsix artifact.
-  package:
+  # Tag-driven release: gates first, then GitHub Release with the vsix +
+  # auto-generated notes, then (when the VSCE_PAT secret is configured)
+  # publish to the VS Code Marketplace.
+  release:
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -93,7 +101,13 @@ jobs:
         run: |
           npm run build
           npx --yes @vscode/vsce package --no-git-tag-version -o opencode2-vscode.vsix
-      - uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: vsix
-          path: opencode2-vscode.vsix
+          generate_release_notes: true
+          files: opencode2-vscode.vsix
+      - name: Publish to VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish

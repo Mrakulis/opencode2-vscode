@@ -91,17 +91,21 @@ Open a folder, and every **new** session is anchored to it — the agent reads/e
 
 All server I/O lives in the extension host (`src/controller.ts`; every client call isolated in `src/apiAdapter.ts`). The React webview communicates over a typed postMessage RPC bridge (`src/protocol.ts`). Incoming V2 events route through an explicit table (`webview-src/lib/events.ts`); text/reasoning deltas stream incrementally (`webview-src/lib/deltas.ts`) with REST re-sync as the volatile-stream safety net.
 
-## Development
+## Contributing & releasing
 
 ```sh
+git clone https://github.com/Mrakulis/opencode2-vscode
+cd opencode2-vscode
 npm install
-npm run typecheck   # strict TS across host + webview
+npm run typecheck   # strict TS across host + webview — required
 npm test            # unit tests
 npm run build       # bundle extension + webview
-npm run watch
+npm run watch       # rebuild on change
 ```
 
-Press F5 to launch an Extension Development Host.
+Press F5 to launch an Extension Development Host. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Releases (maintainer):** bump `version` in `package.json`, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z` — CI gates, builds the vsix, creates a GitHub Release with it, and publishes to the Marketplace when the `VSCE_PAT` secret is configured (Azure DevOps PAT with *Marketplace → Manage* scope for publisher `Mrakulis`).
 
 ## License
 
