@@ -39,6 +39,7 @@ export function Feed({
   const contentRef = useRef<HTMLDivElement | null>(null);
   const pinnedRef = useRef(true);
   const lastScrollTopRef = useRef(0);
+  const roRafRef = useRef<number | undefined>(undefined);
   const [showJump, setShowJump] = useState(false);
 
   // Ensure chronological order: oldest at top, newest at bottom.
@@ -90,10 +91,20 @@ export function Feed({
     const content = contentRef.current;
     if (!el || !content) return;
     const ro = new ResizeObserver(() => {
-      if (pinnedRef.current) scrollToBottom(el);
+      // rAF-coalesced: a fast fling can resize content many times per frame;
+      // one correction per frame is enough and avoids sync-layout churn.
+      if (!pinnedRef.current) return;
+      if (roRafRef.current) return;
+      roRafRef.current = requestAnimationFrame(() => {
+        roRafRef.current = undefined;
+        scrollToBottom(scrollRef.current);
+      });
     });
     ro.observe(content);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (roRafRef.current) cancelAnimationFrame(roRafRef.current);
+    };
   }, []);
 
   // Follow output only while the user stays pinned to the bottom.
@@ -113,8 +124,12 @@ export function Feed({
    */
   function scrollToBottom(el: HTMLDivElement | null): void {
     if (!el) return;
-    const max = el.scrollHeight - el.clientHeight;
-    if (max - el.scrollTop > 1) el.scrollTop = max;
+    // Floor to an integer: at display zoom the raw max is fractional, and
+    // assigning it made every write land ±1px off the browser's rounding,
+    // which read back as "not at the end yet" → endless 1px re-writes
+    // (the jitter). Floored target + 1px tolerance converges and stops.
+    const max = Math.max(0, Math.floor(el.scrollHeight - el.clientHeight));
+    if (Math.abs(el.scrollTop - max) > 1) el.scrollTop = max;
   }
 
   // A newly sent prompt ALWAYS jumps into view and re-pins the feed —
@@ -174,10 +189,8 @@ export function Feed({
               const el = scrollRef.current;
               pinnedRef.current = true;
               setShowJump(false);
-              if (el) {
-                el.scrollTop = el.scrollHeight - el.clientHeight;
-                lastScrollTopRef.current = el.scrollTop;
-              }
+              scrollToBottom(el);
+              if (el) lastScrollTopRef.current = el.scrollTop;
             }}
           >
             ↓ Jump to latest
