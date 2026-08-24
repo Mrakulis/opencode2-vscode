@@ -1351,6 +1351,15 @@ button:focus-visible {
   color: var(--oc2-success);
 }
 
+.tool-card.static .tool-head {
+  cursor: default;
+}
+.tool-error-inline {
+  margin-left: var(--oc2-space-2);
+  color: var(--oc2-error);
+  font-family: var(--oc2-mono);
+}
+
 /* meta / status messages (system, compaction, skill, …) */
 .msg.meta {
   display: flex;

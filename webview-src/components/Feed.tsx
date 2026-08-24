@@ -276,6 +276,30 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
   useEffect(() => setExpanded(initiallyExpanded(part.name, expandShellTools, expandEditTools)), [part.name, expandShellTools, expandEditTools]);
   const kind = toolKind(part.name);
 
+  // Reads aren't worth expanding — just announce the file being read.
+  if (kind === "read") {
+    const st = part.state as { status: string; input?: Record<string, unknown>; error?: { message?: string } };
+    const target =
+      typeof st.input?.filePath === "string"
+        ? st.input.filePath
+        : typeof st.input?.path === "string"
+          ? st.input.path
+          : typeof st.input?.pattern === "string"
+            ? `“${st.input.pattern}”`
+            : undefined;
+    const failed = st.status === "error";
+    const busy = st.status === "running" || st.status === "streaming";
+    return (
+      <div className={`tool-card kind-read st-${st.status} static`}>
+        <div className="tool-head" role="presentation">
+          {failed ? "✗ " : busy ? "…" : ""}
+          {target ? `${part.name} ${target}` : truncate(part.name, 40)}
+          {failed && <span className="tool-error-inline">{(st.error?.message ?? "").slice(0, 120)}</span>}
+        </div>
+      </div>
+    );
+  }
+
   let title = part.name;
   let body: React.ReactNode = null;
 
