@@ -1229,139 +1229,131 @@ export function App() {
         )}
       </main>
 
-      {actionError && (
-        <div className="permissions">
-          <div className="composer-error">{actionError}</div>
-        </div>
-      )}
+      {(() => {
+        // ---- consolidated bottom dock ----
+        const pending = permissions.filter(
+          (p) => p.action.toLowerCase() !== "question",
+        );
+        const showPermissions =
+          permissionMode === "askFirst" && pending.length > 0 && !!activeId;
+        return (
+          <div className="dock">
+            {actionError && (
+              <div className="composer-error dock-error">{actionError}</div>
+            )}
 
-      {forms.length > 0 && (
-        <div className="permissions">
-          {forms.map((f) => (
-            <FormCard key={f.id} form={f} />
-          ))}
-        </div>
-      )}
+            {retryInfo?.action && (
+              <div
+                className="perm-card"
+                data-action="retry-action"
+                style={{ borderLeftColor: "var(--oc2-question)" }}
+              >
+                <div className="perm-header">
+                  <span
+                    className="perm-badge"
+                    style={{
+                      color: "var(--oc2-question)",
+                      borderColor: "var(--oc2-tool-shell-dim)",
+                    }}
+                  >
+                    provider
+                  </span>
+                  <span>
+                    {retryInfo.action.title ?? "Provider action required"}
+                  </span>
+                </div>
+                {retryInfo.action.message && (
+                  <div className="perm-res" style={{ whiteSpace: "pre-wrap" }}>
+                    {retryInfo.action.message}
+                  </div>
+                )}
+                {retryInfo.action.link && (
+                  <div className="perm-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() =>
+                        void rpc
+                          .call("url.open", { url: retryInfo.action!.link })
+                          .catch(() => undefined)
+                      }
+                    >
+                      {retryInfo.action.label ?? "Open"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
-      {permissionMode === "askFirst" &&
-        permissions.filter((p) => p.action.toLowerCase() !== "question")
-          .length > 0 &&
-        activeId && (
-          <div
-            className="permissions"
-            tabIndex={0}
-            aria-label="Permission requests — Enter allow once · A allow always · D or Esc reject"
-            onKeyDown={(e) => {
-              // Keep button focus behavior (space/enter already activate);
-              // add TUI-like shortcuts when focus is on the container.
-              const target = e.target as HTMLElement;
-              if (target.closest("button")) return;
-              const pending = permissions.filter(
-                (p) => p.action.toLowerCase() !== "question",
-              );
-              const first = pending[0];
-              if (!first) return;
-              if (e.key === "a" || e.key === "A") {
-                e.preventDefault();
-                void replyPermission(first.requestID, "always");
-              } else if (e.key === "d" || e.key === "D" || e.key === "Escape") {
-                e.preventDefault();
-                void replyPermission(first.requestID, "reject");
-              } else if (e.key === "Enter") {
-                e.preventDefault();
-                void replyPermission(first.requestID, "once");
-              }
-            }}
-          >
-            {permissions
-              .filter((p) => p.action.toLowerCase() !== "question")
-              .map((p) => (
-                <PermissionRow
-                  key={p.requestID}
-                  perm={p}
-                  onReply={(r) => void replyPermission(p.requestID, r)}
-                />
-              ))}
-          </div>
-        )}
+            {forms.map((f) => (
+              <FormCard key={f.id} form={f} />
+            ))}
 
-      {retryInfo?.action && (
-        <div className="permissions">
-          <div
-            className="perm-card"
-            data-action="retry-action"
-            style={{ borderLeftColor: "var(--oc2-question)" }}
-          >
-            <div className="perm-header">
-              <span
-                className="perm-badge"
-                style={{
-                  color: "var(--oc2-question)",
-                  borderColor: "var(--oc2-tool-shell-dim)",
+            {showPermissions && (
+              <div
+                className="perm-scroll"
+                tabIndex={0}
+                aria-label="Permission requests — Enter allow once · A allow always · D or Esc reject"
+                onKeyDown={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest("button")) return;
+                  const first = pending[0];
+                  if (!first) return;
+                  if (e.key === "a" || e.key === "A") {
+                    e.preventDefault();
+                    void replyPermission(first.requestID, "always");
+                  } else if (e.key === "d" || e.key === "D" || e.key === "Escape") {
+                    e.preventDefault();
+                    void replyPermission(first.requestID, "reject");
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    void replyPermission(first.requestID, "once");
+                  }
                 }}
               >
-                provider
-              </span>
-              <span>{retryInfo.action.title ?? "Provider action required"}</span>
-            </div>
-            {retryInfo.action.message && (
-              <div className="perm-res" style={{ whiteSpace: "pre-wrap" }}>
-                {retryInfo.action.message}
+                {pending.map((p) => (
+                  <PermissionRow
+                    key={p.requestID}
+                    perm={p}
+                    onReply={(r) => void replyPermission(p.requestID, r)}
+                  />
+                ))}
               </div>
             )}
-            {retryInfo.action.link && (
-              <div className="perm-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() =>
-                    void rpc
-                      .call("url.open", { url: retryInfo.action!.link })
-                      .catch(() => undefined)
-                  }
-                >
-                  {retryInfo.action.label ?? "Open"}
-                </button>
+
+            {(compacting ||
+              (busy && retryInfo && !retryInfo.action) ||
+              (retryPending && !busy)) && (
+              <div className="dock-status">
+                {compacting && (
+                  <span
+                    className="retry-pill"
+                    title="The server is compacting this session's context"
+                  >
+                    ↻ compacting…
+                  </span>
+                )}
+                {busy && retryInfo && !retryInfo.action && (
+                  <span className="retry-pill" title={retryInfo.message ?? ""}>
+                    ↻ retrying
+                    {retryInfo.attempt ? ` (attempt ${retryInfo.attempt})` : ""}…
+                  </span>
+                )}
+                {retryPending && !busy && (
+                  <button
+                    type="button"
+                    className="chip on"
+                    title="The last prompt failed (API/transport). Click to send it again."
+                    onClick={() => void retryLast()}
+                  >
+                    ↻ Retry last prompt
+                  </button>
+                )}
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {compacting && (
-        <div className="retry-bar">
-          <span
-            className="retry-pill"
-            title="The server is compacting this session's context"
-          >
-            ↻ compacting…
-          </span>
-        </div>
-      )}
-
-      {busy && retryInfo && !retryInfo.action && (
-        <div className="retry-bar">
-          <span
-            className="retry-pill"
-            title={retryInfo.message ?? ""}
-          >
-            ↻ retrying{retryInfo.attempt ? ` (attempt ${retryInfo.attempt})` : ""}…
-          </span>
-        </div>
-      )}
-
-      {retryPending && !busy && (
-        <div className="retry-bar">
-          <button
-            type="button"
-            className="chip on"
-            title="The last prompt failed (API/transport). Click to send it again."
-            onClick={() => void retryLast()}
-          >
-            ↻ Retry last prompt
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       <Composer
         disabled={!activeId || conn !== "connected"}

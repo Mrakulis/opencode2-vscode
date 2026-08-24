@@ -1374,8 +1374,8 @@ button:focus-visible {
   top: auto;
   left: 0;
   right: auto;
-  min-width: 220px;
-  max-width: min(320px, 92vw);
+  min-width: 200px;
+  max-width: min(340px, 100%);
 }
 .composer-selectors .picker:nth-child(3) .menu {
   left: auto;
@@ -1547,6 +1547,33 @@ button:focus-visible {
   display: flex;
   justify-content: flex-end;
   padding: 4px var(--oc2-space-2) 0;
+}
+
+/* ---------- consolidated bottom dock ---------- */
+.dock {
+  border-top: 1px solid var(--oc2-border);
+  background: var(--oc2-bg);
+  max-height: 42vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.dock-error {
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+}
+.dock .perm-scroll {
+  max-height: 30vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dock-status {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-top: 1px solid var(--oc2-border);
 }
 .retry-pill {
   font-family: var(--oc2-mono);

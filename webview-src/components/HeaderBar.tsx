@@ -132,50 +132,32 @@ export function HeaderBar(props: Props) {
           </button>
           {menuOpen && (
             <div className="menu">
+              <div className="menu-section">session</div>
               <button
                 type="button"
-                className="menu-item manage"
-                onClick={() => {
-                  setMenuOpen(false);
-                  props.onOpenManager();
-                }}
-              >
-                ⚙ Manage models…
-              </button>
-              <button
-                type="button"
-                className="menu-item manage"
-                onClick={() => {
-                  setMenuOpen(false);
-                  props.onOpenProviders();
-                }}
-              >
-                Providers…
-              </button>
-              <button
-                type="button"
-                className="menu-item manage"
-                onClick={() => {
-                  setMenuOpen(false);
-                  props.onOpenMcp();
-                }}
-              >
-                MCP servers…
-              </button>
-              <button
-                type="button"
-                className="menu-item manage"
+                className="menu-item"
                 disabled={!props.sessionId}
                 onClick={() => {
                   setMenuOpen(false);
-                  props.onOpenInstructions();
+                  void props.onCopyTranscript();
                 }}
               >
-                Instructions…
+                Copy transcript
               </button>
               <button
                 type="button"
-                className="menu-item manage"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void props.onFork();
+                }}
+              >
+                Fork session
+              </button>
+              <button
+                type="button"
+                className="menu-item"
                 disabled={!props.sessionId}
                 onClick={() => {
                   setMenuOpen(false);
@@ -186,25 +168,15 @@ export function HeaderBar(props: Props) {
               </button>
               <button
                 type="button"
-                className="menu-item manage"
+                className="menu-item"
+                disabled={!props.sessionId}
                 onClick={() => {
                   setMenuOpen(false);
-                  props.onOpenWorktrees();
+                  void props.onCompact();
                 }}
               >
-                Worktrees…
+                Compact now
               </button>
-              <button
-                type="button"
-                className="menu-item manage"
-                onClick={() => {
-                  setMenuOpen(false);
-                  props.onOpenSavedPermissions();
-                }}
-              >
-                Saved permissions…
-              </button>
-              <div className="menu-sep" />
               <button
                 type="button"
                 className="menu-item"
@@ -249,6 +221,8 @@ export function HeaderBar(props: Props) {
               >
                 ⤒ Import session…
               </button>
+
+              <div className="menu-section">code</div>
               <button
                 type="button"
                 className="menu-item"
@@ -259,6 +233,69 @@ export function HeaderBar(props: Props) {
                 title="Show the current working-tree diff from OpenCode VCS"
               >
                 ↔ Working diff
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenInstructions();
+                }}
+              >
+                Instructions…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenWorktrees();
+                }}
+              >
+                Worktrees…
+              </button>
+
+              <div className="menu-section">configure</div>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenManager();
+                }}
+              >
+                Models…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenProviders();
+                }}
+              >
+                Providers…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenMcp();
+                }}
+              >
+                MCP servers…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenSavedPermissions();
+                }}
+              >
+                Saved permissions…
               </button>
               <div className="menu-sep" />
               <button
