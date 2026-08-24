@@ -1,18 +1,31 @@
-/* Live smoke test against the real V2 service. Run: node scripts/smoke.mjs */
+/* Live smoke test against the real V2 service. Run: node scripts/smoke.mjs
+ *
+ * Target resolution:
+ *   1. OPENCODE_BASE_URL env (used by CI's integration job against a freshly
+ *      booted beta server)
+ *   2. Service.discover() — the local registered background service
+ */
 import { OpenCode } from "@opencode-ai/client";
 import { Service } from "@opencode-ai/client/service";
 
-const endpoint = await Service.discover();
-if (!endpoint) {
-  console.log(
-    "SMOKE: no running service discovered — start `opencode2` and retry.",
-  );
-  process.exit(0);
+let client;
+if (process.env.OPENCODE_BASE_URL) {
+  client = OpenCode.make({ baseUrl: process.env.OPENCODE_BASE_URL });
+  console.log(`target: ${process.env.OPENCODE_BASE_URL} (from env)`);
+} else {
+  const endpoint = await Service.discover();
+  if (!endpoint) {
+    console.log(
+      "SMOKE: no running service discovered and OPENCODE_BASE_URL not set.",
+    );
+    process.exit(0);
+  }
+  console.log(`target: ${endpoint.url} (discovered)`);
+  client = OpenCode.make({
+    baseUrl: endpoint.url,
+    headers: Service.headers(endpoint),
+  });
 }
-const client = OpenCode.make({
-  baseUrl: endpoint.url,
-  headers: Service.headers(endpoint),
-});
 
 const health = await client.health.get();
 console.log(`health: v${health.version} pid ${health.pid} — OK`);

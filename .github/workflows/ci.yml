@@ -43,3 +43,57 @@ jobs:
         run: npm run typecheck
       - name: Build against latest beta
         run: npm run build
+
+  # End-to-end drift detection: boots a REAL headless server from the latest
+  # published beta CLI and runs the full live smoke suite against it. This
+  # catches runtime/API drift that type-level checks cannot see.
+  integration-beta:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install latest beta CLI (provides `opencode`)
+        run: npm install -g opencode-ai@beta
+      - name: Boot headless beta server
+        run: |
+          opencode serve --hostname 127.0.0.1 --port 18100 &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:18100/api/health >/dev/null 2>&1; then
+              echo "server ready"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:18100/api/health >/dev/null 2>&1 || {
+            echo "::error::beta server failed to become healthy on :18100"
+            exit 1
+          }
+      - name: Live smoke against beta server
+        env:
+          OPENCODE_BASE_URL: http://127.0.0.1:18100
+        run: node scripts/smoke.mjs
+
+  # Tag-driven packaging: push a v* tag to get a buildable .vsix artifact.
+  package:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build + package vsix
+        run: |
+          npm run build
+          npx --yes @vscode/vsce package --no-git-tag-version -o opencode2-vscode.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: opencode2-vscode.vsix
