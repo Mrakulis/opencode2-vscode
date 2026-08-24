@@ -704,8 +704,15 @@ function stringifyError(error: unknown): string {
   }
 }
 
-/** Colored diff body with open-in-editor / open-file actions. */
+/** Colored diff body + editor actions. Primary action opens VS Code's
+ *  side-by-side diff for the real file; the patch text is only passed
+ *  along when there is no real file to diff against. */
 function DiffView({ diff, file }: { diff: string; file?: string }) {
+  const openSideBySide = (): void => {
+    void rpc
+      .call("diff.open", file ? { file } : { file: "edit.diff", diff })
+      .catch(() => undefined);
+  };
   return (
     <div>
       <pre className="diff">
@@ -720,14 +727,12 @@ function DiffView({ diff, file }: { diff: string; file?: string }) {
         type="button"
         className="chip"
         style={{ marginTop: "6px" }}
-        onClick={() =>
-          void rpc.call("diff.open", { file, diff }).catch(() => undefined)
-        }
-        title="Open diff in editor"
+        onClick={openSideBySide}
+        title="Open side-by-side diff in the editor"
       >
-        ↔ Open diff
+        ⇔ Open diff
       </button>
-      {file && (
+      {file && !file.endsWith(".diff") && (
         <button
           type="button"
           className="chip"

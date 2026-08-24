@@ -970,8 +970,8 @@ button:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--oc2-fg);
-  max-height: 420px;
-  overflow-y: auto;
+  /* ~8 visible lines, internally scrollable — same budget as terminals */
+  max-height: calc(8 * 1.45em + var(--oc2-space-2) * 2);
 }
 .tool-out.full {
   max-height: 80vh;
@@ -1028,6 +1028,8 @@ button:focus-visible {
   font-family: var(--oc2-mono);
   white-space: pre;
   overflow-x: auto;
+  max-height: min(360px, 45vh);
+  overflow-y: auto;
 }
 .tool-error {
   color: var(--oc2-error);
