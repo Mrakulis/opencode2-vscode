@@ -1224,6 +1224,7 @@ button:focus-visible {
   line-height: 1.45;
   flex: 1;
   min-width: 0;
+  overflow-y: hidden;
 }
 .composer-input-actions {
   display: flex;

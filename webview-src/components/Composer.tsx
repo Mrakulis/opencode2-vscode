@@ -203,12 +203,23 @@ export function Composer(props: Props) {
     setAtOpen(false);
   }, []);
 
-  // auto-grow up to ~40vh
+  // auto-grow up to ~40vh — no inner scrollbar until capped
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.4))}px`;
+    const resize = (): void => {
+      el.style.height = "auto";
+      const cs = getComputedStyle(el);
+      const border =
+        parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+      const max = Math.round(window.innerHeight * 0.4);
+      const capped = el.scrollHeight + border > max;
+      el.style.height = `${Math.min(el.scrollHeight + border, max)}px`;
+      el.style.overflowY = capped ? "auto" : "hidden";
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
   }, [text]);
 
   useEffect(() => {
