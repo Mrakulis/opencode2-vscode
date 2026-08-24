@@ -14,7 +14,15 @@ async function resolveCli() {
   const where = (name) =>
     new Promise((res) =>
       execFile("where.exe", [name], { windowsHide: true }, (err, out) =>
-        res(err ? [] : out.toString().split(/\r?\n/).map((l) => l.trim()).filter(Boolean)),
+        res(
+          err
+            ? []
+            : out
+                .toString()
+                .split(/\r?\n/)
+                .map((l) => l.trim())
+                .filter(Boolean),
+        ),
       ),
     );
   for (const name of ["opencode2", "opencode"]) {
@@ -26,9 +34,28 @@ async function resolveCli() {
     const npmRoot = path.join(process.env.APPDATA ?? "", "npm");
     if (name === "opencode2" || name === "opencode") {
       const cand = [
-        path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", "opencode2.exe"),
-        path.join(npmRoot, "node_modules", "opencode-ai", "bin", "opencode.exe"),
-      ].find((p) => { try { return require("fs").statSync(p).isFile(); } catch { return false; } });
+        path.join(
+          npmRoot,
+          "node_modules",
+          "@opencode-ai",
+          "cli",
+          "bin",
+          "opencode2.exe",
+        ),
+        path.join(
+          npmRoot,
+          "node_modules",
+          "opencode-ai",
+          "bin",
+          "opencode.exe",
+        ),
+      ].find((p) => {
+        try {
+          return require("fs").statSync(p).isFile();
+        } catch {
+          return false;
+        }
+      });
       if (cand) return { program: cand };
     }
   }
@@ -38,7 +65,9 @@ async function resolveCli() {
 console.log("step 1: discover running service…");
 let ep = await Service.discover().catch(() => undefined);
 if (ep) {
-  console.log(`already running at ${ep.url} — skipping hidden spawn (path exercised on next cold start).`);
+  console.log(
+    `already running at ${ep.url} — skipping hidden spawn (path exercised on next cold start).`,
+  );
   const c = OpenCode.make({ baseUrl: ep.url, headers: Service.headers(ep) });
   const h = await c.health.get();
   console.log(`health: v${h.version} pid ${h.pid} — OK`);
@@ -71,7 +100,10 @@ if (!endpoint) {
   process.exit(1);
 }
 console.log(`registered at ${endpoint.url}`);
-const c = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) });
+const c = OpenCode.make({
+  baseUrl: endpoint.url,
+  headers: Service.headers(endpoint),
+});
 const h = await c.health.get();
 console.log(`health: v${h.version} pid ${h.pid} — OK`);
 console.log("HIDDEN START VERIFIED (no console window created)");

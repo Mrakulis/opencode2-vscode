@@ -40,10 +40,18 @@ export class AutoCompactWatcher implements vscode.Disposable {
     this.disposables.push({ dispose: () => clearInterval(timer) });
   }
 
-  setContextLimits(models: Array<{ providerID: string; modelID?: string; id?: string; limit?: { context?: number } }>): void {
+  setContextLimits(
+    models: Array<{
+      providerID: string;
+      modelID?: string;
+      id?: string;
+      limit?: { context?: number };
+    }>,
+  ): void {
     for (const m of models) {
       const key = `${m.providerID}/${m.modelID ?? m.id ?? ""}`;
-      if (m.limit?.context && m.limit.context > 0) this.contextLimits.set(key, m.limit.context);
+      if (m.limit?.context && m.limit.context > 0)
+        this.contextLimits.set(key, m.limit.context);
     }
   }
 
@@ -57,18 +65,25 @@ export class AutoCompactWatcher implements vscode.Disposable {
       const session = await client.session.get({ sessionID });
       const modelRef = session.model;
       if (!modelRef) return;
-      const limit = this.contextLimits.get(`${modelRef.providerID}/${modelRef.id}`);
+      const limit = this.contextLimits.get(
+        `${modelRef.providerID}/${modelRef.id}`,
+      );
       if (!limit) return;
 
       const t = session.tokens;
-      const total = t.input + t.output + t.reasoning + t.cache.read + t.cache.write;
+      const total =
+        t.input + t.output + t.reasoning + t.cache.read + t.cache.write;
       const pct = (total / limit) * 100;
       if (pct < threshold) return;
 
       if (this.armed.get(sessionID) === false) return; // already compacted this run
-      this.log.info(`auto-compacting ${sessionID}: ${Math.round(pct)}% of ${limit} tokens (threshold ${threshold}%)`);
+      this.log.info(
+        `auto-compacting ${sessionID}: ${Math.round(pct)}% of ${limit} tokens (threshold ${threshold}%)`,
+      );
       this.armed.set(sessionID, false);
-      await createApi({ getClient: () => this.controller.getClient() }).compact(sessionID);
+      await createApi({ getClient: () => this.controller.getClient() }).compact(
+        sessionID,
+      );
     } catch (error) {
       this.log.debug("auto-compact check skipped", error);
     }
@@ -87,7 +102,9 @@ export class AutoCompactWatcher implements vscode.Disposable {
   }
 
   private threshold(): number {
-    return vscode.workspace.getConfiguration("opencode2").get<number>("agent.autoCompactThreshold", 0);
+    return vscode.workspace
+      .getConfiguration("opencode2")
+      .get<number>("agent.autoCompactThreshold", 0);
   }
 
   dispose(): void {

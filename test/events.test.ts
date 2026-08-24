@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { actionsForEvent, isSessionScopedAction } from "../webview-src/lib/events";
+import {
+  actionsForEvent,
+  isSessionScopedAction,
+} from "../webview-src/lib/events";
 import { applyDelta, type DeltaEvent } from "../webview-src/lib/deltas";
 import type { AnyMessage } from "../webview-src/lib/rpc";
 
 describe("actionsForEvent", () => {
   it("routes every valuable V2 event family", () => {
-    assert.ok(actionsForEvent("session.execution.succeeded").includes("sessions"));
+    assert.ok(
+      actionsForEvent("session.execution.succeeded").includes("sessions"),
+    );
     assert.ok(actionsForEvent("form.created").includes("forms"));
     assert.ok(actionsForEvent("mcp.status.changed").includes("mcp"));
     assert.ok(actionsForEvent("integration.updated").includes("providers"));
@@ -44,7 +49,10 @@ describe("applyDelta", () => {
     } as unknown as AnyMessage,
   ];
 
-  const evt = (over: Partial<DeltaEvent["data"]> & { text?: string }, type = "session.text.delta"): DeltaEvent => ({
+  const evt = (
+    over: Partial<DeltaEvent["data"]> & { text?: string },
+    type = "session.text.delta",
+  ): DeltaEvent => ({
     type,
     data: { messageID: "m1", ...over },
   });
@@ -55,10 +63,16 @@ describe("applyDelta", () => {
     const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
     assert.equal((m.content[0] as { text: string }).text, "Hello");
     // original untouched (immutability)
-    assert.equal((base[1] as Extract<AnyMessage, { type: "assistant" }>).content.length, 1);
+    assert.equal(
+      (base[1] as Extract<AnyMessage, { type: "assistant" }>).content.length,
+      1,
+    );
   });
   it("creates a reasoning block when missing", () => {
-    const out = applyDelta(base, evt({ text: "hmm" }, "session.reasoning.delta"));
+    const out = applyDelta(
+      base,
+      evt({ text: "hmm" }, "session.reasoning.delta"),
+    );
     assert.ok(out);
     const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
     assert.equal(m.content.length, 2);
@@ -66,7 +80,13 @@ describe("applyDelta", () => {
   });
   it("returns null for unknown messages / malformed payloads", () => {
     assert.equal(applyDelta(base, evt({ messageID: "nope", text: "x" })), null);
-    assert.equal(applyDelta(base, evt({ messageID: undefined, text: "x" })), null);
-    assert.equal(applyDelta(base, { type: "session.tool.progress", data: {} }), null);
+    assert.equal(
+      applyDelta(base, evt({ messageID: undefined, text: "x" })),
+      null,
+    );
+    assert.equal(
+      applyDelta(base, { type: "session.tool.progress", data: {} }),
+      null,
+    );
   });
 });

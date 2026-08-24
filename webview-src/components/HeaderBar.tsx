@@ -103,53 +103,149 @@ export function HeaderBar(props: Props) {
         </span>
       )}
       {props.branch && (
-        <span className="ws-chip branch-chip" title={`Git branch: ${props.branch}`}>
+        <span
+          className="ws-chip branch-chip"
+          title={`Git branch: ${props.branch}`}
+        >
           ⑂ {truncate(props.branch, 16)}
         </span>
       )}
 
       <div className="header-right" ref={menuRef}>
-        <button type="button" className="iconbtn" title="Settings" onClick={props.onOpenSettings} style={{ fontSize: "14px", padding: "0 4px" }}>
+        <button
+          type="button"
+          className="iconbtn"
+          title="Settings"
+          onClick={props.onOpenSettings}
+          style={{ fontSize: "14px", padding: "0 4px" }}
+        >
           ⚙
         </button>
         <div className="picker">
-          <button type="button" className="chip" onClick={() => setMenuOpen((v) => !v)}>
+          <button
+            type="button"
+            className="chip"
+            onClick={() => setMenuOpen((v) => !v)}
+          >
             ⋯ ▾
           </button>
           {menuOpen && (
             <div className="menu">
-              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenManager(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenManager();
+                }}
+              >
                 ⚙ Manage models…
               </button>
-              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenProviders(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenProviders();
+                }}
+              >
                 Providers…
               </button>
-              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenMcp(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenMcp();
+                }}
+              >
                 MCP servers…
               </button>
-              <button type="button" className="menu-item manage" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onOpenInstructions(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenInstructions();
+                }}
+              >
                 Instructions…
               </button>
-              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenWorktrees(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenWorktrees();
+                }}
+              >
                 Worktrees…
               </button>
-              <button type="button" className="menu-item manage" onClick={() => { setMenuOpen(false); props.onOpenSavedPermissions(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenSavedPermissions();
+                }}
+              >
                 Saved permissions…
               </button>
               <div className="menu-sep" />
-              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onUndo(); }} title="Undo the last turn and revert its file changes">
+              <button
+                type="button"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onUndo();
+                }}
+                title="Undo the last turn and revert its file changes"
+              >
                 ↶ Undo last turn
               </button>
-              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onRedo(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onRedo();
+                }}
+              >
                 ↷ Redo
               </button>
-              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); props.onExport(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onExport();
+                }}
+              >
                 ⤓ Export session…
               </button>
-              <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); props.onImport(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onImport();
+                }}
+              >
                 ⤒ Import session…
               </button>
-              <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); props.onOpenWorkingDiff(); }} title="Show the current working-tree diff from OpenCode VCS">
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenWorkingDiff();
+                }}
+                title="Show the current working-tree diff from OpenCode VCS"
+              >
                 ↔ Working diff
               </button>
               <div className="menu-sep" />
@@ -159,7 +255,12 @@ export function HeaderBar(props: Props) {
                 onClick={() => setThemeMenuOpen((v) => !v)}
                 title="Switch between the OpenCode 2 themes and presets"
               >
-                {props.theme === "dark" ? "☾ Theme" : props.theme === "light" ? "☀ Theme" : `◈ Theme — ${props.theme}`} ▸
+                {props.theme === "dark"
+                  ? "☾ Theme"
+                  : props.theme === "light"
+                    ? "☀ Theme"
+                    : `◈ Theme — ${props.theme}`}{" "}
+                ▸
               </button>
               {themeMenuOpen && (
                 <div className="oc2-theme-sub">
@@ -183,19 +284,44 @@ export function HeaderBar(props: Props) {
               <button
                 type="button"
                 className="menu-item"
-                onClick={() => { props.onToggleTheme(); }}
+                onClick={() => {
+                  props.onToggleTheme();
+                }}
                 title="Cycle to the next theme"
               >
                 ↻ Cycle theme
               </button>
               <div className="menu-sep" />
-              <button type="button" className="menu-item" onClick={() => { setMenuOpen(false); void props.onCopyTranscript(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void props.onCopyTranscript();
+                }}
+              >
                 Copy transcript
               </button>
-              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); void props.onFork(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void props.onFork();
+                }}
+              >
                 Fork session
               </button>
-              <button type="button" className="menu-item" disabled={!props.sessionId} onClick={() => { setMenuOpen(false); void props.onCompact(); }}>
+              <button
+                type="button"
+                className="menu-item"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void props.onCompact();
+                }}
+              >
                 Compact now
               </button>
             </div>
@@ -203,7 +329,11 @@ export function HeaderBar(props: Props) {
         </div>
 
         <span className={`conn conn-${props.conn}`}>
-          {props.conn === "connected" ? "live" : props.conn === "connecting" ? "linking" : "offline"}
+          {props.conn === "connected"
+            ? "live"
+            : props.conn === "connecting"
+              ? "linking"
+              : "offline"}
         </span>
       </div>
     </header>

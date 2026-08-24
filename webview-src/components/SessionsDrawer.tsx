@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { formatCost, formatTokens, relativeTime, totalTokens } from "../lib/format";
+import {
+  formatCost,
+  formatTokens,
+  relativeTime,
+  totalTokens,
+} from "../lib/format";
 import type { SessionSummary } from "../lib/rpc";
 
 interface Props {
@@ -14,15 +19,28 @@ interface Props {
 }
 
 /** Slides over the feed; Esc closes (handled in App). */
-export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, onSelect, onNew, onDelete, onMove }: Props) {
+export function SessionsDrawer({
+  sessions,
+  activeId,
+  allProjects,
+  onToggleAll,
+  onSelect,
+  onNew,
+  onDelete,
+  onMove,
+}: Props) {
   const [query, setQuery] = useState("");
   const [confirming, setConfirming] = useState<string | undefined>(undefined);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const sorted = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
+    const sorted = [...sessions].sort(
+      (a, b) => b.time.updated - a.time.updated,
+    );
     if (!q) return sorted;
-    return sorted.filter((s) => (s.title ?? "").toLowerCase().includes(q) || s.id.includes(q));
+    return sorted.filter(
+      (s) => (s.title ?? "").toLowerCase().includes(q) || s.id.includes(q),
+    );
   }, [sessions, query]);
 
   return (
@@ -38,7 +56,11 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
         <button
           type="button"
           className={`chip${allProjects ? " on" : ""}`}
-          title={allProjects ? "Showing every project" : "Scoped to the opened folder"}
+          title={
+            allProjects
+              ? "Showing every project"
+              : "Scoped to the opened folder"
+          }
           onClick={onToggleAll}
         >
           {allProjects ? "all projects" : "this folder"}
@@ -57,7 +79,12 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
               <>
                 No sessions in this folder.
                 <br />
-                <button type="button" className="menu-item manage" onClick={onToggleAll} style={{ marginTop: "8px" }}>
+                <button
+                  type="button"
+                  className="menu-item manage"
+                  onClick={onToggleAll}
+                  style={{ marginTop: "8px" }}
+                >
                   Show all projects
                 </button>
               </>
@@ -77,7 +104,8 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
           >
             <span className="session-title">{s.title ?? "Untitled"}</span>
             <span className="session-meta">
-              {formatTokens(totalTokens(s.tokens))} tok · {formatCost(s.cost)} · {relativeTime(s.time.updated)}
+              {formatTokens(totalTokens(s.tokens))} tok · {formatCost(s.cost)} ·{" "}
+              {relativeTime(s.time.updated)}
             </span>
             {confirming === s.id ? (
               <span className="confirm">
@@ -104,29 +132,29 @@ export function SessionsDrawer({ sessions, activeId, allProjects, onToggleAll, o
               </span>
             ) : (
               <>
-              <button
-                type="button"
-                className="rowdel"
-                style={{ right: "26px" }}
-                title="Move to another workspace folder"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void onMove(s.id);
-                }}
-              >
-                ⇄
-              </button>
-              <button
-                type="button"
-                className="rowdel"
-                title="Delete session"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirming(s.id);
-                }}
-              >
-                ×
-              </button>
+                <button
+                  type="button"
+                  className="rowdel"
+                  style={{ right: "26px" }}
+                  title="Move to another workspace folder"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void onMove(s.id);
+                  }}
+                >
+                  ⇄
+                </button>
+                <button
+                  type="button"
+                  className="rowdel"
+                  title="Delete session"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirming(s.id);
+                  }}
+                >
+                  ×
+                </button>
               </>
             )}
           </div>

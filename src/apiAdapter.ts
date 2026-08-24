@@ -30,13 +30,19 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       // `e:` on Windows). Fetch all and filter case-insensitively here so
       // `e:\_Code\...` matches stored `E:\_Code\...`.
       const res = await getClient().session.list();
-      const root = directory ? path.normalize(directory).toLowerCase() : undefined;
+      const root = directory
+        ? path.normalize(directory).toLowerCase()
+        : undefined;
       let data = res.data;
       if (root) {
         const sep = path.sep.toLowerCase();
         data = data.filter((s) => {
-          const dir = s.location?.directory ? path.normalize(s.location.directory).toLowerCase() : undefined;
-          return dir !== undefined && (dir === root || dir.startsWith(root + sep));
+          const dir = s.location?.directory
+            ? path.normalize(s.location.directory).toLowerCase()
+            : undefined;
+          return (
+            dir !== undefined && (dir === root || dir.startsWith(root + sep))
+          );
         });
       }
       return data;
@@ -54,8 +60,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         location: directory ? { directory } : undefined,
       });
     },
-    sessionGet: (sessionID: string): Promise<SessionInfo> => getClient().session.get({ sessionID }),
-    sessionRemove: (sessionID: string): Promise<void> => getClient().session.remove({ sessionID }),
+    sessionGet: (sessionID: string): Promise<SessionInfo> =>
+      getClient().session.get({ sessionID }),
+    sessionRemove: (sessionID: string): Promise<void> =>
+      getClient().session.remove({ sessionID }),
     sessionRename: (sessionID: string, title: string): Promise<void> =>
       getClient().session.rename({ sessionID, title }),
 
@@ -67,7 +75,11 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     prompt: (input: {
       sessionID: string;
       text: string;
-      files?: Array<{ uri: string; name?: string; mention?: { start: number; end: number; text: string } }>;
+      files?: Array<{
+        uri: string;
+        name?: string;
+        mention?: { start: number; end: number; text: string };
+      }>;
       delivery?: "steer" | "queue";
     }): Promise<unknown> =>
       getClient().session.prompt({
@@ -76,8 +88,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         files: input.files,
         delivery: input.delivery,
       }),
-    interrupt: (sessionID: string): Promise<void> => getClient().session.interrupt({ sessionID }),
-    compact: (sessionID: string): Promise<unknown> => getClient().session.compact({ sessionID }),
+    interrupt: (sessionID: string): Promise<void> =>
+      getClient().session.interrupt({ sessionID }),
+    compact: (sessionID: string): Promise<unknown> =>
+      getClient().session.compact({ sessionID }),
     fork: (sessionID: string): Promise<SessionInfo> =>
       getClient().session.fork({ sessionID, boundary: { type: "through" } }),
 
@@ -90,19 +104,41 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       getClient().session.import(payload as never),
     moveSession: (sessionID: string, directory: string): Promise<void> =>
       getClient().session.move({ sessionID, directory }),
-    revertStage: (sessionID: string, messageID: string, files?: boolean): Promise<unknown> =>
-      getClient().session.revert.stage({ sessionID, messageID, ...(files !== undefined ? { files } : {}) }),
-    revertClear: (sessionID: string): Promise<void> => getClient().session.revert.clear({ sessionID }),
-    revertCommit: (sessionID: string): Promise<void> => getClient().session.revert.commit({ sessionID }),
-    sessionContext: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
+    revertStage: (
+      sessionID: string,
+      messageID: string,
+      files?: boolean,
+    ): Promise<unknown> =>
+      getClient().session.revert.stage({
+        sessionID,
+        messageID,
+        ...(files !== undefined ? { files } : {}),
+      }),
+    revertClear: (sessionID: string): Promise<void> =>
+      getClient().session.revert.clear({ sessionID }),
+    revertCommit: (sessionID: string): Promise<void> =>
+      getClient().session.revert.commit({ sessionID }),
+    sessionContext: async (
+      sessionID: string,
+    ): Promise<Array<Record<string, unknown>>> => {
       const rows = await getClient().session.context({ sessionID });
-      return (Array.isArray(rows) ? rows : ((rows as unknown as { data?: unknown[] }).data ?? [])) as Array<
-        Record<string, unknown>
-      >;
+      return (
+        Array.isArray(rows)
+          ? rows
+          : ((rows as unknown as { data?: unknown[] }).data ?? [])
+      ) as Array<Record<string, unknown>>;
     },
-    inboxList: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
-      const res = (await getClient().session.inbox.list({ sessionID })) as unknown;
-      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+    inboxList: async (
+      sessionID: string,
+    ): Promise<Array<Record<string, unknown>>> => {
+      const res = (await getClient().session.inbox.list({
+        sessionID,
+      })) as unknown;
+      return Array.isArray(res)
+        ? (res as Array<Record<string, unknown>>)
+        : (((res as { data?: unknown[] }).data ?? []) as Array<
+            Record<string, unknown>
+          >);
     },
     inboxCancel: (sessionID: string, inboxID: string): Promise<void> =>
       getClient().session.inbox.cancel({ sessionID, inboxID }),
@@ -141,10 +177,13 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       sessionID: string,
       requestID: string,
       reply: "once" | "always" | "reject",
-    ): Promise<void> => getClient().permission.reply({ sessionID, requestID, reply }),
+    ): Promise<void> =>
+      getClient().permission.reply({ sessionID, requestID, reply }),
 
     // -- forms -----------------------------------------------------------------
-    formsList: async (sessionID?: string): Promise<Array<Record<string, unknown>>> => {
+    formsList: async (
+      sessionID?: string,
+    ): Promise<Array<Record<string, unknown>>> => {
       if (sessionID) {
         const rows = await getClient().form.list({ sessionID });
         return rows as unknown as Array<Record<string, unknown>>;
@@ -164,23 +203,37 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     },
 
     // -- misc ----------------------------------------------------------------
-    findFiles: (query: string, directory?: string) => getClient().file.find({ query, location: directory ? { directory } : undefined }),
-    commands: async (): Promise<Array<{ name: string; description?: string }>> => {
+    findFiles: (query: string, directory?: string) =>
+      getClient().file.find({
+        query,
+        location: directory ? { directory } : undefined,
+      }),
+    commands: async (): Promise<
+      Array<{ name: string; description?: string }>
+    > => {
       const res = await getClient().command.list();
       return (res.data ?? []).map((c) => ({
         name: c.name,
-        description: typeof c.description === "string" ? c.description : undefined,
+        description:
+          typeof c.description === "string" ? c.description : undefined,
       }));
     },
-    skills: async (): Promise<Array<{ name: string; description?: string; slash?: boolean }>> => {
+    skills: async (): Promise<
+      Array<{ name: string; description?: string; slash?: boolean }>
+    > => {
       const res = await getClient().skill.list();
       return (res.data ?? []).map((s) => ({
         name: s.name,
-        description: typeof s.description === "string" ? s.description : undefined,
+        description:
+          typeof s.description === "string" ? s.description : undefined,
         slash: s.slash === true,
       }));
     },
-    sessionCommand: (sessionID: string, command: string, args?: string): Promise<unknown> =>
+    sessionCommand: (
+      sessionID: string,
+      command: string,
+      args?: string,
+    ): Promise<unknown> =>
       getClient().session.command({
         sessionID,
         command,
@@ -193,44 +246,72 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       return res.data;
     },
     mcpList: () => getClient().mcp.list(),
-    mcpAdd: (server: string, config: unknown) => getClient().mcp.add({ server, config: config as never }),
+    mcpAdd: (server: string, config: unknown) =>
+      getClient().mcp.add({ server, config: config as never }),
     mcpRemove: (server: string) => getClient().mcp.remove({ server }),
     mcpConnect: (server: string) => getClient().mcp.connect({ server }),
     mcpDisconnect: (server: string) => getClient().mcp.disconnect({ server }),
-    mcpResources: () => getClient().mcp.resource.catalog(),
 
     // -- instructions (project rules / /init) ---------------------------------
-    instructionsList: async (sessionID: string): Promise<Array<Record<string, unknown>>> => {
-      const res = await getClient().session.instructions.entry.list({ sessionID });
-      return (Array.isArray(res) ? res : ((res as unknown as { data?: unknown[] }).data ?? [])) as Array<Record<string, unknown>>;
+    instructionsList: async (
+      sessionID: string,
+    ): Promise<Array<Record<string, unknown>>> => {
+      const res = await getClient().session.instructions.entry.list({
+        sessionID,
+      });
+      return (
+        Array.isArray(res)
+          ? res
+          : ((res as unknown as { data?: unknown[] }).data ?? [])
+      ) as Array<Record<string, unknown>>;
     },
-    instructionPut: (sessionID: string, key: string, value: unknown): Promise<void> =>
-      getClient().session.instructions.entry.put({ sessionID, key, value: value as never }),
+    instructionPut: (
+      sessionID: string,
+      key: string,
+      value: unknown,
+    ): Promise<void> =>
+      getClient().session.instructions.entry.put({
+        sessionID,
+        key,
+        value: value as never,
+      }),
     instructionRemove: (sessionID: string, key: string): Promise<void> =>
       getClient().session.instructions.entry.remove({ sessionID, key }),
 
     // -- permissions: saved rules ---------------------------------------------
     savedPermissions: async (): Promise<Array<Record<string, unknown>>> => {
       const res = (await getClient().permission.saved.list()) as unknown;
-      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+      return Array.isArray(res)
+        ? (res as Array<Record<string, unknown>>)
+        : (((res as { data?: unknown[] }).data ?? []) as Array<
+            Record<string, unknown>
+          >);
     },
-    savedPermissionRemove: (id: string): Promise<void> => getClient().permission.saved.remove({ id }),
+    savedPermissionRemove: (id: string): Promise<void> =>
+      getClient().permission.saved.remove({ id }),
 
     // -- provider connect (in-app; replaces the CLI auth handoff) --------------
-    integrationGet: async (integrationID: string): Promise<Record<string, unknown> | undefined> => {
+    integrationGet: async (
+      integrationID: string,
+    ): Promise<Record<string, unknown> | undefined> => {
       const res = await getClient().integration.get({ integrationID });
       return res.data as unknown as Record<string, unknown> | undefined;
     },
     credentialUpdate: (credentialID: string, label: string): Promise<void> =>
       getClient().credential.update({ credentialID, label }),
-    credentialRemove: (credentialID: string): Promise<void> => getClient().credential.remove({ credentialID }),
+    credentialRemove: (credentialID: string): Promise<void> =>
+      getClient().credential.remove({ credentialID }),
     pluginList: async (): Promise<Array<Record<string, unknown>>> => {
       const res = await getClient().plugin.list();
-      return ((res.data ?? []) as unknown[]).map((r) => r as Record<string, unknown>);
+      return ((res.data ?? []) as unknown[]).map(
+        (r) => r as Record<string, unknown>,
+      );
     },
     websearchProviders: async (): Promise<Array<Record<string, unknown>>> => {
       const res = await getClient().websearch.providers();
-      return ((res.data ?? []) as unknown[]).map((r) => r as Record<string, unknown>);
+      return ((res.data ?? []) as unknown[]).map(
+        (r) => r as Record<string, unknown>,
+      );
     },
     connectKey: (integrationID: string, key: string): Promise<void> =>
       getClient().integration.connect.key({ integrationID, key }),
@@ -248,23 +329,39 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         url: typeof d.url === "string" ? d.url : undefined,
       };
     },
-    oauthStatus: async (integrationID: string, attemptID: string): Promise<Record<string, unknown>> => {
-      const res = await getClient().integration.oauth.status({ integrationID, attemptID } as never);
+    oauthStatus: async (
+      integrationID: string,
+      attemptID: string,
+    ): Promise<Record<string, unknown>> => {
+      const res = await getClient().integration.oauth.status({
+        integrationID,
+        attemptID,
+      } as never);
       return (res.data ?? {}) as unknown as Record<string, unknown>;
     },
     oauthComplete: (integrationID: string, attemptID: string): Promise<void> =>
-      getClient().integration.oauth.complete({ integrationID, attemptID } as never),
+      getClient().integration.oauth.complete({
+        integrationID,
+        attemptID,
+      } as never),
     oauthCancel: (integrationID: string, attemptID: string): Promise<void> =>
-      getClient().integration.oauth.cancel({ integrationID, attemptID } as never),
+      getClient().integration.oauth.cancel({
+        integrationID,
+        attemptID,
+      } as never),
     commandConnect: async (
       integrationID: string,
       methodID: string,
     ): Promise<{ attemptID?: string; instructions?: string }> => {
-      const res = await getClient().integration.command.connect({ integrationID, methodID } as never);
+      const res = await getClient().integration.command.connect({
+        integrationID,
+        methodID,
+      } as never);
       const d = (res.data ?? {}) as Record<string, unknown>;
       return {
         attemptID: typeof d.attemptID === "string" ? d.attemptID : undefined,
-        instructions: typeof d.instructions === "string" ? d.instructions : undefined,
+        instructions:
+          typeof d.instructions === "string" ? d.instructions : undefined,
       };
     },
 
@@ -272,7 +369,8 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     vcsInfo: async (): Promise<{ branch?: string } | undefined> => {
       try {
         const res = await getClient().vcs.get();
-        const info = res.data as unknown as { branch?: { name?: string; current?: string } | string } | undefined;
+        const info = res.data as unknown as
+          { branch?: { name?: string; current?: string } | string } | undefined;
         if (!info?.branch) return undefined;
         if (typeof info.branch === "string") return { branch: info.branch };
         return { branch: info.branch.name ?? info.branch.current };
@@ -280,7 +378,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         return undefined;
       }
     },
-    vcsDiff: async (mode: "working" | "branch", directory?: string): Promise<string> => {
+    vcsDiff: async (
+      mode: "working" | "branch",
+      directory?: string,
+    ): Promise<string> => {
       const res = await getClient().vcs.diff({
         mode,
         ...(directory ? { location: { directory } } : {}),
@@ -288,26 +389,52 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       const out = res.data as unknown;
       if (typeof out === "string") return out;
       const rec = (out ?? {}) as Record<string, unknown>;
-      return typeof rec.diff === "string" ? rec.diff : typeof rec.text === "string" ? rec.text : "";
+      return typeof rec.diff === "string"
+        ? rec.diff
+        : typeof rec.text === "string"
+          ? rec.text
+          : "";
     },
 
     // -- worktrees --------------------------------------------------------------
-    worktreeList: async (projectID: string): Promise<Array<Record<string, unknown>>> => {
+    worktreeList: async (
+      projectID: string,
+    ): Promise<Array<Record<string, unknown>>> => {
       const res = (await getClient().worktree.list({ projectID })) as unknown;
-      return Array.isArray(res) ? (res as Array<Record<string, unknown>>) : (((res as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>);
+      return Array.isArray(res)
+        ? (res as Array<Record<string, unknown>>)
+        : (((res as { data?: unknown[] }).data ?? []) as Array<
+            Record<string, unknown>
+          >);
     },
-    worktreeCreate: (projectID: string, opts: { from?: string; directory: string; name?: string }): Promise<unknown> =>
+    worktreeCreate: (
+      projectID: string,
+      opts: { from?: string; directory: string; name?: string },
+    ): Promise<unknown> =>
       getClient().worktree.create({
         projectID,
-        strategy: { ...(opts.from ? { from: opts.from } : {}), directory: opts.directory, ...(opts.name ? { name: opts.name } : {}) },
+        strategy: {
+          ...(opts.from ? { from: opts.from } : {}),
+          directory: opts.directory,
+          ...(opts.name ? { name: opts.name } : {}),
+        },
       } as never),
-    worktreeRemove: (projectID: string, directory: string, force: boolean): Promise<void> =>
+    worktreeRemove: (
+      projectID: string,
+      directory: string,
+      force: boolean,
+    ): Promise<void> =>
       getClient().worktree.remove({ projectID, directory, force } as never),
-    worktreeRefresh: (projectID: string): Promise<void> => getClient().worktree.refresh({ projectID }),
+    worktreeRefresh: (projectID: string): Promise<void> =>
+      getClient().worktree.refresh({ projectID }),
     providers: async () => {
       const [integrations, providers] = await Promise.all([
-        getClient().integration.list().catch(() => undefined),
-        getClient().provider.list().catch(() => undefined),
+        getClient()
+          .integration.list()
+          .catch(() => undefined),
+        getClient()
+          .provider.list()
+          .catch(() => undefined),
       ]);
       return {
         integrations: integrations?.data ?? [],

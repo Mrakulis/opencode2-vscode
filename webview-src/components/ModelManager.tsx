@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { filterVisibleModels, groupByProvider, modelKey, toggleInList, toggleProviderModels } from "../lib/models";
+import {
+  filterVisibleModels,
+  groupByProvider,
+  modelKey,
+  toggleInList,
+  toggleProviderModels,
+} from "../lib/models";
 import type { SettingKey } from "../../src/protocol";
 import type { PickerModel } from "../lib/models";
 
@@ -74,7 +80,13 @@ export function ModelManager(props: Props) {
           {props.recents.map((key) => {
             const found = props.models.find((m) => modelKey(m) === key);
             return found ? (
-              <button key={key} type="button" className="chip" title={key} onClick={() => setQuery(found.name ?? "")}>
+              <button
+                key={key}
+                type="button"
+                className="chip"
+                title={key}
+                onClick={() => setQuery(found.name ?? "")}
+              >
                 {found.name}
               </button>
             ) : null;
@@ -83,7 +95,9 @@ export function ModelManager(props: Props) {
       )}
 
       <div className="drawer-list">
-        {filtered.length === 0 && <div className="drawer-empty">No matching models.</div>}
+        {filtered.length === 0 && (
+          <div className="drawer-empty">No matching models.</div>
+        )}
         {filtered.map((group) => {
           const allKeys = group.models.map(modelKey);
           const allHidden = allKeys.every((k) => props.hidden.includes(k));
@@ -95,12 +109,20 @@ export function ModelManager(props: Props) {
                 <button
                   type="button"
                   className={`chip${allHidden ? "" : " on"}`}
-                  title={allHidden ? "Show all from this provider" : "Hide all from this provider"}
+                  title={
+                    allHidden
+                      ? "Show all from this provider"
+                      : "Hide all from this provider"
+                  }
                   onClick={() =>
                     props.onUpdate([
                       {
                         key: "models.hidden",
-                        value: toggleProviderModels(props.hidden, group.providerID, group.models),
+                        value: toggleProviderModels(
+                          props.hidden,
+                          group.providerID,
+                          group.models,
+                        ),
                       },
                     ])
                   }
@@ -114,12 +136,22 @@ export function ModelManager(props: Props) {
                 const isFav = props.favorites.includes(key);
                 const isDefault = props.defaultKey === key;
                 return (
-                  <div key={key} className={`model-row${isHidden ? " dim" : ""}`}>
+                  <div
+                    key={key}
+                    className={`model-row${isHidden ? " dim" : ""}`}
+                  >
                     <button
                       type="button"
                       className={`rowicon star${isFav ? " on" : ""}`}
                       title={isFav ? "Unstar" : "Star (pin to picker top)"}
-                      onClick={() => props.onUpdate([{ key: "models.favorites", value: toggleInList(props.favorites, key) }])}
+                      onClick={() =>
+                        props.onUpdate([
+                          {
+                            key: "models.favorites",
+                            value: toggleInList(props.favorites, key),
+                          },
+                        ])
+                      }
                     >
                       {isFav ? "★" : "☆"}
                     </button>
@@ -130,10 +162,17 @@ export function ModelManager(props: Props) {
                     <button
                       type="button"
                       className={`rowicon${isDefault ? " on" : ""}`}
-                      title={isDefault ? "Default for new sessions — click to clear" : "Set as default for new sessions"}
+                      title={
+                        isDefault
+                          ? "Default for new sessions — click to clear"
+                          : "Set as default for new sessions"
+                      }
                       onClick={() =>
                         props.onUpdate([
-                          { key: "models.default", value: isDefault ? "" : key },
+                          {
+                            key: "models.default",
+                            value: isDefault ? "" : key,
+                          },
                         ])
                       }
                     >
@@ -144,7 +183,12 @@ export function ModelManager(props: Props) {
                       className={`rowicon eye${isHidden ? " off" : ""}`}
                       title={isHidden ? "Show in picker" : "Hide from picker"}
                       onClick={() =>
-                        props.onUpdate([{ key: "models.hidden", value: toggleInList(props.hidden, key) }])
+                        props.onUpdate([
+                          {
+                            key: "models.hidden",
+                            value: toggleInList(props.hidden, key),
+                          },
+                        ])
                       }
                     >
                       {isHidden ? "🚫" : "👁"}

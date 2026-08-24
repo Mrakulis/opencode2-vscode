@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isInbound } from "../src/protocol";
 import type { ResolvedConfig, SettingKey, WireForm } from "../src/protocol";
 import { THEME_IDS } from "../src/protocol";
 import type { SlashEntry } from "./lib/slash";
@@ -58,7 +57,15 @@ export function App() {
   const [messages, setMessages] = useState<AnyMessage[]>([]);
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
-  const [models, setModels] = useState<Array<{ id: string; providerID: string; name: string; context: number; variants?: Array<{ id: string }> }>>([]);
+  const [models, setModels] = useState<
+    Array<{
+      id: string;
+      providerID: string;
+      name: string;
+      context: number;
+      variants?: Array<{ id: string }>;
+    }>
+  >([]);
   const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sounds, setSounds] = useState(true);
@@ -69,7 +76,9 @@ export function App() {
     } catch {}
     return undefined;
   };
-  const [cfg, setCfg] = useState<ResolvedConfig | undefined>(() => getInitialConfig());
+  const [cfg, setCfg] = useState<ResolvedConfig | undefined>(() =>
+    getInitialConfig(),
+  );
   const [managerOpen, setManagerOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
@@ -77,9 +86,9 @@ export function App() {
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
-  const [serverDefault, setServerDefault] = useState<{ id: string; providerID: string; name?: string } | undefined>(
-    undefined,
-  );
+  const [serverDefault, setServerDefault] = useState<
+    { id: string; providerID: string; name?: string } | undefined
+  >(undefined);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
@@ -87,12 +96,19 @@ export function App() {
     if (!cfg) return;
     document.documentElement.dataset.density = cfg.ui.density;
     document.documentElement.dataset.theme = cfg.ui.theme;
-    if (cfg.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
+    if (cfg.ui.accentTint)
+      document.documentElement.style.setProperty(
+        "--oc2-accent",
+        cfg.ui.accentTint,
+      );
     else document.documentElement.style.removeProperty("--oc2-accent");
     setSounds(cfg.ui.sounds);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const active = useMemo(() => sessions.find((s) => s.id === activeId), [sessions, activeId]);
+  const active = useMemo(
+    () => sessions.find((s) => s.id === activeId),
+    [sessions, activeId],
+  );
   const busy = activeId ? busySessions[activeId] === true : false;
 
   // Keep a ref of activeId so push handlers never go stale.
@@ -106,7 +122,9 @@ export function App() {
   const refreshSessions = useCallback(
     async (all?: boolean) => {
       try {
-        const list = await rpc.call<SessionSummary[]>("session.list", { allProjects: all ?? allProjects });
+        const list = await rpc.call<SessionSummary[]>("session.list", {
+          allProjects: all ?? allProjects,
+        });
         setSessions(list);
         return list;
       } catch {
@@ -118,7 +136,9 @@ export function App() {
 
   const refreshMessages = useCallback(async (sessionId: string) => {
     try {
-      const list = await rpc.call<AnyMessage[]>("messages.list", { sessionID: sessionId });
+      const list = await rpc.call<AnyMessage[]>("messages.list", {
+        sessionID: sessionId,
+      });
       setMessages(list);
     } catch {
       /* transient */
@@ -128,14 +148,30 @@ export function App() {
   const refreshPickers = useCallback(async () => {
     try {
       const [m, a, def] = await Promise.all([
-        rpc.call<Array<{ id: string; providerID: string; name: string; context: number; variants?: Array<{ id: string }> }>>("models.list"),
+        rpc.call<
+          Array<{
+            id: string;
+            providerID: string;
+            name: string;
+            context: number;
+            variants?: Array<{ id: string }>;
+          }>
+        >("models.list"),
         rpc.call<{ id: string; name: string }[]>("agents.list"),
-        rpc.call<{ id?: string; providerID?: string; name?: string } | null>("models.default").catch(() => null),
+        rpc
+          .call<{ id?: string; providerID?: string; name?: string } | null>(
+            "models.default",
+          )
+          .catch(() => null),
       ]);
       setModels(m);
       setAgents(a);
       if (def?.id && def?.providerID) {
-        setServerDefault({ id: def.id, providerID: def.providerID, name: def.name });
+        setServerDefault({
+          id: def.id,
+          providerID: def.providerID,
+          name: def.name,
+        });
       }
     } catch {
       /* not connected yet */
@@ -145,9 +181,21 @@ export function App() {
   const refreshPendingPermissions = useCallback(async () => {
     try {
       const pending = (await rpc.call<
-        Array<{ data?: { id: string; sessionID: string; action: string; resources?: string[] } }>
+        Array<{
+          data?: {
+            id: string;
+            sessionID: string;
+            action: string;
+            resources?: string[];
+          };
+        }>
       >("permissions.pending")) as unknown as {
-        data?: Array<{ id: string; sessionID: string; action: string; resources?: string[] }>;
+        data?: Array<{
+          id: string;
+          sessionID: string;
+          action: string;
+          resources?: string[];
+        }>;
       };
       const rows = pending.data ?? [];
       setPermissions(
@@ -177,8 +225,11 @@ export function App() {
   /** Re-fetch pending agent form requests (all sessions; UI filters by visibility). */
   const refreshForms = useCallback(async () => {
     try {
-      const rows = await rpc.call<Array<Record<string, unknown>>>("forms.pending");
-      const wires = rows.map(toWireFormClient).filter((f): f is WireForm => f !== undefined);
+      const rows =
+        await rpc.call<Array<Record<string, unknown>>>("forms.pending");
+      const wires = rows
+        .map(toWireFormClient)
+        .filter((f): f is WireForm => f !== undefined);
       setForms(wires);
     } catch {
       /* transient */
@@ -220,7 +271,10 @@ export function App() {
           document.documentElement.dataset.density = msg.config.ui.density;
           document.documentElement.dataset.theme = msg.config.ui.theme;
           if (msg.config.ui.accentTint) {
-            document.documentElement.style.setProperty("--oc2-accent", msg.config.ui.accentTint);
+            document.documentElement.style.setProperty(
+              "--oc2-accent",
+              msg.config.ui.accentTint,
+            );
           } else {
             document.documentElement.style.removeProperty("--oc2-accent");
           }
@@ -272,11 +326,14 @@ export function App() {
           break;
         }
         case "form": {
-          setForms((list) => (list.some((f) => f.id === msg.form.id) ? list : [...list, msg.form]));
+          setForms((list) =>
+            list.some((f) => f.id === msg.form.id) ? list : [...list, msg.form],
+          );
           break;
         }
         case "event": {
-          const evt = msg.event as { type?: string; data?: { sessionID?: string } } | undefined;
+          const evt = msg.event as
+            { type?: string; data?: { sessionID?: string } } | undefined;
           if (!evt?.type) break;
           const sid = evt.data?.sessionID;
 
@@ -290,7 +347,11 @@ export function App() {
             evt.type === "session.execution.succeeded" ||
             evt.type === "session.execution.failed" ||
             evt.type === "session.execution.interrupted";
-          if ((isTerminal || evt.type === "session.idle") && sounds && sid === activeIdRef.current) {
+          if (
+            (isTerminal || evt.type === "session.idle") &&
+            sounds &&
+            sid === activeIdRef.current
+          ) {
             if (isTerminal) chime("done");
           }
 
@@ -300,29 +361,29 @@ export function App() {
             // Deltas are applied immediately below (no refetch); everything else
             // refreshes through the debounced REST path.
             clearTimeout(sessionTimer);
-            sessionTimer = setTimeout(
-              () => {
-                for (const a of actions) {
-                  if (a === "sessions") void refreshSessions();
-                  if (a === "pickers") void refreshPickers();
-                  if (a === "permissions") void refreshPendingPermissions();
-                  if (a === "forms") void refreshForms();
-                  if (a === "mcp") setMcpTick((t) => t + 1);
-                  if (a === "providers") setProvidersTick((t) => t + 1);
-                  if (a === "vcs") void refreshVcs();
-                  if (a === "worktrees") setWorktreeTick((t) => t + 1);
-                  if (a === "instructions") setInstructionsTick((t) => t + 1);
-                  if (a === "commands") void reloadSlash();
-                }
-              },
-              150,
-            );
+            sessionTimer = setTimeout(() => {
+              for (const a of actions) {
+                if (a === "sessions") void refreshSessions();
+                if (a === "pickers") void refreshPickers();
+                if (a === "permissions") void refreshPendingPermissions();
+                if (a === "forms") void refreshForms();
+                if (a === "mcp") setMcpTick((t) => t + 1);
+                if (a === "providers") setProvidersTick((t) => t + 1);
+                if (a === "vcs") void refreshVcs();
+                if (a === "worktrees") setWorktreeTick((t) => t + 1);
+                if (a === "instructions") setInstructionsTick((t) => t + 1);
+                if (a === "commands") void reloadSlash();
+              }
+            }, 150);
           }
 
           if (sid && sid === activeIdRef.current) {
             const wantsMessages = actions.includes("messages");
             // Try the incremental accumulator first for a smooth stream.
-            const merged = applyDelta(messagesRef.current, { type: evt.type, data: evt.data as DeltaEvent["data"] });
+            const merged = applyDelta(messagesRef.current, {
+              type: evt.type,
+              data: evt.data as DeltaEvent["data"],
+            });
             if (merged) {
               messagesRef.current = merged;
               setMessages(merged);
@@ -330,7 +391,10 @@ export function App() {
               clearTimeout(messageTimer);
               messageTimer = setTimeout(() => void refreshMessages(sid), 120);
             }
-            if (evt.type === "session.execution.started" || evt.type === "session.status.updated") {
+            if (
+              evt.type === "session.execution.started" ||
+              evt.type === "session.status.updated"
+            ) {
               setBusySessions((b) => ({ ...b, [sid]: true }));
             }
             if (
@@ -347,7 +411,9 @@ export function App() {
             const data = evt.data as unknown as PermissionCardData | undefined;
             if (data?.sessionID && data.requestID) {
               setPermissions((list) =>
-                list.some((p) => p.requestID === data.requestID) ? list : [...list, data],
+                list.some((p) => p.requestID === data.requestID)
+                  ? list
+                  : [...list, data],
               );
             }
           }
@@ -373,7 +439,15 @@ export function App() {
       clearTimeout(sessionTimer);
       clearTimeout(messageTimer);
     };
-  }, [refreshSessions, refreshMessages, refreshPickers, refreshPendingPermissions, refreshForms, selectSession, sounds]);
+  }, [
+    refreshSessions,
+    refreshMessages,
+    refreshPickers,
+    refreshPendingPermissions,
+    refreshForms,
+    selectSession,
+    sounds,
+  ]);
 
   // Report the visible session so host notifications skip it.
   useEffect(() => {
@@ -390,19 +464,31 @@ export function App() {
 
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
-    async (text: string, files?: Array<{ uri: string; name?: string }>, delivery?: "queue") => {
+    async (
+      text: string,
+      files?: Array<{ uri: string; name?: string }>,
+      delivery?: "queue",
+    ) => {
       if (!activeId || (!text.trim() && (!files || files.length === 0))) return;
       const optimistic: Extract<AnyMessage, { type: "user" }> = {
         type: "user",
         id: `pending-${Date.now()}`,
-        text: text || (files?.length ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}` : ""),
+        text:
+          text ||
+          (files?.length
+            ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}`
+            : ""),
         time: { created: Date.now() },
       };
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [activeId]: true }));
       try {
-        const params: Record<string, unknown> = { sessionID: activeId, text: text || "" };
-        if (files && files.length) (params as Record<string, unknown>).files = files;
+        const params: Record<string, unknown> = {
+          sessionID: activeId,
+          text: text || "",
+        };
+        if (files && files.length)
+          (params as Record<string, unknown>).files = files;
         if (delivery) params.delivery = delivery;
         await rpc.call("prompt.send", params);
       } catch (error) {
@@ -423,19 +509,25 @@ export function App() {
     }
   }, [activeId]);
 
-  const updateSettings = useCallback(async (updates: Array<{ key: SettingKey; value: unknown }>) => {
-    try {
-      await rpc.call("settings.update", { updates });
-      // host pushes the fresh config automatically on settings change
-    } catch {
-      /* config push will reflect reality */
-    }
-  }, []);
+  const updateSettings = useCallback(
+    async (updates: Array<{ key: SettingKey; value: unknown }>) => {
+      try {
+        await rpc.call("settings.update", { updates });
+        // host pushes the fresh config automatically on settings change
+      } catch {
+        /* config push will reflect reality */
+      }
+    },
+    [],
+  );
 
   const newSession = useCallback(async () => {
     try {
       const def = resolveDefault(cfg?.models.default ?? "", serverDefault);
-      const session = await rpc.call<SessionSummary>("session.create", def ? { model: def } : {});
+      const session = await rpc.call<SessionSummary>(
+        "session.create",
+        def ? { model: def } : {},
+      );
       await refreshSessions();
       selectSession(session.id);
       setDrawerOpen(false);
@@ -448,11 +540,16 @@ export function App() {
   const exportSession = useCallback(async () => {
     if (!activeId) return;
     try {
-      const data = await rpc.call<unknown>("session.export", { sessionID: activeId });
-      const res = await rpc.call<{ saved: boolean; path?: string }>("dialog.saveText", {
-        content: JSON.stringify(data, null, 2),
-        suggestedName: `${(active?.title ?? "session").replace(/[^\w.-]+/g, "_")}.json`,
+      const data = await rpc.call<unknown>("session.export", {
+        sessionID: activeId,
       });
+      const res = await rpc.call<{ saved: boolean; path?: string }>(
+        "dialog.saveText",
+        {
+          content: JSON.stringify(data, null, 2),
+          suggestedName: `${(active?.title ?? "session").replace(/[^\w.-]+/g, "_")}.json`,
+        },
+      );
       if (!res.saved && res.path === undefined) return; // user cancelled
     } catch (e) {
       void e; // surfaced by rpc error path
@@ -465,7 +562,11 @@ export function App() {
     const lastAssistant = [...messagesRef.current].reverse().find(isAssistant);
     if (!lastAssistant) return;
     try {
-      await rpc.call("session.revert.stage", { sessionID: activeId, messageID: lastAssistant.id, files: true });
+      await rpc.call("session.revert.stage", {
+        sessionID: activeId,
+        messageID: lastAssistant.id,
+        files: true,
+      });
       await rpc.call("session.revert.commit", { sessionID: activeId });
       revertTargetRef.current = lastAssistant.id;
     } catch {
@@ -482,7 +583,11 @@ export function App() {
     const lastAssistant = [...messagesRef.current].reverse().find(isAssistant);
     if (!lastAssistant || lastAssistant.id === revertTargetRef.current) return;
     try {
-      await rpc.call("session.revert.stage", { sessionID: activeId, messageID: lastAssistant.id, files: true });
+      await rpc.call("session.revert.stage", {
+        sessionID: activeId,
+        messageID: lastAssistant.id,
+        files: true,
+      });
       await rpc.call("session.revert.commit", { sessionID: activeId });
     } catch {
       /* surfaced via refresh */
@@ -497,7 +602,9 @@ export function App() {
       });
       if (!text) return; // cancelled
       const payload = JSON.parse(text) as unknown;
-      const created = await rpc.call<{ id: string }>("session.import", { payload });
+      const created = await rpc.call<{ id: string }>("session.import", {
+        payload,
+      });
       await refreshSessions();
       if (created?.id) selectSession(created.id);
     } catch (e) {
@@ -510,7 +617,10 @@ export function App() {
   const openWorkingDiff = useCallback(async () => {
     try {
       const diff = await rpc.call<string>("vcs.diff", { mode: "working" });
-      await rpc.call("diff.open", { file: "working-tree", diff: diff || "(no changes)" });
+      await rpc.call("diff.open", {
+        file: "working-tree",
+        diff: diff || "(no changes)",
+      });
     } catch {
       /* surfaced by state */
     }
@@ -518,7 +628,7 @@ export function App() {
 
   const cycleTheme = useCallback(() => {
     const current = cfg?.ui.theme ?? "dark";
-    const idx = THEME_IDS.indexOf(current as typeof THEME_IDS[number]);
+    const idx = THEME_IDS.indexOf(current as (typeof THEME_IDS)[number]);
     const next = THEME_IDS[(idx + 1) % THEME_IDS.length] ?? "dark";
     void updateSettings([{ key: "ui.theme", value: next }]);
   }, [cfg?.ui.theme, updateSettings]);
@@ -526,37 +636,103 @@ export function App() {
   /** Client-side builtins surfaced in the slash menu — the official apps
    * hard-code these; the V2 API does not serve them. Each maps to a real
    * GUI action that already exists here. */
-  const slashBuiltins = useMemo<SlashEntry[]>(() => [
-    { kind: "command", name: "new", description: "Start a new session", local: true, run: () => void newSession() },
-    { kind: "command", name: "sessions", description: "Open the sessions drawer", local: true, run: () => setDrawerOpen(true) },
-    { kind: "command", name: "models", description: "Open the model manager", local: true, run: () => setManagerOpen(true) },
-    {
-      kind: "command",
-      name: "compact",
-      description: "Compact the current session",
-      local: true,
-      run: () => {
-        if (activeId) void rpc.call("session.compact", { sessionID: activeId }).catch(() => undefined);
+  const slashBuiltins = useMemo<SlashEntry[]>(
+    () => [
+      {
+        kind: "command",
+        name: "new",
+        description: "Start a new session",
+        local: true,
+        run: () => void newSession(),
       },
-    },
-    { kind: "command", name: "undo", description: "Undo last turn + revert files", local: true, run: () => void undoLastTurn() },
-    { kind: "command", name: "redo", description: "Redo the reverted turn", local: true, run: () => void redoRevert() },
-    { kind: "command", name: "export", description: "Export session as JSON", local: true, run: () => void exportSession() },
-    { kind: "command", name: "import", description: "Import a session export", local: true, run: () => void importSessionFile() },
-    {
-      kind: "command",
-      name: "thinking",
-      description: "Cycle reasoning visibility (hidden → collapsed → expanded)",
-      local: true,
-      run: () => {
-        const order = ["hide", "collapsed", "expanded"] as const;
-        const cur = cfg?.ui.showReasoning ?? "collapsed";
-        const next = order[(order.indexOf(cur) + 1) % order.length]!;
-        void updateSettings([{ key: "ui.showReasoning", value: next }]);
+      {
+        kind: "command",
+        name: "sessions",
+        description: "Open the sessions drawer",
+        local: true,
+        run: () => setDrawerOpen(true),
       },
-    },
-    { kind: "command", name: "themes", description: `Cycle theme (current: ${cfg?.ui.theme ?? "dark"})`, local: true, run: cycleTheme },
-  ], [newSession, activeId, undoLastTurn, redoRevert, exportSession, importSessionFile, cfg?.ui.showReasoning, cfg?.ui.theme, updateSettings, cycleTheme]);
+      {
+        kind: "command",
+        name: "models",
+        description: "Open the model manager",
+        local: true,
+        run: () => setManagerOpen(true),
+      },
+      {
+        kind: "command",
+        name: "compact",
+        description: "Compact the current session",
+        local: true,
+        run: () => {
+          if (activeId)
+            void rpc
+              .call("session.compact", { sessionID: activeId })
+              .catch(() => undefined);
+        },
+      },
+      {
+        kind: "command",
+        name: "undo",
+        description: "Undo last turn + revert files",
+        local: true,
+        run: () => void undoLastTurn(),
+      },
+      {
+        kind: "command",
+        name: "redo",
+        description: "Redo the reverted turn",
+        local: true,
+        run: () => void redoRevert(),
+      },
+      {
+        kind: "command",
+        name: "export",
+        description: "Export session as JSON",
+        local: true,
+        run: () => void exportSession(),
+      },
+      {
+        kind: "command",
+        name: "import",
+        description: "Import a session export",
+        local: true,
+        run: () => void importSessionFile(),
+      },
+      {
+        kind: "command",
+        name: "thinking",
+        description:
+          "Cycle reasoning visibility (hidden → collapsed → expanded)",
+        local: true,
+        run: () => {
+          const order = ["hide", "collapsed", "expanded"] as const;
+          const cur = cfg?.ui.showReasoning ?? "collapsed";
+          const next = order[(order.indexOf(cur) + 1) % order.length]!;
+          void updateSettings([{ key: "ui.showReasoning", value: next }]);
+        },
+      },
+      {
+        kind: "command",
+        name: "themes",
+        description: `Cycle theme (current: ${cfg?.ui.theme ?? "dark"})`,
+        local: true,
+        run: cycleTheme,
+      },
+    ],
+    [
+      newSession,
+      activeId,
+      undoLastTurn,
+      redoRevert,
+      exportSession,
+      importSessionFile,
+      cfg?.ui.showReasoning,
+      cfg?.ui.theme,
+      updateSettings,
+      cycleTheme,
+    ],
+  );
 
   const replyPermission = useCallback(
     async (requestID: string, reply: "once" | "always" | "reject") => {
@@ -588,35 +764,32 @@ export function App() {
   }, [permissions, permissionMode, replyPermission]);
 
   // ---- derived -------------------------------------------------------------
-  const lastAssistant = useMemo(() => [...messages].reverse().find(isAssistant), [messages]);
+  const lastAssistant = useMemo(
+    () => [...messages].reverse().find(isAssistant),
+    [messages],
+  );
   const effectiveModel =
-    (active as unknown as { model?: { id: string; providerID: string; variant?: string } })?.model ??
+    (
+      active as unknown as {
+        model?: { id: string; providerID: string; variant?: string };
+      }
+    )?.model ??
     lastAssistant?.model ??
     serverDefault ??
     undefined;
   const ctxLimit = useMemo(() => {
     const ref = effectiveModel;
     if (!ref) return undefined;
-    const hit = models.find((m) => m.id === ref.id && m.providerID === ref.providerID) as unknown as
-      | { context?: number; limit?: { context?: number } }
-      | undefined;
+    const hit = models.find(
+      (m) => m.id === ref.id && m.providerID === ref.providerID,
+    ) as unknown as
+      { context?: number; limit?: { context?: number } } | undefined;
     return hit?.context ?? hit?.limit?.context;
   }, [effectiveModel, models]);
   const ctxPct = useMemo(
     () => contextPercent(lastAssistant?.tokens ?? active?.tokens, ctxLimit),
     [lastAssistant, active, ctxLimit],
   );
-
-  const lastAssistantText = useMemo(() => {
-    const m = [...messages].reverse().find(isAssistant) as unknown as
-      | { content?: Array<{ type: string; text?: string }> }
-      | undefined;
-    const texts = m?.content?.filter((p) => p.type === "text").map((p) => p.text ?? "") ?? [];
-    return texts.join("\n");
-  }, [messages]);
-  // Real V2 "question" permissions render as a card below; the old regex-based
-  // text heuristic was removed now that structured forms (form.*) are wired.
-  const questionPerm = useMemo(() => permissions.find((p) => p.action.toLowerCase() === "question"), [permissions]);
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
@@ -629,14 +802,22 @@ export function App() {
     // CSS owns the plan accent via [data-plan="true"]; JS only manages accentTint.
     document.documentElement.dataset.plan = isPlan ? "true" : "false";
     if (!isPlan) {
-      if (cfg?.ui.accentTint) document.documentElement.style.setProperty("--oc2-accent", cfg.ui.accentTint);
+      if (cfg?.ui.accentTint)
+        document.documentElement.style.setProperty(
+          "--oc2-accent",
+          cfg.ui.accentTint,
+        );
       else document.documentElement.style.removeProperty("--oc2-accent");
     }
   }, [isPlan, cfg?.ui.accentTint]);
 
   return (
     <div className="app">
-      <div className="busy-bar" data-busy={busy ? "true" : "false"} aria-hidden />
+      <div
+        className="busy-bar"
+        data-busy={busy ? "true" : "false"}
+        aria-hidden
+      />
       <HeaderBar
         conn={conn}
         title={active?.title}
@@ -650,7 +831,10 @@ export function App() {
         drawerOpen={drawerOpen}
         onToggleDrawer={() => setDrawerOpen((v) => !v)}
         onRename={async (title) => {
-          if (activeId) await rpc.call("session.rename", { sessionID: activeId, title }).catch(() => undefined);
+          if (activeId)
+            await rpc
+              .call("session.rename", { sessionID: activeId, title })
+              .catch(() => undefined);
           void refreshSessions();
         }}
         onOpenManager={() => setManagerOpen(true)}
@@ -666,11 +850,18 @@ export function App() {
         onUndo={() => void undoLastTurn()}
         onRedo={() => void redoRevert()}
         onOpenWorkingDiff={() => void openWorkingDiff()}
-        onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
+        onOpenSettings={() =>
+          void rpc.call("settings.open").catch(() => undefined)
+        }
         theme={cfg?.ui.theme ?? "dark"}
         themes={THEME_IDS.map((id) => ({
           id,
-          label: id === "dark" ? "OpenCode Dark" : id === "light" ? "OpenCode Light" : id.charAt(0).toUpperCase() + id.slice(1),
+          label:
+            id === "dark"
+              ? "OpenCode Dark"
+              : id === "light"
+                ? "OpenCode Light"
+                : id.charAt(0).toUpperCase() + id.slice(1),
         }))}
         onToggleTheme={(id) => {
           if (id) {
@@ -689,14 +880,19 @@ export function App() {
         }}
         onFork={async () => {
           if (!activeId) return;
-          const forked = await rpc.call<SessionSummary>("session.fork", { sessionID: activeId }).catch(() => undefined);
+          const forked = await rpc
+            .call<SessionSummary>("session.fork", { sessionID: activeId })
+            .catch(() => undefined);
           if (forked) {
             await refreshSessions();
             selectSession(forked.id);
           }
         }}
         onCompact={async () => {
-          if (activeId) await rpc.call("session.compact", { sessionID: activeId }).catch(() => undefined);
+          if (activeId)
+            await rpc
+              .call("session.compact", { sessionID: activeId })
+              .catch(() => undefined);
         }}
       />
 
@@ -712,14 +908,21 @@ export function App() {
               <>
                 <h2>Service unreachable</h2>
                 {connDetail && <code className="err-detail">{connDetail}</code>}
-                <p>Run “OpenCode 2: Restart Background Service” from the command palette.</p>
+                <p>
+                  Run “OpenCode 2: Restart Background Service” from the command
+                  palette.
+                </p>
               </>
             )}
           </div>
         ) : !activeId ? (
           <div className="empty">
             <h2>No sessions yet</h2>
-            <button type="button" className="primary" onClick={() => void newSession()}>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void newSession()}
+            >
               New session
             </button>
           </div>
@@ -751,14 +954,20 @@ export function App() {
             }}
             onNew={() => void newSession()}
             onDelete={async (id) => {
-              await rpc.call("session.remove", { sessionID: id }).catch(() => undefined);
+              await rpc
+                .call("session.remove", { sessionID: id })
+                .catch(() => undefined);
               if (id === activeId) selectSession(undefined);
               await refreshSessions();
             }}
             onMove={async (id) => {
-              const dir = await rpc.call<string | undefined>("pick.folder").catch(() => undefined);
+              const dir = await rpc
+                .call<string | undefined>("pick.folder")
+                .catch(() => undefined);
               if (!dir) return;
-              await rpc.call("session.move", { sessionID: id, directory: dir }).catch(() => undefined);
+              await rpc
+                .call("session.move", { sessionID: id, directory: dir })
+                .catch(() => undefined);
               await refreshSessions();
             }}
           />
@@ -776,15 +985,33 @@ export function App() {
           />
         )}
 
-        {providersOpen && <ProvidersDrawer onClose={() => setProvidersOpen(false)} refreshTick={providersTick} />}
-
-        {mcpOpen && <McpDrawer onClose={() => setMcpOpen(false)} refreshTick={mcpTick} />}
-
-        {savedPermsOpen && <SavedPermissionsDrawer onClose={() => setSavedPermsOpen(false)} />}
-        {instructionsOpen && activeId && (
-          <InstructionsDrawer sessionId={activeId} onClose={() => setInstructionsOpen(false)} />
+        {providersOpen && (
+          <ProvidersDrawer
+            onClose={() => setProvidersOpen(false)}
+            refreshTick={providersTick}
+          />
         )}
-        {worktreesOpen && <WorktreesDrawer onClose={() => setWorktreesOpen(false)} />}
+
+        {mcpOpen && (
+          <McpDrawer onClose={() => setMcpOpen(false)} refreshTick={mcpTick} />
+        )}
+
+        {savedPermsOpen && (
+          <SavedPermissionsDrawer onClose={() => setSavedPermsOpen(false)} />
+        )}
+        {instructionsOpen && activeId && (
+          <InstructionsDrawer
+            sessionId={activeId}
+            refreshTick={instructionsTick}
+            onClose={() => setInstructionsOpen(false)}
+          />
+        )}
+        {worktreesOpen && (
+          <WorktreesDrawer
+            refreshTick={worktreeTick}
+            onClose={() => setWorktreesOpen(false)}
+          />
+        )}
       </main>
 
       {actionError && (
@@ -802,18 +1029,21 @@ export function App() {
       )}
 
       {permissionMode === "askFirst" &&
-        permissions.filter((p) => p.action.toLowerCase() !== "question").length > 0 &&
+        permissions.filter((p) => p.action.toLowerCase() !== "question")
+          .length > 0 &&
         activeId && (
           <div className="permissions">
             {permissions
               .filter((p) => p.action.toLowerCase() !== "question")
               .map((p) => (
-                <PermissionRow key={p.requestID} perm={p} onReply={(r) => void replyPermission(p.requestID, r)} />
+                <PermissionRow
+                  key={p.requestID}
+                  perm={p}
+                  onReply={(r) => void replyPermission(p.requestID, r)}
+                />
               ))}
           </div>
         )}
-
-
 
       <Composer
         disabled={!activeId || conn !== "connected"}
@@ -826,7 +1056,11 @@ export function App() {
           if (!activeId) return;
           setBusySessions((b) => ({ ...b, [activeId]: true }));
           try {
-            await rpc.call("session.command", { sessionID: activeId, command, args });
+            await rpc.call("session.command", {
+              sessionID: activeId,
+              command,
+              args,
+            });
           } catch (e) {
             setBusySessions((b) => ({ ...b, [activeId]: false }));
             throw e;
@@ -853,15 +1087,26 @@ export function App() {
         recents={recents}
         activeModel={effectiveModel}
         permissionMode={permissionMode}
-        onPickPermissionMode={(mode) => void updateSettings([{ key: "permissions.mode", value: mode }])}
+        onPickPermissionMode={(mode) =>
+          void updateSettings([{ key: "permissions.mode", value: mode }])
+        }
         onPickModel={async (m) => {
           const key = modelKey(m);
           setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
           if (activeId) {
             setSessions((prev) =>
-              prev.map((s) => (s.id === activeId ? ({ ...s, model: { id: m.id, providerID: m.providerID } } as SessionSummary) : s)),
+              prev.map((s) =>
+                s.id === activeId
+                  ? ({
+                      ...s,
+                      model: { id: m.id, providerID: m.providerID },
+                    } as SessionSummary)
+                  : s,
+              ),
             );
-            await rpc.call("model.switch", { sessionID: activeId, model: m }).catch(() => undefined);
+            await rpc
+              .call("model.switch", { sessionID: activeId, model: m })
+              .catch(() => undefined);
           }
           void refreshSessions();
         }}
@@ -872,28 +1117,49 @@ export function App() {
               ? { id: am.id, providerID: am.providerID, variant }
               : { id: am.id, providerID: am.providerID };
             setSessions((prev) =>
-              prev.map((s) => (s.id === activeId ? ({ ...s, model: nextModel } as SessionSummary) : s)),
+              prev.map((s) =>
+                s.id === activeId
+                  ? ({ ...s, model: nextModel } as SessionSummary)
+                  : s,
+              ),
             );
-            await rpc.call("model.switch", {
-              sessionID: activeId,
-              model: { id: am.id, providerID: am.providerID, variant },
-            }).catch(() => undefined);
+            await rpc
+              .call("model.switch", {
+                sessionID: activeId,
+                model: { id: am.id, providerID: am.providerID, variant },
+              })
+              .catch(() => undefined);
           }
           void refreshSessions();
         }}
         onPickAgent={async (a) => {
           if (activeId) {
-            await rpc.call("agent.switch", { sessionID: activeId, agent: a }).catch(() => undefined);
+            await rpc
+              .call("agent.switch", { sessionID: activeId, agent: a })
+              .catch(() => undefined);
           }
           void refreshSessions();
         }}
         onToggleFavorite={(key) =>
-          void updateSettings([{ key: "models.favorites", value: toggleInList(cfg?.models.favorites ?? [], key) }])
+          void updateSettings([
+            {
+              key: "models.favorites",
+              value: toggleInList(cfg?.models.favorites ?? [], key),
+            },
+          ])
         }
         onOpenManager={() => setManagerOpen(true)}
       />
 
-      {conn === "connected" && <StatusStrip connected cost={active?.cost} tokens={active?.tokens} ctxPct={ctxPct} ctxLimit={ctxLimit} />}
+      {conn === "connected" && (
+        <StatusStrip
+          connected
+          cost={active?.cost}
+          tokens={active?.tokens}
+          ctxPct={ctxPct}
+          ctxLimit={ctxLimit}
+        />
+      )}
     </div>
   );
 }
@@ -907,7 +1173,8 @@ function PermissionRow({
 }) {
   const kind = perm.action.toLowerCase().includes("shell")
     ? "shell"
-    : perm.action.toLowerCase().includes("edit") || perm.action.toLowerCase().includes("write")
+    : perm.action.toLowerCase().includes("edit") ||
+        perm.action.toLowerCase().includes("write")
       ? "edit"
       : perm.action.toLowerCase().includes("read")
         ? "read"
@@ -934,7 +1201,10 @@ function PermissionRow({
         <span>Permission required</span>
       </div>
       {perm.resources.length > 0 ? (
-        <div className="perm-resources" style={{ maxHeight: "160px", overflowY: "auto", paddingRight: "4px" }}>
+        <div
+          className="perm-resources"
+          style={{ maxHeight: "160px", overflowY: "auto", paddingRight: "4px" }}
+        >
           {perm.resources.map((r, i) => (
             <code key={i} className="perm-res">
               {r}
@@ -944,14 +1214,35 @@ function PermissionRow({
       ) : (
         <div className="perm-hint">Agent wants to perform this action.</div>
       )}
-      <div className="perm-actions" style={{ borderTop: "1px solid var(--oc2-border)", paddingTop: "8px", marginTop: "4px" }}>
-        <button type="button" className="danger" onClick={() => onReply("reject")} title="Deny (Esc)">
+      <div
+        className="perm-actions"
+        style={{
+          borderTop: "1px solid var(--oc2-border)",
+          paddingTop: "8px",
+          marginTop: "4px",
+        }}
+      >
+        <button
+          type="button"
+          className="danger"
+          onClick={() => onReply("reject")}
+          title="Deny (Esc)"
+        >
           Reject
         </button>
-        <button type="button" onClick={() => onReply("always")} title="Always allow — saves pattern for this project">
+        <button
+          type="button"
+          onClick={() => onReply("always")}
+          title="Always allow — saves pattern for this project"
+        >
           Allow always
         </button>
-        <button type="button" className="primary" onClick={() => onReply("once")} title="Allow this time (Enter)">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => onReply("once")}
+          title="Allow this time (Enter)"
+        >
           Allow once
         </button>
       </div>
@@ -965,28 +1256,42 @@ function mostRecentSession(list: SessionSummary[]): SessionSummary | undefined {
 
 /** Client-side mirror of the host's toWireForm normalization. */
 function toWireFormClient(raw: Record<string, unknown>): WireForm | undefined {
-  if (typeof raw.id !== "string" || typeof raw.sessionID !== "string") return undefined;
+  if (typeof raw.id !== "string" || typeof raw.sessionID !== "string")
+    return undefined;
   const fieldsRaw = Array.isArray(raw.fields) ? raw.fields : [];
   return {
     id: raw.id,
     sessionID: raw.sessionID,
     title: typeof raw.title === "string" ? raw.title : "Agent input",
     fields: fieldsRaw
-      .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null && typeof (f as Record<string, unknown>).key === "string")
+      .filter(
+        (f): f is Record<string, unknown> =>
+          typeof f === "object" &&
+          f !== null &&
+          typeof (f as Record<string, unknown>).key === "string",
+      )
       .map((f) => ({
         key: f.key as string,
         title: typeof f.title === "string" ? f.title : (f.key as string),
-        description: typeof f.description === "string" ? f.description : undefined,
+        description:
+          typeof f.description === "string" ? f.description : undefined,
         required: f.required === true,
         type: typeof f.type === "string" ? f.type : "string",
         options: Array.isArray(f.options)
           ? (f.options as Array<Record<string, unknown>>).map((o) => ({
-              label: typeof o.label === "string" ? o.label : String(o.value ?? ""),
+              label:
+                typeof o.label === "string" ? o.label : String(o.value ?? ""),
               value: o.value as string | number | boolean | undefined,
             }))
           : undefined,
-        default: typeof f.default === "string" || typeof f.default === "number" || typeof f.default === "boolean" ? f.default : undefined,
-        placeholder: typeof f.placeholder === "string" ? f.placeholder : undefined,
+        default:
+          typeof f.default === "string" ||
+          typeof f.default === "number" ||
+          typeof f.default === "boolean"
+            ? f.default
+            : undefined,
+        placeholder:
+          typeof f.placeholder === "string" ? f.placeholder : undefined,
       })),
   };
 }
@@ -998,12 +1303,18 @@ function buildTranscript(messages: AnyMessage[]): string {
     if (isUser(m)) {
       lines.push(`## 🧑 Prompt\n\n${m.text}\n`);
     } else if (isAssistant(m)) {
-      lines.push(`## 🤖 ${m.agent}${m.model ? ` (${m.model.providerID}/${m.model.id})` : ""}\n`);
+      lines.push(
+        `## 🤖 ${m.agent}${m.model ? ` (${m.model.providerID}/${m.model.id})` : ""}\n`,
+      );
       for (const part of m.content ?? []) {
         if (part.type === "text") lines.push(`${part.text}\n`);
-        if (part.type === "reasoning") lines.push(`> _thinking:_ ${truncate(part.text, 400)}\n`);
+        if (part.type === "reasoning")
+          lines.push(`> _thinking:_ ${truncate(part.text, 400)}\n`);
       }
-      if (m.cost !== undefined) lines.push(`_cost: ${formatCost(m.cost)} · ${formatTokens(m.tokens?.input)} in / ${formatTokens(m.tokens?.output)} out_\n`);
+      if (m.cost !== undefined)
+        lines.push(
+          `_cost: ${formatCost(m.cost)} · ${formatTokens(m.tokens?.input)} in / ${formatTokens(m.tokens?.output)} out_\n`,
+        );
     }
   }
   return lines.join("\n");

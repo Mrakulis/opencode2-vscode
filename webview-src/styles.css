@@ -340,7 +340,12 @@ button:focus-visible {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, var(--oc2-accent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--oc2-accent),
+    transparent
+  );
   animation: busy-shimmer 1.2s infinite;
 }
 @keyframes busy-shimmer {
@@ -1587,9 +1592,18 @@ button:focus-visible {
   color: var(--oc2-fg-muted);
   text-transform: lowercase;
 }
-.oc2-pop-badge.skill { color: var(--oc2-skill); border-color: var(--oc2-skill); }
-.oc2-pop-badge.gui { color: var(--oc2-link); border-color: var(--oc2-link); }
-.oc2-pop-badge.file { color: var(--oc2-link); border-color: var(--oc2-link); }
+.oc2-pop-badge.skill {
+  color: var(--oc2-skill);
+  border-color: var(--oc2-skill);
+}
+.oc2-pop-badge.gui {
+  color: var(--oc2-link);
+  border-color: var(--oc2-link);
+}
+.oc2-pop-badge.file {
+  color: var(--oc2-link);
+  border-color: var(--oc2-link);
+}
 .oc2-pop-name {
   font-weight: 600;
   white-space: nowrap;

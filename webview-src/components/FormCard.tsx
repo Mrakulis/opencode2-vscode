@@ -7,7 +7,9 @@ import { rpc } from "../lib/rpc";
  * Replaces the old regex-based "is this a question?" heuristic.
  */
 export function FormCard({ form }: { form: WireForm }) {
-  const [values, setValues] = useState<Record<string, string | number | boolean>>(() => {
+  const [values, setValues] = useState<
+    Record<string, string | number | boolean>
+  >(() => {
     const init: Record<string, string | number | boolean> = {};
     for (const f of form.fields) {
       if (f.default !== undefined) init[f.key] = f.default;
@@ -17,14 +19,20 @@ export function FormCard({ form }: { form: WireForm }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  const missing = form.fields.filter((f) => f.required && (values[f.key] === undefined || values[f.key] === ""));
+  const missing = form.fields.filter(
+    (f) => f.required && (values[f.key] === undefined || values[f.key] === ""),
+  );
 
   const submit = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     setError(undefined);
     try {
-      await rpc.call("form.reply", { sessionID: form.sessionID, formID: form.id, answer: values });
+      await rpc.call("form.reply", {
+        sessionID: form.sessionID,
+        formID: form.id,
+        answer: values,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -36,7 +44,10 @@ export function FormCard({ form }: { form: WireForm }) {
     if (busy) return;
     setBusy(true);
     try {
-      await rpc.call("form.cancel", { sessionID: form.sessionID, formID: form.id });
+      await rpc.call("form.cancel", {
+        sessionID: form.sessionID,
+        formID: form.id,
+      });
     } catch {
       /* best-effort */
     } finally {
@@ -45,11 +56,18 @@ export function FormCard({ form }: { form: WireForm }) {
   };
 
   return (
-    <div className="perm-card" data-action="form" style={{ borderLeftColor: "var(--oc2-question)" }}>
+    <div
+      className="perm-card"
+      data-action="form"
+      style={{ borderLeftColor: "var(--oc2-question)" }}
+    >
       <div className="perm-header">
         <span
           className="perm-badge"
-          style={{ color: "var(--oc2-question)", borderColor: "var(--oc2-tool-shell-dim)" }}
+          style={{
+            color: "var(--oc2-question)",
+            borderColor: "var(--oc2-tool-shell-dim)",
+          }}
         >
           input
         </span>
@@ -57,18 +75,43 @@ export function FormCard({ form }: { form: WireForm }) {
       </div>
       <div className="oc2-form-fields">
         {form.fields.map((f) => (
-          <FormFieldRow key={f.key} field={f} value={values[f.key]} onChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))} />
+          <FormFieldRow
+            key={f.key}
+            field={f}
+            value={values[f.key]}
+            onChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))}
+          />
         ))}
       </div>
       {missing.length > 0 && (
-        <div className="perm-hint">{missing.length} required field{missing.length === 1 ? "" : "s"} remaining</div>
+        <div className="perm-hint">
+          {missing.length} required field{missing.length === 1 ? "" : "s"}{" "}
+          remaining
+        </div>
       )}
       {error && <div className="composer-error">{error}</div>}
-      <div className="perm-actions" style={{ borderTop: "1px solid var(--oc2-border)", paddingTop: "8px", marginTop: "4px" }}>
-        <button type="button" className="danger" disabled={busy} onClick={() => void cancel()}>
+      <div
+        className="perm-actions"
+        style={{
+          borderTop: "1px solid var(--oc2-border)",
+          paddingTop: "8px",
+          marginTop: "4px",
+        }}
+      >
+        <button
+          type="button"
+          className="danger"
+          disabled={busy}
+          onClick={() => void cancel()}
+        >
           Cancel
         </button>
-        <button type="button" className="primary" disabled={busy || missing.length > 0} onClick={() => void submit()}>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || missing.length > 0}
+          onClick={() => void submit()}
+        >
           Submit
         </button>
       </div>
@@ -92,13 +135,19 @@ function FormFieldRow({
     </label>
   );
 
-  if (field.options && field.options.length > 0 && (field.type === "string" || field.type === undefined)) {
+  if (
+    field.options &&
+    field.options.length > 0 &&
+    (field.type === "string" || field.type === undefined)
+  ) {
     return (
       <div className="oc2-form-row">
         {label}
         <select
           className="search"
-          value={typeof value === "string" ? value : String(field.default ?? "")}
+          value={
+            typeof value === "string" ? value : String(field.default ?? "")
+          }
           onChange={(e) => onChange(e.target.value)}
         >
           {!field.required && <option value="">—</option>}
@@ -130,10 +179,22 @@ function FormFieldRow({
       {label}
       <input
         className="search"
-        type={field.type === "number" || field.type === "integer" ? "number" : "text"}
+        type={
+          field.type === "number" || field.type === "integer"
+            ? "number"
+            : "text"
+        }
         placeholder={field.placeholder ?? field.description}
-        value={value === undefined || typeof value === "boolean" ? "" : String(value)}
-        onChange={(e) => onChange(field.type === "number" || field.type === "integer" ? Number(e.target.value) : e.target.value)}
+        value={
+          value === undefined || typeof value === "boolean" ? "" : String(value)
+        }
+        onChange={(e) =>
+          onChange(
+            field.type === "number" || field.type === "integer"
+              ? Number(e.target.value)
+              : e.target.value,
+          )
+        }
       />
     </div>
   );

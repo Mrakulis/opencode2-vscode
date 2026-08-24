@@ -33,23 +33,43 @@ describe("formatTokens", () => {
 
 describe("totalTokens", () => {
   it("sums all five components", () => {
-    const t = { input: 100, output: 50, reasoning: 25, cache: { read: 30, write: 5 } };
+    const t = {
+      input: 100,
+      output: 50,
+      reasoning: 25,
+      cache: { read: 30, write: 5 },
+    };
     assert.equal(totalTokens(t), 210);
   });
   it("returns undefined for missing/invalid usage", () => {
     assert.equal(totalTokens(undefined), undefined);
-    const bad = { input: Number.NaN, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
+    const bad = {
+      input: Number.NaN,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    };
     assert.equal(totalTokens(bad), undefined);
   });
 });
 
 describe("contextPercent", () => {
-  const tokens = { input: 100, output: 50, reasoning: 50, cache: { read: 100, write: 0 } };
+  const tokens = {
+    input: 100,
+    output: 50,
+    reasoning: 50,
+    cache: { read: 100, write: 0 },
+  };
   it("computes percent of limit", () => {
     assert.equal(contextPercent(tokens, 1000), 30);
   });
   it("clamps at 100", () => {
-    const big = { input: 900, output: 900, reasoning: 0, cache: { read: 0, write: 0 } };
+    const big = {
+      input: 900,
+      output: 900,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    };
     assert.equal(contextPercent(big, 1000), 100);
   });
   it("returns null without a limit", () => {
@@ -61,7 +81,9 @@ describe("contextPercent", () => {
 
 describe("diffLines", () => {
   it("classifies added/removed/meta/context", () => {
-    const lines = diffLines(["diff --git a/x b/x", "@@ -1 +1 @@", "-old", "+new", "same"].join("\n"));
+    const lines = diffLines(
+      ["diff --git a/x b/x", "@@ -1 +1 @@", "-old", "+new", "same"].join("\n"),
+    );
     assert.deepEqual(
       lines.map((l) => l.cls),
       ["meta", "meta", "del", "add", "ctx"],
@@ -71,7 +93,10 @@ describe("diffLines", () => {
 
 describe("toolTitle", () => {
   it("prefers file path basenames", () => {
-    assert.equal(toolTitle("read", { filePath: "src/deep/name.ts" }), "read: name.ts");
+    assert.equal(
+      toolTitle("read", { filePath: "src/deep/name.ts" }),
+      "read: name.ts",
+    );
   });
   it("falls back to the tool name", () => {
     assert.equal(toolTitle("grep", {}), "grep");

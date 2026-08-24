@@ -14,7 +14,11 @@ export const DIFF_MAX_LINES = 400;
  * are trimmed so only the replaced middle shows as -/+ pairs.
  * Returns "" when there is no visible change.
  */
-export function synthEditDiff(oldText: string, newText: string, maxLines = DIFF_MAX_LINES): string {
+export function synthEditDiff(
+  oldText: string,
+  newText: string,
+  maxLines = DIFF_MAX_LINES,
+): string {
   const a = (oldText ?? "").split("\n");
   const b = (newText ?? "").split("\n");
 
@@ -29,7 +33,12 @@ export function synthEditDiff(oldText: string, newText: string, maxLines = DIFF_
   let pre = 0;
   while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
   let suf = 0;
-  while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+  while (
+    suf < a.length - pre &&
+    suf < b.length - pre &&
+    a[a.length - 1 - suf] === b[b.length - 1 - suf]
+  )
+    suf++;
 
   const removed = a.slice(pre, a.length - suf);
   const added = b.slice(pre, b.length - suf);
@@ -44,13 +53,19 @@ export function synthEditDiff(oldText: string, newText: string, maxLines = DIFF_
 function applyCap(lines: string[], maxLines: number): string {
   if (lines.length === 0) return "";
   if (lines.length > maxLines) {
-    return [...lines.slice(0, maxLines), `+ … (${lines.length - maxLines} more lines truncated)`].join("\n");
+    return [
+      ...lines.slice(0, maxLines),
+      `+ … (${lines.length - maxLines} more lines truncated)`,
+    ].join("\n");
   }
   return lines.join("\n");
 }
 
 /** Full-file diff for `write` (create/overwrite): everything shows as added. */
-export function synthWriteDiff(content: string, maxLines = DIFF_MAX_LINES): string {
+export function synthWriteDiff(
+  content: string,
+  maxLines = DIFF_MAX_LINES,
+): string {
   if (!content) return "";
   return applyCap(
     content.split("\n").map((l) => `+${l}`),

@@ -30,7 +30,9 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | undefined>(undefined);
   const [plugins, setPlugins] = useState<Array<Record<string, unknown>>>([]);
-  const [websearch, setWebsearch] = useState<Array<Record<string, unknown>>>([]);
+  const [websearch, setWebsearch] = useState<Array<Record<string, unknown>>>(
+    [],
+  );
 
   // Reload on mount and whenever the event router bumps refreshTick
   // (integration.updated / integration.connection.updated).
@@ -47,25 +49,40 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
         setError(e instanceof Error ? e.message : String(e));
       }
       // Read-only environment surfaces (best-effort).
-      rpc.call<Array<Record<string, unknown>>>("plugins.list").then(setPlugins).catch(() => undefined);
-      rpc.call<Array<Record<string, unknown>>>("websearch.providers").then(setWebsearch).catch(() => undefined);
+      rpc
+        .call<Array<Record<string, unknown>>>("plugins.list")
+        .then(setPlugins)
+        .catch(() => undefined);
+      rpc
+        .call<Array<Record<string, unknown>>>("websearch.providers")
+        .then(setWebsearch)
+        .catch(() => undefined);
     })();
   }, [refreshTick]);
 
   /** In-app connect: OAuth → browser; command → instructions; key → inline field. */
-  const connect = async (it: IntegrationRow, methodTypes: string[]): Promise<void> => {
+  const connect = async (
+    it: IntegrationRow,
+    methodTypes: string[],
+  ): Promise<void> => {
     if (busyId) return;
     setBusyId(it.id);
     setError(undefined);
     try {
       const keyDraft = keyDrafts[it.id];
       if (keyDraft && keyDraft.trim().length > 0) {
-        await rpc.call("integration.connectKey", { integrationID: it.id, key: keyDraft.trim() });
+        await rpc.call("integration.connectKey", {
+          integrationID: it.id,
+          key: keyDraft.trim(),
+        });
         setKeyDrafts((d) => ({ ...d, [it.id]: "" }));
         return;
       }
       if (methodTypes.includes("oauth")) {
-        const attempt = await rpc.call<{ url?: string }>("integration.oauthConnect", { integrationID: it.id });
+        const attempt = await rpc.call<{ url?: string }>(
+          "integration.oauthConnect",
+          { integrationID: it.id },
+        );
         if (attempt.url) window.open(attempt.url, "_blank");
         return;
       }
@@ -96,10 +113,18 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
           <div className="drawer-empty">No provider integrations reported.</div>
         )}
 
-        {integrations.length > 0 && <div className="menu-section">accounts</div>}
+        {integrations.length > 0 && (
+          <div className="menu-section">accounts</div>
+        )}
         {integrations.map((it) => {
           const connected = it.connections?.length ?? 0;
-          const methodTypes = [...new Set(it.methods?.map((m) => (typeof m === "string" ? m : (m.type ?? "?"))))];
+          const methodTypes = [
+            ...new Set(
+              it.methods?.map((m) =>
+                typeof m === "string" ? m : (m.type ?? "?"),
+              ),
+            ),
+          ];
           const hasKeyMethod = methodTypes.includes("key");
           return (
             <div key={it.id} className="model-row">
@@ -117,7 +142,9 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
                   placeholder="API key…"
                   type="password"
                   value={keyDrafts[it.id] ?? ""}
-                  onChange={(e) => setKeyDrafts((d) => ({ ...d, [it.id]: e.target.value }))}
+                  onChange={(e) =>
+                    setKeyDrafts((d) => ({ ...d, [it.id]: e.target.value }))
+                  }
                 />
               )}
               <button
@@ -137,7 +164,10 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
                   void connect(it, methodTypes).then(() => {
                     // re-fetch so the dot flips without waiting for an event
                     return rpc
-                      .call<{ integrations: IntegrationRow[]; providers: ProviderRow[] }>("providers.list")
+                      .call<{
+                        integrations: IntegrationRow[];
+                        providers: ProviderRow[];
+                      }>("providers.list")
                       .then((res) => {
                         setIntegrations(res.integrations ?? []);
                         setProviders(res.providers ?? []);
@@ -167,7 +197,9 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
             <div className="menu-section">plugins</div>
             {plugins.map((pl, i) => (
               <div key={i} className="model-row">
-                <span className="model-name">{String(pl.name ?? pl.id ?? "plugin")}</span>
+                <span className="model-name">
+                  {String(pl.name ?? pl.id ?? "plugin")}
+                </span>
                 <span className="model-meta act">loaded</span>
               </div>
             ))}
@@ -179,8 +211,12 @@ export function ProvidersDrawer({ onClose, refreshTick = 0 }: Props) {
             <div className="menu-section">web search</div>
             {websearch.map((w, i) => (
               <div key={i} className="model-row">
-                <span className="model-name">{String(w.name ?? w.id ?? "provider")}</span>
-                <span className="model-meta act">{w.enabled === false ? "off" : "ready"}</span>
+                <span className="model-name">
+                  {String(w.name ?? w.id ?? "provider")}
+                </span>
+                <span className="model-meta act">
+                  {w.enabled === false ? "off" : "ready"}
+                </span>
               </div>
             ))}
           </>

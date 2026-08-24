@@ -1,4 +1,8 @@
-import { OpenCode, type OpenCodeClient, type OpenCodeEvent } from "@opencode-ai/client";
+import {
+  OpenCode,
+  type OpenCodeClient,
+  type OpenCodeEvent,
+} from "@opencode-ai/client";
 import { Service, type Endpoint } from "@opencode-ai/client/service";
 import { spawn } from "node:child_process";
 import * as vscode from "vscode";
@@ -89,13 +93,18 @@ export class OpenCodeController implements vscode.Disposable {
     this.setConnecting();
 
     try {
-      const { client, health } = await this.withTimeout(this.establish(cli, generation), this.connectTimeoutMs);
+      const { client, health } = await this.withTimeout(
+        this.establish(cli, generation),
+        this.connectTimeoutMs,
+      );
       if (generation !== this.generation) return this.getClient(); // superseded
       this.client = client;
       this.lastError = undefined;
       this.retryCount = 0;
       this.emitter.fire("connected");
-      this.log.info(`connected to ${this.activeBaseUrl} (service v${health.version}, pid ${health.pid})`);
+      this.log.info(
+        `connected to ${this.activeBaseUrl} (service v${health.version}, pid ${health.pid})`,
+      );
       this.startEventPump(client, generation);
       return client;
     } catch (error) {
@@ -115,11 +124,16 @@ export class OpenCodeController implements vscode.Disposable {
   private async establish(
     cli: ResolvedCli | undefined,
     generation: number,
-  ): Promise<{ client: OpenCodeClient; health: Awaited<ReturnType<OpenCodeClient["health"]["get"]>> }> {
+  ): Promise<{
+    client: OpenCodeClient;
+    health: Awaited<ReturnType<OpenCodeClient["health"]["get"]>>;
+  }> {
     const client = await this.createClient(cli);
-    if (generation !== this.generation) throw new Error("connection superseded");
+    if (generation !== this.generation)
+      throw new Error("connection superseded");
     const health = await client.health.get();
-    if (generation !== this.generation) throw new Error("connection superseded");
+    if (generation !== this.generation)
+      throw new Error("connection superseded");
     return { client, health };
   }
 
@@ -127,7 +141,10 @@ export class OpenCodeController implements vscode.Disposable {
   private withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`connection timed out after ${ms}ms`)), ms);
+      timer = setTimeout(
+        () => reject(new Error(`connection timed out after ${ms}ms`)),
+        ms,
+      );
       this.pendingTimers.add(timer);
     });
     return Promise.race([p, timeout]).finally(() => {
@@ -137,17 +154,29 @@ export class OpenCodeController implements vscode.Disposable {
   }
 
   /** Auto-retry the connection while auto-start is enabled (backoff, capped). */
-  private scheduleRetry(generation: number, cli: ResolvedCli | undefined): void {
+  private scheduleRetry(
+    generation: number,
+    cli: ResolvedCli | undefined,
+  ): void {
     if (generation !== this.generation || this.client) return;
-    const autoStart = vscode.workspace.getConfiguration("opencode2").get<boolean>("server.autoStart", true);
+    const autoStart = vscode.workspace
+      .getConfiguration("opencode2")
+      .get<boolean>("server.autoStart", true);
     if (!autoStart) return;
     if (this.retryCount >= this.maxRetries) {
-      this.log.warn("connection retries exhausted — run 'OpenCode 2: Restart Background Service'");
+      this.log.warn(
+        "connection retries exhausted — run 'OpenCode 2: Restart Background Service'",
+      );
       return;
     }
     this.retryCount++;
-    const delay = Math.min(this.retryBaseMs * 2 ** (this.retryCount - 1), 30_000);
-    this.log.debug(`scheduling connection retry #${this.retryCount} in ${delay}ms`);
+    const delay = Math.min(
+      this.retryBaseMs * 2 ** (this.retryCount - 1),
+      30_000,
+    );
+    this.log.debug(
+      `scheduling connection retry #${this.retryCount} in ${delay}ms`,
+    );
     const timer = setTimeout(() => {
       this.pendingTimers.delete(timer);
       this.retryTimer = undefined;
@@ -187,14 +216,17 @@ export class OpenCodeController implements vscode.Disposable {
     void (async () => {
       try {
         for await (const event of client.event.subscribe()) {
-          if (token !== this.pumpToken || generation !== this.generation) return;
+          if (token !== this.pumpToken || generation !== this.generation)
+            return;
           this.eventEmitter.fire(event);
         }
         // Stream ended cleanly — treat like a drop and resync.
         throw new Error("event stream ended");
       } catch (error) {
         if (token !== this.pumpToken || generation !== this.generation) return;
-        this.log.warn(`event stream dropped (${error instanceof Error ? error.message : String(error)}); resyncing`);
+        this.log.warn(
+          `event stream dropped (${error instanceof Error ? error.message : String(error)}); resyncing`,
+        );
         this.resyncEmitter.fire();
         this.scheduleReconnect(generation);
       }
@@ -217,7 +249,10 @@ export class OpenCodeController implements vscode.Disposable {
   }
 
   /** Keep only the event pump alive across drops (no full reconnect). */
-  private async runPumpLoop(generation: number, onFail: () => void): Promise<void> {
+  private async runPumpLoop(
+    generation: number,
+    onFail: () => void,
+  ): Promise<void> {
     const client = this.client;
     if (!client || generation !== this.generation) return;
     try {
@@ -226,7 +261,10 @@ export class OpenCodeController implements vscode.Disposable {
       await Promise.race([
         stream.next(),
         new Promise<never>((_, reject) => {
-          const timer = setTimeout(() => reject(new Error("subscribe probe timeout")), 10_000);
+          const timer = setTimeout(
+            () => reject(new Error("subscribe probe timeout")),
+            10_000,
+          );
           this.pendingTimers.add(timer);
         }),
       ]);
@@ -285,7 +323,9 @@ export class OpenCodeController implements vscode.Disposable {
     // spawns with `detached: true` and no `windowsHide`, which opens a console
     // window on Windows. We keep detached+unref (survives the host, machine-wide
     // singleton) but add windowsHide + silent stdio so no window appears.
-    this.log.debug(`starting hidden background service: ${spawnCommand.join(" ")}`);
+    this.log.debug(
+      `starting hidden background service: ${spawnCommand.join(" ")}`,
+    );
     await this.startHiddenService(spawnCommand);
     // The CLI writes the global registration file itself — poll discovery until
     // it appears, replicating ensure()'s wait without its visible spawn.
@@ -319,7 +359,9 @@ export class OpenCodeController implements vscode.Disposable {
       child.once("spawn", () => {
         if (settled) return;
         settled = true;
-        this.log.info(`background service spawned (pid ${child.pid}); waiting for registration`);
+        this.log.info(
+          `background service spawned (pid ${child.pid}); waiting for registration`,
+        );
         resolve();
       });
       // The service is shared and intentionally outlives this extension host.
@@ -343,11 +385,19 @@ export class OpenCodeController implements vscode.Disposable {
       await sleep(delay);
       delay = Math.min(delay * 1.7, 2000);
     }
-    throw new Error("OpenCode service failed to register within 15s of starting it.");
+    throw new Error(
+      "OpenCode service failed to register within 15s of starting it.",
+    );
   }
 
   private makeFor(endpoint: Endpoint): OpenCodeClient {
-    return this.track(OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) }), endpoint.url);
+    return this.track(
+      OpenCode.make({
+        baseUrl: endpoint.url,
+        headers: Service.headers(endpoint),
+      }),
+      endpoint.url,
+    );
   }
 
   private track(client: OpenCodeClient, url: string): OpenCodeClient {

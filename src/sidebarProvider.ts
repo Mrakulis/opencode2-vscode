@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { createApi } from "./apiAdapter";
 import type { OpenCodeController } from "./controller";
 import {
-  isRpcRequest,
   isInbound,
   type InboundMessage,
   type OutboundMessage,
@@ -34,21 +33,32 @@ export function toWireForm(raw: unknown): WireForm | undefined {
     if (!key) continue;
     const options = Array.isArray(fr.options)
       ? fr.options
-          .filter((o): o is Record<string, unknown> => typeof o === "object" && o !== null)
+          .filter(
+            (o): o is Record<string, unknown> =>
+              typeof o === "object" && o !== null,
+          )
           .map((o) => ({
-            label: typeof o.label === "string" ? o.label : String(o.value ?? ""),
+            label:
+              typeof o.label === "string" ? o.label : String(o.value ?? ""),
             value: o.value as string | number | boolean | undefined,
           }))
       : undefined;
     fields.push({
       key,
       title: typeof fr.title === "string" ? fr.title : key,
-      description: typeof fr.description === "string" ? fr.description : undefined,
+      description:
+        typeof fr.description === "string" ? fr.description : undefined,
       required: fr.required === true,
       type: typeof fr.type === "string" ? fr.type : "string",
       options,
-      default: typeof fr.default === "string" || typeof fr.default === "number" || typeof fr.default === "boolean" ? fr.default : undefined,
-      placeholder: typeof fr.placeholder === "string" ? fr.placeholder : undefined,
+      default:
+        typeof fr.default === "string" ||
+        typeof fr.default === "number" ||
+        typeof fr.default === "boolean"
+          ? fr.default
+          : undefined,
+      placeholder:
+        typeof fr.placeholder === "string" ? fr.placeholder : undefined,
     });
   }
   return { id, sessionID, title, fields };
@@ -121,7 +131,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this.post({
           type: "connection",
           state,
-          detail: state === "error" ? this.controller.lastErrorDetail : undefined,
+          detail:
+            state === "error" ? this.controller.lastErrorDetail : undefined,
         } satisfies InboundMessage),
       null,
       this.disposables,
@@ -132,13 +143,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         // Real form requests replace the old text-heuristic "question" flow.
         if ((event as { type?: string }).type === "form.created") {
           const wire = toWireForm((event as { data?: unknown }).data);
-          if (wire) this.post({ type: "form", form: wire } satisfies InboundMessage);
+          if (wire)
+            this.post({ type: "form", form: wire } satisfies InboundMessage);
         }
       },
       null,
       this.disposables,
     );
-    this.controller.onResync(() => this.post({ type: "resync" }), null, this.disposables);
+    this.controller.onResync(
+      () => this.post({ type: "resync" }),
+      null,
+      this.disposables,
+    );
 
     // Re-sync state whenever the panel becomes visible — covers the case where
     // a connection resolved while the view was still hidden/not yet mounted.
@@ -166,7 +182,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   /** Push live connection state into the UI (fired by the controller). */
-  notifyConnection(state: "connected" | "connecting" | "error", detail?: string): void {
+  notifyConnection(
+    state: "connected" | "connecting" | "error",
+    detail?: string,
+  ): void {
     this.post({ type: "connection", state, detail });
   }
 
@@ -181,7 +200,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const api = createApi({ getClient: () => this.controller.getClient() });
       const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       const session = await api.sessionCreate({ directory });
-      this.post({ type: "selectSession", id: session.id } satisfies InboundMessage);
+      this.post({
+        type: "selectSession",
+        id: session.id,
+      } satisfies InboundMessage);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `OpenCode 2: could not create session — ${error instanceof Error ? error.message : String(error)}`,
@@ -189,7 +211,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handle(message: OutboundMessage, pushState: () => void): Promise<void> {
+  private async handle(
+    message: OutboundMessage,
+    pushState: () => void,
+  ): Promise<void> {
     switch (message.type) {
       case "hello": {
         pushState();
@@ -212,10 +237,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return {
       ui: {
         density: cfg.get<"compact" | "comfortable">("ui.density", "compact"),
-        theme: cfg.get<"dark" | "light" | "tokyonight" | "gruvbox" | "nord" | "catppuccin">("ui.theme", "dark"),
+        theme: cfg.get<
+          "dark" | "light" | "tokyonight" | "gruvbox" | "nord" | "catppuccin"
+        >("ui.theme", "dark"),
         accentTint: cfg.get<string>("ui.accentTint") || undefined,
         sounds: cfg.get<boolean>("ui.sounds", true),
-        showReasoning: cfg.get<"hide" | "collapsed" | "expanded">("ui.showReasoning", "collapsed"),
+        showReasoning: cfg.get<"hide" | "collapsed" | "expanded">(
+          "ui.showReasoning",
+          "collapsed",
+        ),
         expandShellTools: cfg.get<boolean>("ui.expandShellTools", false),
         expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
         fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
@@ -228,16 +258,26 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         default: cfg.get<string>("models.default", ""),
       },
       permissions: {
-        mode: cfg.get<"askFirst" | "autoAllow" | "deny">("permissions.mode", "askFirst"),
+        mode: cfg.get<"askFirst" | "autoAllow" | "deny">(
+          "permissions.mode",
+          "askFirst",
+        ),
       },
     };
   }
 
   private renderHtml(webview: vscode.Webview): string {
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.js"));
-    const styles = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.css"));
+    const script = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.js"),
+    );
+    const styles = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "webview", "main.css"),
+    );
     const nonce = getNonce();
-    const initialConfig = JSON.stringify(this.getConfig()).replace(/</g, "\\u003c");
+    const initialConfig = JSON.stringify(this.getConfig()).replace(
+      /</g,
+      "\\u003c",
+    );
 
     return /* html */ `<!doctype html>
 <html lang="en">
@@ -259,7 +299,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
 function getNonce(): string {
   let out = "";
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   for (const b of bytes) out += alphabet[b % alphabet.length];

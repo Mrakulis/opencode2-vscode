@@ -4,7 +4,11 @@ import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
 import { rpc } from "../lib/rpc";
-import { filterSlashEntries, type SlashEntry, type SlashKind } from "../lib/slash";
+import {
+  filterSlashEntries,
+  type SlashEntry,
+  type SlashKind,
+} from "../lib/slash";
 import type { PermissionMode } from "../../src/protocol";
 
 export type { SlashEntry };
@@ -20,7 +24,11 @@ interface Props {
   sendKey: "enter" | "ctrlEnter";
   catalogTick?: number;
   builtins?: SlashEntry[];
-  onSend(text: string, files?: Array<{ uri: string; name?: string }>, delivery?: "queue"): Promise<void> | void;
+  onSend(
+    text: string,
+    files?: Array<{ uri: string; name?: string }>,
+    delivery?: "queue",
+  ): Promise<void> | void;
   onSendCommand(command: string, args: string): Promise<void> | void;
   onSendSkill(skill: string): Promise<void> | void;
   onStop(): void;
@@ -28,7 +36,13 @@ interface Props {
   agents: Array<{ id: string; name: string }>;
   activeAgent?: string;
   agentName?: string;
-  models: Array<{ id: string; providerID: string; name?: string; context?: number; variants?: Array<{ id: string }> }>;
+  models: Array<{
+    id: string;
+    providerID: string;
+    name?: string;
+    context?: number;
+    variants?: Array<{ id: string }>;
+  }>;
   hidden: string[];
   favorites: string[];
   defaultKey: string;
@@ -47,11 +61,15 @@ export function Composer(props: Props) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [menu, setMenu] = useState<"agent" | "model" | "variant" | "permission" | undefined>(undefined);
+  const [menu, setMenu] = useState<
+    "agent" | "model" | "variant" | "permission" | undefined
+  >(undefined);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; preview: string; uri: string }>>([]);
+  const [attachments, setAttachments] = useState<
+    Array<{ id: string; name: string; preview: string; uri: string }>
+  >([]);
   const [modelFilter, setModelFilter] = useState("");
   // ---- slash / @ popovers ---------------------------------------------------
   const [slashEntries, setSlashEntries] = useState<SlashEntry[]>([]);
@@ -72,12 +90,26 @@ export function Composer(props: Props) {
     void (async () => {
       try {
         const [cmds, skills] = await Promise.all([
-          rpc.call<Array<{ name: string; description?: string }>>("commands.list").catch(() => []),
-          rpc.call<Array<{ name: string; description?: string }>>("skills.list").catch(() => []),
+          rpc
+            .call<Array<{ name: string; description?: string }>>(
+              "commands.list",
+            )
+            .catch(() => []),
+          rpc
+            .call<Array<{ name: string; description?: string }>>("skills.list")
+            .catch(() => []),
         ]);
         setSlashEntries([
-          ...cmds.map((c): SlashEntry => ({ kind: "command", name: c.name, description: c.description })),
-          ...skills.map((s): SlashEntry => ({ kind: "skill", name: s.name, description: s.description })),
+          ...cmds.map((c): SlashEntry => ({
+            kind: "command",
+            name: c.name,
+            description: c.description,
+          })),
+          ...skills.map((s): SlashEntry => ({
+            kind: "skill",
+            name: s.name,
+            description: s.description,
+          })),
         ]);
       } catch {
         /* not connected yet — retried on next composer focus */
@@ -86,7 +118,12 @@ export function Composer(props: Props) {
   }, [props.disabled, props.catalogTick]);
 
   const filteredSlash = useMemo(
-    () => filterSlashEntries([...(props.builtins ?? []), ...slashEntries], slashFilter, slashKind),
+    () =>
+      filterSlashEntries(
+        [...(props.builtins ?? []), ...slashEntries],
+        slashFilter,
+        slashKind,
+      ),
     [slashEntries, slashFilter, slashKind, props.builtins],
   );
 
@@ -159,15 +196,12 @@ export function Composer(props: Props) {
     [text, props],
   );
 
-  const applyMention = useCallback(
-    (hit: FileHit) => {
-      const p = hit.path ?? hit.name ?? "";
-      if (!p) return;
-      setText((prev) => prev.replace(/@([^\s@]*)$/, `@${p} `));
-      setAtOpen(false);
-    },
-    [],
-  );
+  const applyMention = useCallback((hit: FileHit) => {
+    const p = hit.path ?? hit.name ?? "";
+    if (!p) return;
+    setText((prev) => prev.replace(/@([^\s@]*)$/, `@${p} `));
+    setAtOpen(false);
+  }, []);
 
   // auto-grow up to ~40vh
   useEffect(() => {
@@ -208,15 +242,25 @@ export function Composer(props: Props) {
       if (!file.type.startsWith("image/")) continue;
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const preview = URL.createObjectURL(file);
-      setAttachments((a) => [...a, { id, name: file.name || "pasted-image.png", preview, uri: "" }]);
+      setAttachments((a) => [
+        ...a,
+        { id, name: file.name || "pasted-image.png", preview, uri: "" },
+      ]);
       try {
         const buf = await file.arrayBuffer();
         const bytes = new Uint8Array(buf);
         let binary = "";
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+        for (let i = 0; i < bytes.length; i++)
+          binary += String.fromCharCode(bytes[i]!);
         const b64 = btoa(binary);
-        const res = await rpc.call<{ uri: string }>("image.save", { data: b64, name: file.name || "pasted-image.png", mime: file.type });
-        setAttachments((a) => a.map((x) => (x.id === id ? { ...x, uri: res.uri } : x)));
+        const res = await rpc.call<{ uri: string }>("image.save", {
+          data: b64,
+          name: file.name || "pasted-image.png",
+          mime: file.type,
+        });
+        setAttachments((a) =>
+          a.map((x) => (x.id === id ? { ...x, uri: res.uri } : x)),
+        );
       } catch {}
     }
   }, []);
@@ -244,7 +288,9 @@ export function Composer(props: Props) {
   const submit = useCallback(async () => {
     const value = text.trim();
     if ((!value && attachments.length === 0) || props.busy) return;
-    const files = attachments.filter((a) => a.uri).map((a) => ({ uri: a.uri, name: a.name }));
+    const files = attachments
+      .filter((a) => a.uri)
+      .map((a) => ({ uri: a.uri, name: a.name }));
     setText("");
     setAttachments((a) => {
       a.forEach((x) => URL.revokeObjectURL(x.preview));
@@ -261,18 +307,29 @@ export function Composer(props: Props) {
   }, [text, attachments, delivery, props]);
 
   // derived for selectors
-  const visibleModels = useMemo(() => filterVisibleModels(props.models, props.hidden), [props.models, props.hidden]);
+  const visibleModels = useMemo(
+    () => filterVisibleModels(props.models, props.hidden),
+    [props.models, props.hidden],
+  );
   const filteredModels = useMemo(() => {
     const q = modelFilter.trim().toLowerCase();
     if (!q) return visibleModels;
     return visibleModels.filter(
-      (m) => m.providerID.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || (m.name ?? "").toLowerCase().includes(q),
+      (m) =>
+        m.providerID.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        (m.name ?? "").toLowerCase().includes(q),
     );
   }, [visibleModels, modelFilter]);
-  const groups = useMemo(() => groupByProvider(filteredModels), [filteredModels]);
+  const groups = useMemo(
+    () => groupByProvider(filteredModels),
+    [filteredModels],
+  );
   const favoriteRows = useMemo(() => {
     const byKey = new Map(props.models.map((m) => [modelKey(m), m] as const));
-    return props.favorites.map((k) => byKey.get(k)).filter((m): m is PickerModel => Boolean(m));
+    return props.favorites
+      .map((k) => byKey.get(k))
+      .filter((m): m is PickerModel => Boolean(m));
   }, [props.models, props.favorites]);
   const recentRows = useMemo(() => {
     const favSet = new Set(props.favorites);
@@ -285,12 +342,19 @@ export function Composer(props: Props) {
   }, [visibleModels, props.recents, props.favorites]);
 
   const activeModelLabel = props.activeModel
-    ? (props.models.find((m) => m.id === props.activeModel?.id && m.providerID === props.activeModel?.providerID)?.name ??
-      props.activeModel.id)
+    ? (props.models.find(
+        (m) =>
+          m.id === props.activeModel?.id &&
+          m.providerID === props.activeModel?.providerID,
+      )?.name ?? props.activeModel.id)
     : "Model";
 
   const activeModelVariants = useMemo(() => {
-    const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
+    const m = props.models.find(
+      (x) =>
+        x.id === props.activeModel?.id &&
+        x.providerID === props.activeModel?.providerID,
+    );
     // filter out synthetic "none" variant — it maps to Default (no reasoning)
     const all = m?.variants ?? [];
     return all.filter((v) => v.id !== "none");
@@ -298,15 +362,30 @@ export function Composer(props: Props) {
   const defaultVariantId = useMemo(() => {
     if (activeModelVariants.length === 0) return undefined;
     const ids = activeModelVariants.map((v) => v.id);
-    for (const cand of ["high", "medium", "low", "xhigh", "minimal", "max"]) if (ids.includes(cand)) return cand;
+    for (const cand of ["high", "medium", "low", "xhigh", "minimal", "max"])
+      if (ids.includes(cand)) return cand;
     return ids[0];
   }, [activeModelVariants]);
-  const activeVariantLabel = props.activeModel?.variant ?? (defaultVariantId ? `Default (${defaultVariantId})` : "Default");
-  const permissionModeLabel = props.permissionMode === "autoAllow" ? "Auto allow" : props.permissionMode === "deny" ? "Deny" : "Ask first";
+  const activeVariantLabel =
+    props.activeModel?.variant ??
+    (defaultVariantId ? `Default (${defaultVariantId})` : "Default");
+  const permissionModeLabel =
+    props.permissionMode === "autoAllow"
+      ? "Auto allow"
+      : props.permissionMode === "deny"
+        ? "Deny"
+        : "Ask first";
   const activeModelContext = useMemo(() => {
-    const m = props.models.find((x) => x.id === props.activeModel?.id && x.providerID === props.activeModel?.providerID);
-    return (m as unknown as { context?: number; limit?: { context?: number } })?.context ??
-      (m as unknown as { limit?: { context?: number } })?.limit?.context;
+    const m = props.models.find(
+      (x) =>
+        x.id === props.activeModel?.id &&
+        x.providerID === props.activeModel?.providerID,
+    );
+    return (
+      (m as unknown as { context?: number; limit?: { context?: number } })
+        ?.context ??
+      (m as unknown as { limit?: { context?: number } })?.limit?.context
+    );
   }, [props.models, props.activeModel]);
   const hasVariants = activeModelVariants.length > 0;
 
@@ -321,15 +400,24 @@ export function Composer(props: Props) {
         void props.onPickModel({ id: m.id, providerID: m.providerID });
       }}
     >
-      <span className="row-label">{opts?.compact ? truncate(m.name ?? m.id, 26) : (m.name ?? m.id)}</span>
-      {props.defaultKey === modelKey(m) && <span className="row-default" title="default">◉</span>}
+      <span className="row-label">
+        {opts?.compact ? truncate(m.name ?? m.id, 26) : (m.name ?? m.id)}
+      </span>
+      {props.defaultKey === modelKey(m) && (
+        <span className="row-default" title="default">
+          ◉
+        </span>
+      )}
       <span
         role="button"
         tabIndex={0}
         className={`row-star${props.favorites.includes(modelKey(m)) ? " on" : ""}`}
         title={props.favorites.includes(modelKey(m)) ? "Unstar" : "Star"}
         aria-label={props.favorites.includes(modelKey(m)) ? "Unstar" : "Star"}
-        onClick={(e) => { e.stopPropagation(); props.onToggleFavorite(modelKey(m)); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onToggleFavorite(modelKey(m));
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -350,7 +438,8 @@ export function Composer(props: Props) {
       <div
         className="composer-input-wrap"
         onDragOver={(e) => {
-          if ([...Array.from(e.dataTransfer.types)].includes("Files")) e.preventDefault();
+          if ([...Array.from(e.dataTransfer.types)].includes("Files"))
+            e.preventDefault();
         }}
         onDrop={(e) => {
           e.preventDefault();
@@ -360,7 +449,13 @@ export function Composer(props: Props) {
         <textarea
           ref={ref}
           rows={1}
-          placeholder={props.disabled ? "Connect to start a session…" : props.busy ? "Agent working…" : "Ask anything..."}
+          placeholder={
+            props.disabled
+              ? "Connect to start a session…"
+              : props.busy
+                ? "Agent working…"
+                : "Ask anything..."
+          }
           disabled={props.disabled}
           value={text}
           onChange={(e) => {
@@ -370,29 +465,54 @@ export function Composer(props: Props) {
           onPaste={handlePaste}
           onKeyDown={(e) => {
             if (slashOpen && filteredSlash.length > 0) {
-              if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => Math.min(i + 1, filteredSlash.length - 1)); return; }
-              if (e.key === "ArrowUp") { e.preventDefault(); setSlashIndex((i) => Math.max(i - 1, 0)); return; }
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSlashIndex((i) => Math.min(i + 1, filteredSlash.length - 1));
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSlashIndex((i) => Math.max(i - 1, 0));
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 const entry = filteredSlash[slashIndex];
                 if (entry) submitSlash(entry);
                 return;
               }
-              if (e.key === "Escape") { e.preventDefault(); setSlashOpen(false); return; }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setSlashOpen(false);
+                return;
+              }
             }
             if (atOpen && atHits.length > 0) {
-              if (e.key === "ArrowDown") { e.preventDefault(); setAtIndex((i) => Math.min(i + 1, atHits.length - 1)); return; }
-              if (e.key === "ArrowUp") { e.preventDefault(); setAtIndex((i) => Math.max(i - 1, 0)); return; }
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setAtIndex((i) => Math.min(i + 1, atHits.length - 1));
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setAtIndex((i) => Math.max(i - 1, 0));
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 const hit = atHits[atIndex];
                 if (hit) applyMention(hit);
                 return;
               }
-              if (e.key === "Escape") { e.preventDefault(); setAtOpen(false); return; }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setAtOpen(false);
+                return;
+              }
             }
             if (e.key === "Enter" && !e.shiftKey) {
-              const allowed = props.sendKey === "enter" || e.ctrlKey || e.metaKey;
+              const allowed =
+                props.sendKey === "enter" || e.ctrlKey || e.metaKey;
               if (!allowed) return;
               e.preventDefault();
               void submit();
@@ -400,10 +520,18 @@ export function Composer(props: Props) {
           }}
         />
         {slashOpen && (
-          <div className="oc2-popover" role="listbox" aria-label="Commands and skills">
+          <div
+            className="oc2-popover"
+            role="listbox"
+            aria-label="Commands and skills"
+          >
             <div className="oc2-popover-head">
               <span>commands &amp; skills</span>
-              <span className="oc2-pop-filters" role="group" aria-label="Filter by type">
+              <span
+                className="oc2-pop-filters"
+                role="group"
+                aria-label="Filter by type"
+              >
                 {(["all", "command", "skill", "gui"] as const).map((k) => (
                   <button
                     key={k}
@@ -412,13 +540,21 @@ export function Composer(props: Props) {
                     aria-pressed={slashKind === k}
                     onClick={() => setSlashKind(k)}
                   >
-                    {k === "all" ? "All" : k === "command" ? "Commands" : k === "skill" ? "Skills" : "GUI"}
+                    {k === "all"
+                      ? "All"
+                      : k === "command"
+                        ? "Commands"
+                        : k === "skill"
+                          ? "Skills"
+                          : "GUI"}
                   </button>
                 ))}
               </span>
             </div>
             {filteredSlash.length === 0 ? (
-              <div className="oc2-popover-empty">No matching {slashKind === "all" ? "entries" : `${slashKind}s`}</div>
+              <div className="oc2-popover-empty">
+                No matching {slashKind === "all" ? "entries" : `${slashKind}s`}
+              </div>
             ) : (
               filteredSlash.map((entry, i) => (
                 <button
@@ -431,20 +567,42 @@ export function Composer(props: Props) {
                   onClick={() => submitSlash(entry)}
                   title={`${entry.kind === "skill" ? "Skill" : "Command"} /${entry.name}${entry.description ? ` — ${entry.description}` : ""}`}
                 >
-                  <span className={`oc2-pop-badge ${entry.kind}${entry.local ? " gui" : ""}`}>{entry.local ? "gui" : entry.kind === "skill" ? "skill" : "cmd"}</span>
+                  <span
+                    className={`oc2-pop-badge ${entry.kind}${entry.local ? " gui" : ""}`}
+                  >
+                    {entry.local
+                      ? "gui"
+                      : entry.kind === "skill"
+                        ? "skill"
+                        : "cmd"}
+                  </span>
                   <span className="oc2-pop-name">/{entry.name}</span>
-                  {entry.description && <span className="oc2-pop-desc">{truncate(entry.description, 44)}</span>}
+                  {entry.description && (
+                    <span className="oc2-pop-desc">
+                      {truncate(entry.description, 44)}
+                    </span>
+                  )}
                 </button>
               ))
             )}
-            <div className="oc2-popover-hint">↑↓ navigate · Enter run · Esc close</div>
+            <div className="oc2-popover-hint">
+              ↑↓ navigate · Enter run · Esc close
+            </div>
           </div>
         )}
         {atOpen && (
-          <div className="oc2-popover" role="listbox" aria-label="File mentions">
+          <div
+            className="oc2-popover"
+            role="listbox"
+            aria-label="File mentions"
+          >
             <div className="oc2-popover-head">attach a file</div>
             {atHits.length === 0 ? (
-              <div className="oc2-popover-empty">{atQuery.trim().length === 0 ? "Type to search files…" : "No matching files"}</div>
+              <div className="oc2-popover-empty">
+                {atQuery.trim().length === 0
+                  ? "Type to search files…"
+                  : "No matching files"}
+              </div>
             ) : (
               atHits.map((hit, i) => {
                 const p = hit.path ?? hit.name ?? "";
@@ -460,18 +618,38 @@ export function Composer(props: Props) {
                     title={p}
                   >
                     <span className="oc2-pop-badge file">@</span>
-                    <span className="oc2-pop-name">{truncate(p.split(/[\\/]/).pop() ?? p, 30)}</span>
+                    <span className="oc2-pop-name">
+                      {truncate(p.split(/[\\/]/).pop() ?? p, 30)}
+                    </span>
                     <span className="oc2-pop-desc">{truncate(p, 40)}</span>
                   </button>
                 );
               })
             )}
-            <div className="oc2-popover-hint">↑↓ navigate · Enter attach · Esc close</div>
+            <div className="oc2-popover-hint">
+              ↑↓ navigate · Enter attach · Esc close
+            </div>
           </div>
         )}
         <div className="composer-input-actions">
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
-          <button type="button" className="iconbtn" title="Attach image" disabled={props.disabled} onClick={() => fileInputRef.current?.click()}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              if (e.target.files) void addFiles(e.target.files);
+              e.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="iconbtn"
+            title="Attach image"
+            disabled={props.disabled}
+            onClick={() => fileInputRef.current?.click()}
+          >
             ＋
           </button>
           <button
@@ -491,7 +669,9 @@ export function Composer(props: Props) {
           <button
             type="button"
             className={`sendbtn${(!text.trim() && attachments.length === 0) || props.disabled ? " disabled" : ""}`}
-            disabled={props.disabled || (!text.trim() && attachments.length === 0)}
+            disabled={
+              props.disabled || (!text.trim() && attachments.length === 0)
+            }
             onClick={() => void submit()}
             title="Send"
           >
@@ -529,7 +709,9 @@ export function Composer(props: Props) {
             title={props.agentName ?? props.activeAgent ?? "Plan"}
             onClick={() => setMenu(menu === "agent" ? undefined : "agent")}
           >
-            <span className="selector-label">{props.agentName ?? props.activeAgent ?? "Plan"}</span>{" "}
+            <span className="selector-label">
+              {props.agentName ?? props.activeAgent ?? "Plan"}
+            </span>{" "}
             <span className="chevron">▾</span>
           </button>
           {menu === "agent" && (
@@ -539,7 +721,10 @@ export function Composer(props: Props) {
                   key={a.id}
                   type="button"
                   className={`menu-item${props.activeAgent === a.id ? " selected" : ""}`}
-                  onClick={() => { setMenu(undefined); void props.onPickAgent(a.id); }}
+                  onClick={() => {
+                    setMenu(undefined);
+                    void props.onPickAgent(a.id);
+                  }}
                 >
                   {a.name}
                 </button>
@@ -550,8 +735,14 @@ export function Composer(props: Props) {
 
         {/* Model */}
         <div className="picker picker-model">
-          <button type="button" className="selector" title={activeModelLabel} onClick={() => setMenu(menu === "model" ? undefined : "model")}>
-            <span className="selector-label">{activeModelLabel}</span> <span className="chevron">▾</span>
+          <button
+            type="button"
+            className="selector"
+            title={activeModelLabel}
+            onClick={() => setMenu(menu === "model" ? undefined : "model")}
+          >
+            <span className="selector-label">{activeModelLabel}</span>{" "}
+            <span className="chevron">▾</span>
           </button>
           {menu === "model" && (
             <div className="menu" style={{ minWidth: "280px" }}>
@@ -590,7 +781,14 @@ export function Composer(props: Props) {
                 ))
               )}
               <div className="menu-sep" />
-              <button type="button" className="menu-item manage" onClick={() => { setMenu(undefined); props.onOpenManager(); }}>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenu(undefined);
+                  props.onOpenManager();
+                }}
+              >
                 ⚙ Manage models…
               </button>
             </div>
@@ -609,14 +807,18 @@ export function Composer(props: Props) {
                 : `${activeVariantLabel}${activeModelContext ? ` · ${Math.round(activeModelContext / 1000)}k ctx` : ""}`
             }
           >
-            <span className="selector-label">{activeVariantLabel}</span> <span className="chevron">▾</span>
+            <span className="selector-label">{activeVariantLabel}</span>{" "}
+            <span className="chevron">▾</span>
           </button>
           {menu === "variant" && (
             <div className="menu">
               <button
                 type="button"
                 className={`menu-item${!props.activeModel?.variant ? " selected" : ""}`}
-                onClick={() => { setMenu(undefined); void props.onPickVariant(""); }}
+                onClick={() => {
+                  setMenu(undefined);
+                  void props.onPickVariant("");
+                }}
               >
                 Default{defaultVariantId ? ` (${defaultVariantId})` : ""}
               </button>
@@ -625,13 +827,18 @@ export function Composer(props: Props) {
                   key={v.id}
                   type="button"
                   className={`menu-item${props.activeModel?.variant === v.id ? " selected" : ""}`}
-                  onClick={() => { setMenu(undefined); void props.onPickVariant(v.id); }}
+                  onClick={() => {
+                    setMenu(undefined);
+                    void props.onPickVariant(v.id);
+                  }}
                 >
                   {v.id}
                 </button>
               ))}
               {activeModelVariants.length === 0 && (
-                <div className="menu-empty">No thinking levels for this model</div>
+                <div className="menu-empty">
+                  No thinking levels for this model
+                </div>
               )}
             </div>
           )}
@@ -642,10 +849,13 @@ export function Composer(props: Props) {
           <button
             type="button"
             className="selector"
-            onClick={() => setMenu(menu === "permission" ? undefined : "permission")}
+            onClick={() =>
+              setMenu(menu === "permission" ? undefined : "permission")
+            }
             title="Permission mode"
           >
-            <span className="selector-label">{permissionModeLabel}</span> <span className="chevron">▾</span>
+            <span className="selector-label">{permissionModeLabel}</span>{" "}
+            <span className="chevron">▾</span>
           </button>
           {menu === "permission" && (
             <div className="menu">
@@ -691,8 +901,14 @@ export function Composer(props: Props) {
               <button
                 type="button"
                 className={`chip${delivery === "queue" ? " on" : ""}`}
-                title={delivery === "queue" ? "Follow-ups queue until the current run ends" : "Follow-ups steer the agent immediately"}
-                onClick={() => setDelivery((d) => (d === "queue" ? undefined : "queue"))}
+                title={
+                  delivery === "queue"
+                    ? "Follow-ups queue until the current run ends"
+                    : "Follow-ups steer the agent immediately"
+                }
+                onClick={() =>
+                  setDelivery((d) => (d === "queue" ? undefined : "queue"))
+                }
               >
                 {delivery === "queue" ? "queued" : "steer"}
               </button>
@@ -708,7 +924,12 @@ export function Composer(props: Props) {
             preview
           </button>
           {props.busy ? (
-            <button type="button" className="primary stop" onClick={props.onStop} title="Interrupt">
+            <button
+              type="button"
+              className="primary stop"
+              onClick={props.onStop}
+              title="Interrupt"
+            >
               ■ stop
             </button>
           ) : null}
@@ -716,7 +937,10 @@ export function Composer(props: Props) {
       </div>
 
       {preview && (
-        <div className="md preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
+        <div
+          className="md preview"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+        />
       )}
     </div>
   );

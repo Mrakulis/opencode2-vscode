@@ -5,7 +5,12 @@ import * as os from "node:os";
 import { createApi } from "./apiAdapter";
 import type { ResolvedCli } from "./cli";
 import type { OpenCodeController } from "./controller";
-import { isSettingKey, validateSettingValue, type RpcMethod, type RpcRequest } from "./protocol";
+import {
+  isSettingKey,
+  validateSettingValue,
+  type RpcMethod,
+  type RpcRequest,
+} from "./protocol";
 import { Log } from "./log";
 
 type Handler = (params: Record<string, unknown>) => Promise<unknown>;
@@ -14,7 +19,11 @@ type Handler = (params: Record<string, unknown>) => Promise<unknown>;
  * Host-side RPC dispatcher: routes webview requests to the api adapter.
  * Params are read defensively — the wire is a trust boundary.
  */
-export function createRpcDispatcher(controller: OpenCodeController, log: Log, resolveCli?: () => Promise<ResolvedCli | undefined>) {
+export function createRpcDispatcher(
+  controller: OpenCodeController,
+  log: Log,
+  resolveCli?: () => Promise<ResolvedCli | undefined>,
+) {
   const api = createApi({
     getClient: () => controller.getClient(),
   });
@@ -25,10 +34,14 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
 
   const str = (params: Record<string, unknown>, key: string): string => {
     const v = params[key];
-    if (typeof v !== "string" || v.length === 0) throw new Error(`rpc: missing '${key}'`);
+    if (typeof v !== "string" || v.length === 0)
+      throw new Error(`rpc: missing '${key}'`);
     return v;
   };
-  const optStr = (params: Record<string, unknown>, key: string): string | undefined => {
+  const optStr = (
+    params: Record<string, unknown>,
+    key: string,
+  ): string | undefined => {
     const v = params[key];
     return typeof v === "string" && v.length > 0 ? v : undefined;
   };
@@ -40,7 +53,8 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       return api.sessionList(all ? undefined : preferredDirectory());
     },
     "session.create": (p) => {
-      const model = p.model as { id?: unknown; providerID?: unknown } | undefined;
+      const model = p.model as
+        { id?: unknown; providerID?: unknown } | undefined;
       const parsed =
         typeof model?.id === "string" && typeof model?.providerID === "string"
           ? { id: model.id, providerID: model.providerID }
@@ -53,7 +67,8 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       });
     },
     "session.remove": (p) => api.sessionRemove(str(p, "sessionID")),
-    "session.rename": (p) => api.sessionRename(str(p, "sessionID"), str(p, "title")),
+    "session.rename": (p) =>
+      api.sessionRename(str(p, "sessionID"), str(p, "title")),
     "session.fork": (p) => api.fork(str(p, "sessionID")),
     "transcript.copy": (p) => {
       const text = str(p, "markdown");
@@ -71,10 +86,18 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       let files: Array<{ uri: string; name?: string }> | undefined;
       if (Array.isArray(rawFiles)) {
         files = rawFiles
-          .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null && typeof (f as Record<string, unknown>).uri === "string")
+          .filter(
+            (f): f is Record<string, unknown> =>
+              typeof f === "object" &&
+              f !== null &&
+              typeof (f as Record<string, unknown>).uri === "string",
+          )
           .map((f) => {
             const rec = f as Record<string, unknown>;
-            return { uri: rec.uri as string, ...(typeof rec.name === "string" ? { name: rec.name } : {}) };
+            return {
+              uri: rec.uri as string,
+              ...(typeof rec.name === "string" ? { name: rec.name } : {}),
+            };
           });
         if (files.length === 0) files = undefined;
       }
@@ -84,7 +107,10 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
         sessionID: str(p, "sessionID"),
         text,
         ...(files ? { files } : {}),
-        delivery: p.delivery === "steer" || p.delivery === "queue" ? p.delivery : undefined,
+        delivery:
+          p.delivery === "steer" || p.delivery === "queue"
+            ? p.delivery
+            : undefined,
       });
     },
     "prompt.interrupt": (p) => api.interrupt(str(p, "sessionID")),
@@ -92,18 +118,26 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "models.list": () => api.models(),
     "agents.list": () => api.agents(),
     "model.switch": (p) => {
-      const model = p.model as { id?: unknown; providerID?: unknown; variant?: unknown } | undefined;
-      if (typeof model?.id !== "string" || typeof model?.providerID !== "string") {
+      const model = p.model as
+        { id?: unknown; providerID?: unknown; variant?: unknown } | undefined;
+      if (
+        typeof model?.id !== "string" ||
+        typeof model?.providerID !== "string"
+      ) {
         throw new Error("rpc: missing 'model.id'/'model.providerID'");
       }
-      const variant = typeof model.variant === "string" && model.variant.length > 0 ? model.variant : undefined;
+      const variant =
+        typeof model.variant === "string" && model.variant.length > 0
+          ? model.variant
+          : undefined;
       return api.switchModel(str(p, "sessionID"), {
         id: model.id,
         providerID: model.providerID,
         ...(variant ? { variant } : {}),
       });
     },
-    "agent.switch": (p) => api.switchAgent(str(p, "sessionID"), str(p, "agent")),
+    "agent.switch": (p) =>
+      api.switchAgent(str(p, "sessionID"), str(p, "agent")),
     "permissions.pending": () => api.pendingPermissions(),
     "permission.reply": (p) =>
       api.replyPermission(
@@ -117,17 +151,32 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "session.command": (p) => {
       const command = str(p, "command");
       const args = p.args as unknown;
-      return api.sessionCommand(str(p, "sessionID"), command, typeof args === "string" ? args : undefined);
+      return api.sessionCommand(
+        str(p, "sessionID"),
+        command,
+        typeof args === "string" ? args : undefined,
+      );
     },
-    "session.skill": (p) => api.sessionSkill(str(p, "sessionID"), str(p, "name")),
+    "session.skill": (p) =>
+      api.sessionSkill(str(p, "sessionID"), str(p, "name")),
     "forms.pending": (p) => api.formsList(optStr(p, "sessionID")),
     "form.reply": (p) => {
       const answer = p.answer as Record<string, unknown> | undefined;
-      if (!answer || typeof answer !== "object") throw new Error("rpc: missing 'answer'");
-      const clean: Record<string, string | number | boolean | ReadonlyArray<string>> = {};
+      if (!answer || typeof answer !== "object")
+        throw new Error("rpc: missing 'answer'");
+      const clean: Record<
+        string,
+        string | number | boolean | ReadonlyArray<string>
+      > = {};
       for (const [k, v] of Object.entries(answer)) {
-        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") clean[k] = v;
-        else if (Array.isArray(v) && v.every((x) => typeof x === "string")) clean[k] = v as string[];
+        if (
+          typeof v === "string" ||
+          typeof v === "number" ||
+          typeof v === "boolean"
+        )
+          clean[k] = v;
+        else if (Array.isArray(v) && v.every((x) => typeof x === "string"))
+          clean[k] = v as string[];
       }
       return api.formReply(str(p, "sessionID"), str(p, "formID"), clean);
     },
@@ -136,26 +185,37 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     // -- session parity ---------------------------------------------------------
     "session.export": (p) => api.exportSession(str(p, "sessionID")),
     "session.import": (p) => {
-      if (typeof p.payload !== "object" || p.payload === null) throw new Error("rpc: missing 'payload'");
+      if (typeof p.payload !== "object" || p.payload === null)
+        throw new Error("rpc: missing 'payload'");
       return api.importSession(p.payload);
     },
-    "session.move": (p) => api.moveSession(str(p, "sessionID"), str(p, "directory")),
+    "session.move": (p) =>
+      api.moveSession(str(p, "sessionID"), str(p, "directory")),
     "session.revert.stage": (p) => {
       const files = p.files as unknown;
-      return api.revertStage(str(p, "sessionID"), str(p, "messageID"), typeof files === "boolean" ? files : undefined);
+      return api.revertStage(
+        str(p, "sessionID"),
+        str(p, "messageID"),
+        typeof files === "boolean" ? files : undefined,
+      );
     },
     "session.revert.clear": (p) => api.revertClear(str(p, "sessionID")),
     "session.revert.commit": (p) => api.revertCommit(str(p, "sessionID")),
     "session.context": (p) => api.sessionContext(str(p, "sessionID")),
     "inbox.list": (p) => api.inboxList(str(p, "sessionID")),
-    "inbox.cancel": (p) => api.inboxCancel(str(p, "sessionID"), str(p, "inboxID")),
-    "inbox.steer": (p) => api.inboxSteer(str(p, "sessionID"), str(p, "inboxID")),
-    "inbox.queue": (p) => api.inboxQueue(str(p, "sessionID"), str(p, "inboxID")),
+    "inbox.cancel": (p) =>
+      api.inboxCancel(str(p, "sessionID"), str(p, "inboxID")),
+    "inbox.steer": (p) =>
+      api.inboxSteer(str(p, "sessionID"), str(p, "inboxID")),
+    "inbox.queue": (p) =>
+      api.inboxQueue(str(p, "sessionID"), str(p, "inboxID")),
 
     // -- instructions -----------------------------------------------------------
     "instructions.list": (p) => api.instructionsList(str(p, "sessionID")),
-    "instructions.put": (p) => api.instructionPut(str(p, "sessionID"), str(p, "key"), p.value),
-    "instructions.remove": (p) => api.instructionRemove(str(p, "sessionID"), str(p, "key")),
+    "instructions.put": (p) =>
+      api.instructionPut(str(p, "sessionID"), str(p, "key"), p.value),
+    "instructions.remove": (p) =>
+      api.instructionRemove(str(p, "sessionID"), str(p, "key")),
 
     // -- saved permissions -------------------------------------------------------
     "permissions.saved": () => api.savedPermissions(),
@@ -163,16 +223,22 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
 
     // -- provider connect ---------------------------------------------------------
     "integration.get": (p) => api.integrationGet(str(p, "integrationID")),
-    "integration.connectKey": (p) => api.connectKey(str(p, "integrationID"), str(p, "key")),
+    "integration.connectKey": (p) =>
+      api.connectKey(str(p, "integrationID"), str(p, "key")),
     "integration.oauthConnect": (p) => {
       const methodID = optStr(p, "methodID");
       return api.oauthConnect(str(p, "integrationID"), methodID);
     },
-    "integration.oauthStatus": (p) => api.oauthStatus(str(p, "integrationID"), str(p, "attemptID")),
-    "integration.oauthComplete": (p) => api.oauthComplete(str(p, "integrationID"), str(p, "attemptID")),
-    "integration.oauthCancel": (p) => api.oauthCancel(str(p, "integrationID"), str(p, "attemptID")),
-    "integration.commandConnect": (p) => api.commandConnect(str(p, "integrationID"), str(p, "methodID")),
-    "credentials.update": (p) => api.credentialUpdate(str(p, "credentialID"), str(p, "label")),
+    "integration.oauthStatus": (p) =>
+      api.oauthStatus(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.oauthComplete": (p) =>
+      api.oauthComplete(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.oauthCancel": (p) =>
+      api.oauthCancel(str(p, "integrationID"), str(p, "attemptID")),
+    "integration.commandConnect": (p) =>
+      api.commandConnect(str(p, "integrationID"), str(p, "methodID")),
+    "credentials.update": (p) =>
+      api.credentialUpdate(str(p, "credentialID"), str(p, "label")),
     "credentials.remove": (p) => api.credentialRemove(str(p, "credentialID")),
     "plugins.list": () => api.pluginList(),
     "websearch.providers": () => api.websearchProviders(),
@@ -188,13 +254,24 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       const directory = str(p, "directory");
       const name = optStr(p, "name");
       const from = optStr(p, "from");
-      return api.worktreeCreate(str(p, "projectID"), { directory, ...(name ? { name } : {}), ...(from ? { from } : {}) });
+      return api.worktreeCreate(str(p, "projectID"), {
+        directory,
+        ...(name ? { name } : {}),
+        ...(from ? { from } : {}),
+      });
     },
-    "worktree.remove": (p) => api.worktreeRemove(str(p, "projectID"), str(p, "directory"), p.force === true),
+    "worktree.remove": (p) =>
+      api.worktreeRemove(
+        str(p, "projectID"),
+        str(p, "directory"),
+        p.force === true,
+      ),
     "worktree.refresh": (p) => api.worktreeRefresh(str(p, "projectID")),
     "workspace.directory": async () => preferredDirectory(),
     "pick.folder": async () => {
-      const pick = await vscode.window.showWorkspaceFolderPick({ placeHolder: "Move session to which folder?" });
+      const pick = await vscode.window.showWorkspaceFolderPick({
+        placeHolder: "Move session to which folder?",
+      });
       return pick?.uri.fsPath;
     },
     "project.current": async () => {
@@ -208,25 +285,35 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "dialog.saveText": async (p) => {
       const content = str(p, "content");
       const suggested = optStr(p, "suggestedName") ?? "export.json";
-      const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(suggested) });
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(suggested),
+      });
       if (!uri) return { saved: false };
       await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
       return { saved: true, path: uri.fsPath };
     },
     "dialog.openText": async (p) => {
-      const filters = (p.filters as Record<string, string[]> | undefined) ?? { "Session export": ["json"] };
-      const uris = await vscode.window.showOpenDialog({ canSelectMany: false, filters });
+      const filters = (p.filters as Record<string, string[]> | undefined) ?? {
+        "Session export": ["json"],
+      };
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters,
+      });
       if (!uris || uris.length === 0) return undefined;
       const doc = await vscode.workspace.openTextDocument(uris[0]!);
       return doc.getText();
     },
     "settings.update": (p) => {
-      const updates = p.updates as Array<{ key?: unknown; value?: unknown }> | undefined;
-      if (!Array.isArray(updates)) throw new Error("rpc: 'updates' must be an array");
+      const updates = p.updates as
+        Array<{ key?: unknown; value?: unknown }> | undefined;
+      if (!Array.isArray(updates))
+        throw new Error("rpc: 'updates' must be an array");
       const cfg = vscode.workspace.getConfiguration("opencode2");
       for (const u of updates) {
         const key = typeof u?.key === "string" ? u.key : "";
-        if (!isSettingKey(key)) throw new Error(`rpc: unsupported setting '${key}'`);
+        if (!isSettingKey(key))
+          throw new Error(`rpc: unsupported setting '${key}'`);
         const check = validateSettingValue(key, u.value);
         if (!check.ok) throw new Error(`rpc: ${check.reason}`);
         void cfg.update(key, u.value, vscode.ConfigurationTarget.Global);
@@ -239,27 +326,39 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
     "mcp.add": (p) => {
       const name = str(p, "name");
       const config = p.config as Record<string, unknown> | undefined;
-      if (!config || typeof config !== "object") throw new Error("rpc: missing 'config'");
+      if (!config || typeof config !== "object")
+        throw new Error("rpc: missing 'config'");
       return api.mcpAdd(name, config);
     },
     "mcp.remove": (p) => api.mcpRemove(str(p, "name")),
     "mcp.connect": (p) => api.mcpConnect(str(p, "name")),
     "mcp.disconnect": (p) => api.mcpDisconnect(str(p, "name")),
-    "mcp.resources": () => api.mcpResources(),
     "providers.authCli": async (p) => {
       // Use the actually-resolved binary (opencode2 on this machine, opencode
       // for npm-only installs) instead of a hard-coded name.
       const resolved = resolveCli ? await resolveCli() : undefined;
-      const bin = resolved ? resolved.program.split(/[\\/]/).pop()?.replace(/\.exe$/i, "") ?? "opencode2" : "opencode2";
+      const bin = resolved
+        ? (resolved.program
+            .split(/[\\/]/)
+            .pop()
+            ?.replace(/\.exe$/i, "") ?? "opencode2")
+        : "opencode2";
       const name = optStr(p, "name");
-      const terminal = vscode.window.createTerminal({ name: "OpenCode 2 — connect provider" });
+      const terminal = vscode.window.createTerminal({
+        name: "OpenCode 2 — connect provider",
+      });
       terminal.show();
       terminal.sendText(`${bin} auth login${name ? ` ${name}` : ""}`, true);
-      log.info(`provider auth handoff: ${bin} auth login${name ? ` ${name}` : ""}`);
+      log.info(
+        `provider auth handoff: ${bin} auth login${name ? ` ${name}` : ""}`,
+      );
       return true;
     },
     "settings.open": async () => {
-      await vscode.commands.executeCommand("workbench.action.openSettings", "opencode2");
+      await vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "opencode2",
+      );
       return true;
     },
     "file.open": async (p) => {
@@ -271,21 +370,35 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       const col = m?.[3] ? parseInt(m[3], 10) : undefined;
       // resolve relative to workspace
       let uri: vscode.Uri;
-      if (/^[a-zA-Z]:[\\/]/.test(filePart) || filePart.startsWith("/") || filePart.startsWith("\\")) {
+      if (
+        /^[a-zA-Z]:[\\/]/.test(filePart) ||
+        filePart.startsWith("/") ||
+        filePart.startsWith("\\")
+      ) {
         uri = vscode.Uri.file(filePart);
       } else {
-        const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const base =
+          preferredDirectory() ??
+          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!base) throw new Error(`Cannot resolve relative path: ${raw}`);
         const joined = path.join(base, filePart);
         uri = vscode.Uri.file(joined);
       }
       // try to open, reveal line
       const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: false,
+      });
       if (line !== undefined) {
-        const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, (col ?? 1) - 1));
+        const pos = new vscode.Position(
+          Math.max(0, line - 1),
+          Math.max(0, (col ?? 1) - 1),
+        );
         editor.selection = new vscode.Selection(pos, pos);
-        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+        editor.revealRange(
+          new vscode.Range(pos, pos),
+          vscode.TextEditorRevealType.InCenter,
+        );
       }
       return true;
     },
@@ -293,19 +406,40 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
       const file = str(p, "file");
       const diff = optStr(p, "diff") ?? "";
       if (diff) {
-        const doc = await vscode.workspace.openTextDocument({ language: "diff", content: diff });
-        await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
+        const doc = await vscode.workspace.openTextDocument({
+          language: "diff",
+          content: diff,
+        });
+        await vscode.window.showTextDocument(doc, {
+          preview: false,
+          viewColumn: vscode.ViewColumn.Active,
+        });
         return true;
       }
       // No diff string: open whole-file diff via VS Code's git provider (shows full file)
-      const base = preferredDirectory() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const base =
+        preferredDirectory() ??
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       let fileUri: vscode.Uri;
-      if (/^[a-zA-Z]:[\\/]/.test(file) || file.startsWith("/") || file.startsWith("\\")) fileUri = vscode.Uri.file(file);
+      if (
+        /^[a-zA-Z]:[\\/]/.test(file) ||
+        file.startsWith("/") ||
+        file.startsWith("\\")
+      )
+        fileUri = vscode.Uri.file(file);
       else if (base) fileUri = vscode.Uri.file(path.join(base, file));
       else throw new Error("no base");
       try {
-        const gitUri = fileUri.with({ scheme: "git", query: JSON.stringify({ path: fileUri.fsPath, ref: "HEAD" }) });
-        await vscode.commands.executeCommand("vscode.diff", gitUri, fileUri, `${path.basename(fileUri.fsPath)} ↔ Working Tree`);
+        const gitUri = fileUri.with({
+          scheme: "git",
+          query: JSON.stringify({ path: fileUri.fsPath, ref: "HEAD" }),
+        });
+        await vscode.commands.executeCommand(
+          "vscode.diff",
+          gitUri,
+          fileUri,
+          `${path.basename(fileUri.fsPath)} ↔ Working Tree`,
+        );
         return true;
       } catch {
         const doc = await vscode.workspace.openTextDocument(fileUri);
@@ -329,10 +463,16 @@ export function createRpcDispatcher(controller: OpenCodeController, log: Log, re
   };
 
   /** Handle one request; never throws — failures become RpcResponse errors. */
-  async function handle(request: RpcRequest): Promise<{ id: number; ok: boolean; result?: unknown; error?: string }> {
+  async function handle(
+    request: RpcRequest,
+  ): Promise<{ id: number; ok: boolean; result?: unknown; error?: string }> {
     const handler = handlers[request.method] as Handler | undefined;
     if (!handler) {
-      return { id: request.id, ok: false, error: `Unknown rpc method: ${String(request.method)}` };
+      return {
+        id: request.id,
+        ok: false,
+        error: `Unknown rpc method: ${String(request.method)}`,
+      };
     }
     try {
       const result = await handler(request.params ?? {});

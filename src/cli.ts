@@ -27,16 +27,25 @@ const CANDIDATE_NAMES = ["opencode2", "opencode"] as const;
 
 export function expandHome(p: string): string {
   if (p === "~") return os.homedir();
-  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
+  if (p.startsWith("~/") || p.startsWith("~\\"))
+    return path.join(os.homedir(), p.slice(2));
   return p;
 }
 
-function run(program: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+function run(
+  program: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(program, args, { timeout: 10_000, windowsHide: true }, (error, stdout, stderr) => {
-      if (error) reject(error);
-      else resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
-    });
+    execFile(
+      program,
+      args,
+      { timeout: 10_000, windowsHide: true },
+      (error, stdout, stderr) => {
+        if (error) reject(error);
+        else resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
+      },
+    );
   });
 }
 
@@ -60,9 +69,14 @@ function whereAll(name: string): Promise<string[]> {
   });
 }
 
-async function queryVersion(resolved: ResolvedCli): Promise<string | undefined> {
+async function queryVersion(
+  resolved: ResolvedCli,
+): Promise<string | undefined> {
   try {
-    const { stdout } = await run(resolved.program, [...resolved.prefixArgs, "--version"]);
+    const { stdout } = await run(resolved.program, [
+      ...resolved.prefixArgs,
+      "--version",
+    ]);
     return stdout.trim().split(/\r?\n/, 1)[0] || undefined;
   } catch {
     return undefined;
@@ -85,7 +99,11 @@ function describe(candidate: string): ResolvedCli | undefined {
   }
   // .cmd / .bat shim -> route through cmd.exe
   if (/\.cmd$/i.test(expanded) || /\.bat$/i.test(expanded)) {
-    return { program: "cmd.exe", prefixArgs: ["/d", "/c", expanded], display: expanded };
+    return {
+      program: "cmd.exe",
+      prefixArgs: ["/d", "/c", expanded],
+      display: expanded,
+    };
   }
   // extension-less shims (sh script) -> skip on Windows spawn paths
   return undefined;
@@ -97,7 +115,14 @@ function knownRealExes(name: string): string[] {
   const out: string[] = [];
   if (name === "opencode2" || name === "opencode") {
     out.push(
-      path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", "opencode2.exe"),
+      path.join(
+        npmRoot,
+        "node_modules",
+        "@opencode-ai",
+        "cli",
+        "bin",
+        "opencode2.exe",
+      ),
       path.join(npmRoot, "node_modules", "opencode-ai", "bin", "opencode.exe"),
     );
   }
@@ -112,7 +137,10 @@ function knownRealExes(name: string): string[] {
  *  4. PATH hits for legacy `opencode` (only useful for discovery-less spawn)
  */
 export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
-  const configured = vscode.workspace.getConfiguration("opencode2").get<string>("cliPath", "").trim();
+  const configured = vscode.workspace
+    .getConfiguration("opencode2")
+    .get<string>("cliPath", "")
+    .trim();
   const names: string[] = configured ? [configured] : [...CANDIDATE_NAMES];
   if (!configured) names.push("opencode");
 
@@ -134,7 +162,9 @@ export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
       if (d) {
         const version = await queryVersion(d);
         if (version !== undefined) {
-          log.debug(`cli resolved (shim via ${d.program}): ${hit} (${version ?? "?"})`);
+          log.debug(
+            `cli resolved (shim via ${d.program}): ${hit} (${version ?? "?"})`,
+          );
           return { ...d, version };
         }
       }
@@ -171,8 +201,12 @@ export async function installCli(log: Log): Promise<void> {
   );
   if (choice !== "Install") return;
 
-  const terminal = vscode.window.createTerminal({ name: "OpenCode 2 — CLI install" });
+  const terminal = vscode.window.createTerminal({
+    name: "OpenCode 2 — CLI install",
+  });
   terminal.show();
   terminal.sendText("npm install -g opencode-ai@beta", true);
-  log.info("npm global install started in terminal 'OpenCode 2 — CLI install'.");
+  log.info(
+    "npm global install started in terminal 'OpenCode 2 — CLI install'.",
+  );
 }

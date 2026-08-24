@@ -26,16 +26,31 @@ interface AssistantLike {
 }
 
 /** Apply one delta; returns a NEW array or null when it cannot be applied. */
-export function applyDelta(messages: AnyMessage[], evt: DeltaEvent): AnyMessage[] | null {
-  if (evt.type !== "session.text.delta" && evt.type !== "session.reasoning.delta") return null;
+export function applyDelta(
+  messages: AnyMessage[],
+  evt: DeltaEvent,
+): AnyMessage[] | null {
+  if (
+    evt.type !== "session.text.delta" &&
+    evt.type !== "session.reasoning.delta"
+  )
+    return null;
   const messageID = evt.data?.messageID;
   const text = evt.data?.text;
   if (!messageID || typeof text !== "string") return null;
 
   const idx = messages.findIndex((m) => m.id === messageID);
   if (idx === -1) return null;
-  const candidate = messages[idx] as unknown as { type?: string; content?: AssistantLike["content"] };
-  if (!candidate || candidate.type !== "assistant" || !Array.isArray(candidate.content)) return null;
+  const candidate = messages[idx] as unknown as {
+    type?: string;
+    content?: AssistantLike["content"];
+  };
+  if (
+    !candidate ||
+    candidate.type !== "assistant" ||
+    !Array.isArray(candidate.content)
+  )
+    return null;
 
   const partKind = evt.type === "session.text.delta" ? "text" : "reasoning";
   const content: AssistantLike["content"] = [...candidate.content];
@@ -49,6 +64,9 @@ export function applyDelta(messages: AnyMessage[], evt: DeltaEvent): AnyMessage[
   }
 
   const out = [...messages];
-  out[idx] = { ...(messages[idx] as unknown as Record<string, unknown>), content } as unknown as AnyMessage;
+  out[idx] = {
+    ...(messages[idx] as unknown as Record<string, unknown>),
+    content,
+  } as unknown as AnyMessage;
   return out;
 }

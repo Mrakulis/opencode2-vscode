@@ -16,23 +16,43 @@ export function formatTokens(n: number | undefined): string {
 }
 
 /** Sum every component of a V2 TokenUsageInfo. */
-export function totalTokens(tokens:
-  | { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-  | undefined): number | undefined {
+export function totalTokens(
+  tokens:
+    | {
+        input: number;
+        output: number;
+        reasoning: number;
+        cache: { read: number; write: number };
+      }
+    | undefined,
+): number | undefined {
   if (!tokens) return undefined;
   const { input, output, reasoning, cache } = tokens;
   const parts = [input, output, reasoning, cache.read, cache.write];
-  if (parts.some((v) => typeof v !== "number" || Number.isNaN(v))) return undefined;
+  if (parts.some((v) => typeof v !== "number" || Number.isNaN(v)))
+    return undefined;
   return parts.reduce((a, b) => a + b, 0);
 }
 
 /** Context usage percent against a model context limit; null when unknown. */
 export function contextPercent(
-  tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } } | undefined,
+  tokens:
+    | {
+        input: number;
+        output: number;
+        reasoning: number;
+        cache: { read: number; write: number };
+      }
+    | undefined,
   contextLimit: number | undefined,
 ): number | null {
   if (!tokens || !contextLimit || contextLimit <= 0) return null;
-  const total = tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write;
+  const total =
+    tokens.input +
+    tokens.output +
+    tokens.reasoning +
+    tokens.cache.read +
+    tokens.cache.write;
   return Math.min(100, Math.round((total / contextLimit) * 100));
 }
 
@@ -49,9 +69,16 @@ export function relativeTime(ms: number): string {
 }
 
 /** Split unified-diff-ish text into lines with a sign class for coloring. */
-export function diffLines(text: string): Array<{ cls: "add" | "del" | "meta" | "ctx"; text: string }> {
+export function diffLines(
+  text: string,
+): Array<{ cls: "add" | "del" | "meta" | "ctx"; text: string }> {
   return text.split(/\r?\n/).map((line) => {
-    if (line.startsWith("@@") || line.startsWith("diff ") || line.startsWith("index ")) return { cls: "meta" as const, text: line };
+    if (
+      line.startsWith("@@") ||
+      line.startsWith("diff ") ||
+      line.startsWith("index ")
+    )
+      return { cls: "meta" as const, text: line };
     if (line.startsWith("+")) return { cls: "add" as const, text: line };
     if (line.startsWith("-")) return { cls: "del" as const, text: line };
     return { cls: "ctx" as const, text: line };
@@ -59,7 +86,10 @@ export function diffLines(text: string): Array<{ cls: "add" | "del" | "meta" | "
 }
 
 /** Extract a human title for a tool card from its input/result. */
-export function toolTitle(name: string, input: Record<string, unknown>): string {
+export function toolTitle(
+  name: string,
+  input: Record<string, unknown>,
+): string {
   const candidate =
     (typeof input.filePath === "string" && input.filePath) ||
     (typeof input.file_path === "string" && input.file_path) ||
@@ -68,7 +98,10 @@ export function toolTitle(name: string, input: Record<string, unknown>): string 
     (typeof input.url === "string" && input.url) ||
     (typeof input.pattern === "string" && input.pattern) ||
     (typeof input.query === "string" && input.query);
-  const short = typeof candidate === "string" ? truncate(candidate.replace(/^.*[\\/]/, "") || candidate, 48) : "";
+  const short =
+    typeof candidate === "string"
+      ? truncate(candidate.replace(/^.*[\\/]/, "") || candidate, 48)
+      : "";
   return short ? `${name}: ${short}` : name;
 }
 

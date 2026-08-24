@@ -13,10 +13,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const rpc = createRpcDispatcher(controller, log, () => resolveCli(log));
   const provider = new SidebarProvider(context.extensionUri, controller, rpc);
   const autoCompact = new AutoCompactWatcher(controller, log);
-  const notifications = new NotificationService(controller, log, rpc.getActiveSessionId);
+  const notifications = new NotificationService(
+    controller,
+    rpc.getActiveSessionId,
+  );
 
   // Status bar mirrors the original UX: connected / connecting / error.
-  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  const statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100,
+  );
   statusBar.command = "opencode2.focus";
   context.subscriptions.push(
     statusBar,
@@ -37,7 +43,9 @@ export function activate(context: vscode.ExtensionContext): void {
         case "error": {
           statusBar.text = "$(warning) OpenCode";
           statusBar.tooltip = "OpenCode connection error — click for output";
-          statusBar.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+          statusBar.backgroundColor = new vscode.ThemeColor(
+            "statusBarItem.warningBackground",
+          );
           break;
         }
       }
@@ -68,14 +76,19 @@ export function activate(context: vscode.ExtensionContext): void {
       context.subscriptions,
     ),
     vscode.commands.registerCommand("opencode2.focus", () => provider.reveal()),
-    vscode.commands.registerCommand("opencode2.toggle", () => provider.toggle()),
+    vscode.commands.registerCommand("opencode2.toggle", () =>
+      provider.toggle(),
+    ),
     vscode.commands.registerCommand("opencode2.refresh", () => {
       connect();
       return provider.reveal();
     }),
     vscode.commands.registerCommand("opencode2.restartService", async () => {
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "OpenCode 2: restarting service..." },
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "OpenCode 2: restarting service...",
+        },
         () => controller.restart(),
       );
     }),
@@ -89,7 +102,9 @@ export function activate(context: vscode.ExtensionContext): void {
       terminal.show();
       terminal.sendText(cli?.display ?? "opencode2", true);
     }),
-    vscode.commands.registerCommand("opencode2.installCli", () => installCli(log)),
+    vscode.commands.registerCommand("opencode2.installCli", () =>
+      installCli(log),
+    ),
     vscode.commands.registerCommand("opencode2.newSession", async () => {
       await provider.reveal();
       await provider.createAndSelectSession();

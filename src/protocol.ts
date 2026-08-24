@@ -11,7 +11,14 @@ export type Density = "compact" | "comfortable";
  * presets (canonical published palettes). Selected via `opencode2.ui.theme`
  * and applied as `[data-theme="<id>"]`.
  */
-export const THEME_IDS = ["dark", "light", "tokyonight", "gruvbox", "nord", "catppuccin"] as const;
+export const THEME_IDS = [
+  "dark",
+  "light",
+  "tokyonight",
+  "gruvbox",
+  "nord",
+  "catppuccin",
+] as const;
 export type ThemeName = (typeof THEME_IDS)[number];
 export type ShowReasoning = "hide" | "collapsed" | "expanded";
 export type SendKey = "enter" | "ctrlEnter";
@@ -70,7 +77,11 @@ export function isSettingKey(value: string): value is SettingKey {
 /** Host -> Webview */
 export type InboundMessage =
   | { type: "ready"; config: ResolvedConfig }
-  | { type: "connection"; state: "connected" | "connecting" | "error"; detail?: string }
+  | {
+      type: "connection";
+      state: "connected" | "connecting" | "error";
+      detail?: string;
+    }
   | { type: "resync" }
   | { type: "event"; event: unknown }
   | { type: "selectSession"; id: string }
@@ -116,9 +127,7 @@ export interface RpcResponse {
 }
 
 /** Webview -> Host */
-export type OutboundMessage =
-  | RpcRequest
-  | { type: "hello" };
+export type OutboundMessage = RpcRequest | { type: "hello" };
 
 /** Anything that can arrive on the webview->host channel. */
 export type WireMessage = InboundMessage | OutboundMessage;
@@ -205,7 +214,6 @@ export type RpcMethod =
   | "mcp.remove"
   | "mcp.connect"
   | "mcp.disconnect"
-  | "mcp.resources"
   // misc
   | "files.find"
   | "transcript.copy"
@@ -238,26 +246,38 @@ export function isRpcRequest(value: unknown): value is RpcRequest {
 export type SettingCheck = { ok: true } | { ok: false; reason: string };
 
 /** Validate one settings update arriving over the wire. */
-export function validateSettingValue(key: SettingKey, value: unknown): SettingCheck {
-  const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
+export function validateSettingValue(
+  key: SettingKey,
+  value: unknown,
+): SettingCheck {
+  const isStrArr = (v: unknown): v is string[] =>
+    Array.isArray(v) && v.every((x) => typeof x === "string");
   switch (key) {
     case "models.hidden":
     case "models.favorites":
-      return isStrArr(value) ? { ok: true } : { ok: false, reason: `${key} must be a string array` };
+      return isStrArr(value)
+        ? { ok: true }
+        : { ok: false, reason: `${key} must be a string array` };
     case "models.default":
-      return typeof value === "string" ? { ok: true } : { ok: false, reason: "must be a string" };
+      return typeof value === "string"
+        ? { ok: true }
+        : { ok: false, reason: "must be a string" };
     case "ui.density":
       return value === "compact" || value === "comfortable"
         ? { ok: true }
         : { ok: false, reason: "density must be compact|comfortable" };
     case "ui.theme":
-      return typeof value === "string" && (THEME_IDS as readonly string[]).includes(value)
+      return typeof value === "string" &&
+        (THEME_IDS as readonly string[]).includes(value)
         ? { ok: true }
         : { ok: false, reason: `theme must be one of ${THEME_IDS.join("|")}` };
     case "ui.showReasoning":
       return value === "hide" || value === "collapsed" || value === "expanded"
         ? { ok: true }
-        : { ok: false, reason: "showReasoning must be hide|collapsed|expanded" };
+        : {
+            ok: false,
+            reason: "showReasoning must be hide|collapsed|expanded",
+          };
     case "composer.sendKey":
       return value === "enter" || value === "ctrlEnter"
         ? { ok: true }
@@ -267,10 +287,15 @@ export function validateSettingValue(key: SettingKey, value: unknown): SettingCh
     case "ui.expandEditTools":
     case "ui.fullShellOutput":
     case "ui.messageStats":
-      return typeof value === "boolean" ? { ok: true } : { ok: false, reason: `${key} must be boolean` };
+      return typeof value === "boolean"
+        ? { ok: true }
+        : { ok: false, reason: `${key} must be boolean` };
     case "permissions.mode":
       return value === "askFirst" || value === "autoAllow" || value === "deny"
         ? { ok: true }
-        : { ok: false, reason: "permissions.mode must be askFirst|autoAllow|deny" };
+        : {
+            ok: false,
+            reason: "permissions.mode must be askFirst|autoAllow|deny",
+          };
   }
 }

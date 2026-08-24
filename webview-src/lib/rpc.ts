@@ -9,7 +9,10 @@ type PushHandler = (msg: InboundMessage) => void;
  */
 class RpcClient {
   private nextId = 1;
-  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private readonly pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+  >();
   private readonly pushHandlers = new Set<PushHandler>();
   private readonly api: { postMessage(message: unknown): void };
 
@@ -32,14 +35,21 @@ class RpcClient {
     });
   }
 
-  call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+  call<T = unknown>(
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      this.pending.set(id, {
+        resolve: resolve as (v: unknown) => void,
+        reject,
+      });
       this.api.postMessage({ type: "rpc", id, method, params: params ?? {} });
       // Safety net: host always answers; reject stragglers after 30s.
       setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error(`rpc ${method} timed out`));
+        if (this.pending.delete(id))
+          reject(new Error(`rpc ${method} timed out`));
       }, 30_000);
     });
   }
@@ -50,7 +60,15 @@ class RpcClient {
   }
 }
 
-function isRpcResult(value: unknown): value is { type: "rpcResult"; id: number; ok: boolean; result?: unknown; error?: string } {
+function isRpcResult(
+  value: unknown,
+): value is {
+  type: "rpcResult";
+  id: number;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+} {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -82,7 +100,12 @@ export interface SessionSummary {
   agent?: string;
   model?: { id: string; providerID: string; variant?: string };
   cost: number;
-  tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } };
+  tokens: {
+    input: number;
+    output: number;
+    reasoning: number;
+    cache: { read: number; write: number };
+  };
   time: { created: number; updated: number; idle?: number; archived?: number };
   location: { directory: string };
 }
@@ -102,7 +125,11 @@ export interface MessagePartTool {
   state:
     | { status: "streaming" }
     | { status: "running" }
-    | { status: "completed"; input: Record<string, unknown>; content: ToolContent[] }
+    | {
+        status: "completed";
+        input: Record<string, unknown>;
+        content: ToolContent[];
+      }
     | { status: "error"; error?: { message?: string } };
 }
 export type ToolContent =
@@ -132,9 +159,13 @@ export type AnyMessage =
     }
   | { type: string; id?: string };
 
-export function isUser(m: AnyMessage): m is Extract<AnyMessage, { type: "user" }> {
+export function isUser(
+  m: AnyMessage,
+): m is Extract<AnyMessage, { type: "user" }> {
   return m.type === "user";
 }
-export function isAssistant(m: AnyMessage): m is Extract<AnyMessage, { type: "assistant" }> {
+export function isAssistant(
+  m: AnyMessage,
+): m is Extract<AnyMessage, { type: "assistant" }> {
   return m.type === "assistant";
 }

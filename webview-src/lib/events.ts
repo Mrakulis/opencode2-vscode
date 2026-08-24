@@ -83,6 +83,7 @@ const TABLE: Record<string, UiAction[]> = {
   "session.shell.started": ["messages"],
   "session.shell.ended": ["messages"],
   "session.synthetic": ["messages"],
+  "session.instructions.updated": ["instructions"],
 
   // permissions & forms
   "permission.asked": ["permissions"],

@@ -10,13 +10,20 @@ import {
   toggleProviderModels,
 } from "../webview-src/lib/models";
 
-const m = (providerID: string, id: string, name?: string) => ({ providerID, id, name });
+const m = (providerID: string, id: string, name?: string) => ({
+  providerID,
+  id,
+  name,
+});
 
 describe("modelKey / parseModelKey", () => {
   it("round-trips", () => {
     const key = modelKey({ providerID: "anthropic", id: "claude-x" });
     assert.equal(key, "anthropic/claude-x");
-    assert.deepEqual(parseModelKey(key), { providerID: "anthropic", id: "claude-x" });
+    assert.deepEqual(parseModelKey(key), {
+      providerID: "anthropic",
+      id: "claude-x",
+    });
   });
   it("rejects malformed keys", () => {
     assert.equal(parseModelKey("noseparator"), undefined);
@@ -41,8 +48,15 @@ describe("filterVisibleModels", () => {
 
 describe("groupByProvider", () => {
   it("groups and sorts by providerID", () => {
-    const groups = groupByProvider([m("zeta", "1"), m("alpha", "2"), m("alpha", "3")]);
-    assert.deepEqual(groups.map((g) => g.providerID), ["alpha", "zeta"]);
+    const groups = groupByProvider([
+      m("zeta", "1"),
+      m("alpha", "2"),
+      m("alpha", "3"),
+    ]);
+    assert.deepEqual(
+      groups.map((g) => g.providerID),
+      ["alpha", "zeta"],
+    );
     assert.equal(groups[0]?.models.length, 2);
   });
 });
@@ -78,10 +92,13 @@ describe("resolveDefault", () => {
     );
   });
   it("falls back to server default", () => {
-    assert.deepEqual(resolveDefault("", { id: "claude", providerID: "anthropic" }), {
-      id: "claude",
-      providerID: "anthropic",
-    });
+    assert.deepEqual(
+      resolveDefault("", { id: "claude", providerID: "anthropic" }),
+      {
+        id: "claude",
+        providerID: "anthropic",
+      },
+    );
     assert.equal(resolveDefault("", null), undefined);
     assert.equal(resolveDefault("", undefined), undefined);
   });

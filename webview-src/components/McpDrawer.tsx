@@ -88,7 +88,9 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
     }
   };
 
-  const statusBadge = (status: ServerStatus): { label: string; cls: string; title?: string } => {
+  const statusBadge = (
+    status: ServerStatus,
+  ): { label: string; cls: string; title?: string } => {
     switch (status.status) {
       case "connected":
         return { label: "✓ connected", cls: "ok" };
@@ -109,10 +111,16 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
     const secret = secrets[s.name]?.trim();
     if (!secret) return;
     try {
-      await rpc.call("credentials.update", { credentialID: s.integrationID, label: `${s.name} api key` });
+      await rpc.call("credentials.update", {
+        credentialID: s.integrationID,
+        label: `${s.name} api key`,
+      });
       // With the reference stored, route through the integration connect flow
       // (key first; falls back to OAuth browser flow when no key method).
-      await rpc.call("integration.connectKey", { integrationID: s.integrationID, key: secret });
+      await rpc.call("integration.connectKey", {
+        integrationID: s.integrationID,
+        key: secret,
+      });
       setSecrets((d) => ({ ...d, [s.name]: "" }));
       await refresh();
     } catch (e) {
@@ -135,7 +143,10 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   const oauthConnect = async (s: McpServerRow): Promise<void> => {
     if (!s.integrationID) return;
     try {
-      const attempt = await rpc.call<{ url?: string }>("integration.oauthConnect", { integrationID: s.integrationID });
+      const attempt = await rpc.call<{ url?: string }>(
+        "integration.oauthConnect",
+        { integrationID: s.integrationID },
+      );
       if (attempt.url) window.open(attempt.url, "_blank");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -147,7 +158,11 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
       <div className="drawer-head">
         <span className="prov-name">MCP servers</span>
         <span className="micro">runtime scope</span>
-        <button type="button" className="primary" onClick={() => setAdding((v) => !v)}>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setAdding((v) => !v)}
+        >
           {adding ? "cancel" : "+ Add"}
         </button>
         <button type="button" onClick={onClose}>
@@ -161,11 +176,18 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
         <div className="mcp-form">
           <label>
             name
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="my-server"
+            />
           </label>
           <label>
             type
-            <select value={kind} onChange={(e) => setKind(e.target.value as "remote" | "local")}>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as "remote" | "local")}
+            >
               <option value="remote">remote (URL)</option>
               <option value="local">local (command)</option>
             </select>
@@ -173,19 +195,39 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
           {kind === "remote" ? (
             <label>
               URL
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/mcp" />
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/mcp"
+              />
             </label>
           ) : (
             <label>
               command (argv)
-              <input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="npx -y some-mcp-server" />
+              <input
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                placeholder="npx -y some-mcp-server"
+              />
             </label>
           )}
           <label className="checkrow">
-            <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={disabled}
+              onChange={(e) => setDisabled(e.target.checked)}
+            />
             add as disabled
           </label>
-          <button type="button" className="primary" disabled={!name.trim() || (kind === "remote" ? !url.trim() : !command.trim())} onClick={() => void submitAdd()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={
+              !name.trim() ||
+              (kind === "remote" ? !url.trim() : !command.trim())
+            }
+            onClick={() => void submitAdd()}
+          >
             Add server
           </button>
         </div>
@@ -199,82 +241,108 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
           const badge = statusBadge(s.status);
           const isOpen = expanded === s.name;
           return (
-            <div key={s.name} style={{ display: "flex", flexDirection: "column" }}>
-            <div className="model-row mcp-row">
-              <button
-                type="button"
-                className={`rowicon${isOpen ? " on" : ""}`}
-                onClick={() => setExpanded(isOpen ? undefined : s.name)}
-                title="details"
-              >
-                <span className={`chev${isOpen ? " open" : ""}`}>▸</span>
-              </button>
-              <span className={`dot ${badge.cls === "ok" ? "ok" : badge.cls === "dim" || badge.cls === "" ? "off" : "warn"}`} />
-              <span className="model-name" title={s.name}>
-                {s.name}
-              </span>
-              <span className={`model-meta ${badge.cls}`} title={badge.title}>
-                {badge.label}
-              </span>
-              {s.status.status === "connected" ? (
+            <div
+              key={s.name}
+              style={{ display: "flex", flexDirection: "column" }}
+            >
+              <div className="model-row mcp-row">
                 <button
                   type="button"
-                  className="rowicon"
-                  title="Disconnect"
-                  onClick={() => void rpc.call("mcp.disconnect", { name: s.name }).catch(() => undefined)}
+                  className={`rowicon${isOpen ? " on" : ""}`}
+                  onClick={() => setExpanded(isOpen ? undefined : s.name)}
+                  title="details"
                 >
-                  ⏻
+                  <span className={`chev${isOpen ? " open" : ""}`}>▸</span>
                 </button>
-              ) : s.status.status !== "disabled" ? (
-                <button
-                  type="button"
-                  className="rowicon"
-                  title="Connect"
-                  onClick={() => void rpc.call("mcp.connect", { name: s.name }).catch(() => undefined)}
-                >
-                  ⟳
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="rowicon eye"
-                title="Remove server"
-                onClick={() =>
-                  void rpc
-                    .call("mcp.remove", { name: s.name })
-                    .then(() => refresh())
-                    .catch(() => undefined)
-                }
-              >
-                ✕
-              </button>
-            </div>
-            {isOpen && s.status.status === "needs_auth" && s.integrationID && (
-              <div className="oc2-mcp-auth">
-                <input
-                  className="search"
-                  style={{ flex: 1 }}
-                  type="password"
-                  placeholder={`${s.name} API key…`}
-                  value={secrets[s.name] ?? ""}
-                  onChange={(e) => setSecrets((d) => ({ ...d, [s.name]: e.target.value }))}
+                <span
+                  className={`dot ${badge.cls === "ok" ? "ok" : badge.cls === "dim" || badge.cls === "" ? "off" : "warn"}`}
                 />
-                <button type="button" className="primary" onClick={() => void storeCredential(s)}>
-                  Set key
-                </button>
-                <button type="button" className="chip" title="Sign in via browser (OAuth)" onClick={() => void oauthConnect(s)}>
-                  OAuth
-                </button>
+                <span className="model-name" title={s.name}>
+                  {s.name}
+                </span>
+                <span className={`model-meta ${badge.cls}`} title={badge.title}>
+                  {badge.label}
+                </span>
+                {s.status.status === "connected" ? (
+                  <button
+                    type="button"
+                    className="rowicon"
+                    title="Disconnect"
+                    onClick={() =>
+                      void rpc
+                        .call("mcp.disconnect", { name: s.name })
+                        .catch(() => undefined)
+                    }
+                  >
+                    ⏻
+                  </button>
+                ) : s.status.status !== "disabled" ? (
+                  <button
+                    type="button"
+                    className="rowicon"
+                    title="Connect"
+                    onClick={() =>
+                      void rpc
+                        .call("mcp.connect", { name: s.name })
+                        .catch(() => undefined)
+                    }
+                  >
+                    ⟳
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="danger"
-                  title="Clear the stored credential reference for this server"
-                  onClick={() => void clearCredential(s)}
+                  className="rowicon eye"
+                  title="Remove server"
+                  onClick={() =>
+                    void rpc
+                      .call("mcp.remove", { name: s.name })
+                      .then(() => refresh())
+                      .catch(() => undefined)
+                  }
                 >
-                  Clear
+                  ✕
                 </button>
               </div>
-            )}
+              {isOpen &&
+                s.status.status === "needs_auth" &&
+                s.integrationID && (
+                  <div className="oc2-mcp-auth">
+                    <input
+                      className="search"
+                      style={{ flex: 1 }}
+                      type="password"
+                      placeholder={`${s.name} API key…`}
+                      value={secrets[s.name] ?? ""}
+                      onChange={(e) =>
+                        setSecrets((d) => ({ ...d, [s.name]: e.target.value }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void storeCredential(s)}
+                    >
+                      Set key
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
+                      title="Sign in via browser (OAuth)"
+                      onClick={() => void oauthConnect(s)}
+                    >
+                      OAuth
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      title="Clear the stored credential reference for this server"
+                      onClick={() => void clearCredential(s)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
             </div>
           );
         })}
