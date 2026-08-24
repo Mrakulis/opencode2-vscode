@@ -84,11 +84,10 @@ export function ModelManager(props: Props) {
                 key={key}
                 type="button"
                 className="chip"
-                title={`${key} · ${found.providerID}`}
+                title={key}
                 onClick={() => setQuery(found.name ?? "")}
               >
-                {found.name}{" "}
-                <span className="chip-provider">{found.providerID}</span>
+                {found.name}
               </button>
             ) : null;
           })}

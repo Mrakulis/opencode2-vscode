@@ -503,6 +503,10 @@ button:focus-visible {
   outline-offset: -1px;
 }
 .menu-section {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--oc2-bg-menu);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 2px);
   text-transform: uppercase;
@@ -568,6 +572,10 @@ button:focus-visible {
   background: var(--oc2-bg-hover);
 }
 .prov-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--oc2-bg);
   display: flex;
   align-items: center;
   gap: var(--oc2-space-1);
