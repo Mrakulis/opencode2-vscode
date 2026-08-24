@@ -1505,6 +1505,11 @@ button:focus-visible {
   align-items: center;
   padding: 0 0 var(--oc2-space-2) 26px;
 }
+.retry-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px var(--oc2-space-2) 0;
+}
 .oc2-theme-sub {
   display: flex;
   flex-direction: column;

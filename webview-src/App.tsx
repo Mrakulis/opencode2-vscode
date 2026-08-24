@@ -55,6 +55,7 @@ export function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<AnyMessage[]>([]);
+  const [retryPending, setRetryPending] = useState(false);
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
   const [models, setModels] = useState<
@@ -139,7 +140,56 @@ export function App() {
       const list = await rpc.call<AnyMessage[]>("messages.list", {
         sessionID: sessionId,
       });
-      setMessages(list);
+      // While reasoning/text is streaming, the REST snapshot lags the deltas we
+      // accumulate in messagesRef (the server finalizes parts only at the end),
+      // so a mid-stream refetch could wipe the thinking shown so far. Overlay:
+      // keep the *longer* local text for text/reasoning parts — deltas only grow.
+      const localById = new Map<string, AnyMessage>();
+      for (const m of messagesRef.current) {
+        const id = (m as { id?: unknown }).id;
+        if (typeof id === "string") localById.set(id, m);
+      }
+      const merged: AnyMessage[] = list.map((m) => {
+        const mm = m as unknown as {
+          id?: string;
+          type?: string;
+          content?: Array<Record<string, unknown>>;
+        };
+        if (mm.type !== "assistant" || !Array.isArray(mm.content)) return m;
+        const lm = localById.get((m as { id?: string }).id ?? "") as unknown as
+          | { type?: string; content?: Array<Record<string, unknown>> }
+          | undefined;
+        if (!lm || lm.type !== "assistant" || !Array.isArray(lm.content)) return m;
+        const localParts = new Map<string, string>();
+        for (const p of lm.content) {
+          if (
+            (p.type === "text" || p.type === "reasoning") &&
+            typeof p.text === "string"
+          ) {
+            localParts.set(p.type, p.text);
+          }
+        }
+        let changed = false;
+        const content = mm.content.map((p) => {
+          if (
+            (p.type === "text" || p.type === "reasoning") &&
+            typeof p.text === "string"
+          ) {
+            const localText = localParts.get(p.type) ?? "";
+            if (localText.length > p.text.length) {
+              changed = true;
+              return { ...p, text: localText };
+            }
+          }
+          return p;
+        });
+        if (!changed) return m;
+        return {
+          ...(m as unknown as Record<string, unknown>),
+          content,
+        } as unknown as AnyMessage;
+      });
+      setMessages(merged);
     } catch {
       /* transient */
     }
@@ -412,6 +462,8 @@ export function App() {
               evt.type === "session.idle"
             ) {
               setBusySessions((b) => ({ ...b, [sid]: false }));
+              if (evt.type === "session.execution.failed") setRetryPending(true);
+              else setRetryPending(false);
             }
           }
 
@@ -499,14 +551,40 @@ export function App() {
           (params as Record<string, unknown>).files = files;
         if (delivery) params.delivery = delivery;
         await rpc.call("prompt.send", params);
+        setRetryPending(false);
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [activeId]: false }));
+        // Surface a Retry affordance for transport/API failures.
+        setRetryPending(true);
         throw error;
       }
     },
     [activeId],
   );
+
+  /** Resend the last user prompt — the recovery path after an API error. */
+  const retryLast = useCallback(async () => {
+    if (!activeId) return;
+    const last = [...messagesRef.current].reverse().find(isUser);
+    if (!last) return;
+    const files: Array<{ uri: string; name?: string }> | undefined = (() => {
+      const raw = (last as { files?: unknown }).files;
+      if (!Array.isArray(raw)) return undefined;
+      const clean: Array<{ uri: string; name?: string }> = [];
+      for (const f of raw as Array<Record<string, unknown>>) {
+        if (typeof f?.uri === "string") {
+          clean.push({ uri: f.uri, name: typeof f.name === "string" ? f.name : undefined });
+        }
+      }
+      return clean.length > 0 ? clean : undefined;
+    })();
+    try {
+      await sendMessage(last.text, files && files.length > 0 ? files : undefined);
+    } catch {
+      /* composer/props surface the error; retryPending stays set */
+    }
+  }, [activeId, sendMessage]);
 
   const interrupt = useCallback(async () => {
     if (!activeId) return;
@@ -727,6 +805,13 @@ export function App() {
         local: true,
         run: cycleTheme,
       },
+      {
+        kind: "command",
+        name: "retry",
+        description: "Resend the last prompt (e.g. after an API error)",
+        local: true,
+        run: () => void retryLast(),
+      },
     ],
     [
       newSession,
@@ -735,6 +820,7 @@ export function App() {
       redoRevert,
       exportSession,
       importSessionFile,
+      retryLast,
       cfg?.ui.showReasoning,
       cfg?.ui.theme,
       updateSettings,
@@ -1052,6 +1138,19 @@ export function App() {
               ))}
           </div>
         )}
+
+      {retryPending && !busy && (
+        <div className="retry-bar">
+          <button
+            type="button"
+            className="chip on"
+            title="The last prompt failed (API/transport). Click to send it again."
+            onClick={() => void retryLast()}
+          >
+            ↻ Retry last prompt
+          </button>
+        </div>
+      )}
 
       <Composer
         disabled={!activeId || conn !== "connected"}
