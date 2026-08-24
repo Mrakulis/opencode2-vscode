@@ -14,6 +14,10 @@ import { modelKey, resolveDefault, toggleInList } from "./lib/models";
 import { chime } from "./lib/sound";
 import { actionsForEvent } from "./lib/events";
 import { applyDelta, type DeltaEvent } from "./lib/deltas";
+import {
+  autoReplyFor,
+  RespondedTracker,
+} from "./lib/permissions";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -117,6 +121,10 @@ export function App() {
     | { attempt?: number; message?: string; action?: { title?: string; message?: string; label?: string; link?: string } }
     | undefined
   >(undefined);
+
+  // Session auto-accept + dedupe tracker (OpenCode permission parity).
+  const autoAcceptSessionsRef = useRef(new Set<string>());
+  const respondedRef = useRef(new RespondedTracker());
 
   // Keep a ref of activeId so push handlers never go stale.
   const activeIdRef = useRef(activeId);
@@ -895,33 +903,63 @@ export function App() {
   );
 
   const replyPermission = useCallback(
-    async (requestID: string, reply: "once" | "always" | "reject") => {
+    async (
+      requestID: string,
+      reply: "once" | "always" | "reject",
+    ): Promise<boolean> => {
       const target = permissions.find((p) => p.requestID === requestID);
       setPermissions((list) => list.filter((p) => p.requestID !== requestID));
-      if (!target) return;
+      if (!target) return false;
       try {
         await rpc.call("permission.reply", {
           sessionID: target.sessionID,
           requestID,
           reply,
         });
+        return true;
       } catch {
-        /* reappear via next permission.asked */
+        // reappear via next permission.asked; allow a future retry
+        respondedRef.current.clear(requestID);
+        return false;
       }
     },
     [permissions],
   );
 
-  // Auto-handle like Desktop/TUI auto-approve: when not in Ask first, auto reply without banner
+  // Keep the active session auto-accepting in `autoAllow` mode (per-session,
+  // mirroring upstream's session/directory auto-accept map).
+  useEffect(() => {
+    if (!activeId) return;
+    if (permissionMode === "autoAllow") autoAcceptSessionsRef.current.add(activeId);
+    else autoAcceptSessionsRef.current.delete(activeId);
+  }, [activeId, permissionMode]);
+
+  // Auto-decide like OpenCode's session auto-accept: reply when the mode (or an
+  // auto-accepting session) says so, deduped against duplicate asks.
   useEffect(() => {
     if (permissions.length === 0) return;
-    if (permissionMode === "askFirst") return;
     for (const p of permissions) {
-      if (p.action.toLowerCase() === "question") continue;
-      const reply = permissionMode === "autoAllow" ? "once" : "reject";
-      void replyPermission(p.requestID, reply as "once" | "always" | "reject");
+      const reply = autoReplyFor(
+        permissionMode,
+        p.action,
+        autoAcceptSessionsRef.current.has(p.sessionID),
+      );
+      if (!reply) continue;
+      if (respondedRef.current.had(p.requestID)) continue;
+      respondedRef.current.mark(p.requestID);
+      void replyPermission(p.requestID, reply).then((ok) => {
+        if (!ok) respondedRef.current.clear(p.requestID);
+      });
     }
   }, [permissions, permissionMode, replyPermission]);
+
+  // Drain already-pending requests when auto mode is enabled (like upstream's
+  // enable() which lists + auto-responds pending permissions).
+  useEffect(() => {
+    if (permissionMode === "askFirst") return;
+    const t = setTimeout(() => void refreshPendingPermissions(), 0);
+    return () => clearTimeout(t);
+  }, [permissionMode, refreshPendingPermissions]);
 
   // ---- derived -------------------------------------------------------------
   const lastAssistant = useMemo(

@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -285,7 +285,7 @@
             "Deny — block the action"
           ],
           "default": "askFirst",
-          "description": "How to handle permission requests. Like the Plan/Build menu at the bottom."
+          "markdownDescription": "How to handle permission requests, using OpenCode's own permission semantics. **Ask first** prompts for approval (default). **Auto allow** auto-approves each request with *Allow once* — the same behaviour as OpenCode's session auto-accept (CLI `--auto`); explicit `deny` rules in your `permissions` config still win. **Deny** auto-rejects requests that would otherwise ask. `question` requests always prompt. Saved *Allow forever* rules are only created via the button on each prompt, never automatically."
         }
       }
     }
