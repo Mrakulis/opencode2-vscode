@@ -992,10 +992,11 @@ button:focus-visible {
 }
 
 .jump {
-  position: absolute;
+  position: sticky;
   bottom: var(--oc2-space-3);
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: center;
+  width: fit-content;
+  max-width: 90%;
   z-index: 5;
   border-radius: 999px;
   box-shadow:
