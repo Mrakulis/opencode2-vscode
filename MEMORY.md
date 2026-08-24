@@ -4,10 +4,9 @@
 
 ## Status snapshot
 
-- **Status: v0.2.37 COMPLETE (features)** — all planned v0.2 features shipped & committed 2026-08-23; vsix packaged. **Next:** full functionality audit done (see `AUDIT_AND_PLAN.md`); awaiting review of its Open Questions (§5) before implementing M-theme/M5–M8.
-- **Repo:** 14 commits; conventional commits; gates = typecheck + 29/29 tests + build
-- **v0.2 additions:** settings envelope (10 new `opencode2.*` keys pushed via ready), grouped model picker w/ favorites/recents/visibility, Model Manager drawer, display behavior prefs, Providers drawer + CLI auth handoff, MCP drawer (full CRUD + live status), folder-scoped sessions with all-projects toggle
-- **Verified:** MCP add/list/remove round-trip live; config-file untouched ⇒ runtime-scoped changes (documented in drawer)
+- **Status: v0.3.37 (2026-08-25)** — full V2 GUI parity shipped (see Decisions 9–16); docs consolidated: `plan.md`/`todo.md`/`AUDIT_AND_PLAN.md` removed after completion (git history retains them). Living docs = this file + `agents.md` + `README.md`.
+- **Gates:** typecheck clean · 65/65 unit tests · build · `npm run audit` (rpc consistency + theme tokens) · live smoke (`scripts/smoke.mjs`) vs running service
+- **Known maintenance:** client pinned `@opencode-ai/client@beta-17927` while server runs newer betas — still interoperable; re-pin deliberately. `vsce` not on PATH → use `npx --yes @vscode/vsce package`.
 
 ## Decisions log (append-only, newest last)
 
