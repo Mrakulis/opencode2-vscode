@@ -41,6 +41,7 @@
   --oc2-diff-del-bg: rgba(255, 107, 107, 0.14);
   --oc2-diff-del-fg: #ff9b9b;
   --oc2-question: #c084fc;
+  --oc2-skill: #67e8f9;
 
   /* density tokens — swapped via [data-density] */
   --oc2-font-size: 13px;
@@ -85,6 +86,7 @@
   --oc2-diff-del-bg: rgba(220, 38, 38, 0.1);
   --oc2-diff-del-fg: #b91c1c;
   --oc2-question: #9333ea;
+  --oc2-skill: #0e7490;
 }
 
 :root[data-density="comfortable"] {
@@ -135,6 +137,7 @@
   --oc2-diff-del-bg: rgba(247, 118, 142, 0.13);
   --oc2-diff-del-fg: #f7768e;
   --oc2-question: #bb9af7;
+  --oc2-skill: #73daca;
 }
 
 /* Gruvbox Dark */
@@ -169,6 +172,7 @@
   --oc2-diff-del-bg: rgba(251, 73, 52, 0.14);
   --oc2-diff-del-fg: #fb4934;
   --oc2-question: #d3869b;
+  --oc2-skill: #8ec07c;
 }
 
 /* Nord */
@@ -203,6 +207,7 @@
   --oc2-diff-del-bg: rgba(191, 97, 106, 0.14);
   --oc2-diff-del-fg: #bf616a;
   --oc2-question: #b48ead;
+  --oc2-skill: #8fbcbb;
 }
 
 /* Catppuccin Mocha */
@@ -237,6 +242,7 @@
   --oc2-diff-del-bg: rgba(243, 139, 168, 0.12);
   --oc2-diff-del-fg: #f38ba8;
   --oc2-question: #cba6f7;
+  --oc2-skill: #94e2d5;
 }
 
 * {
@@ -1581,7 +1587,7 @@ button:focus-visible {
   color: var(--oc2-fg-muted);
   text-transform: lowercase;
 }
-.oc2-pop-badge.skill { color: var(--oc2-accent); border-color: var(--oc2-accent); }
+.oc2-pop-badge.skill { color: var(--oc2-skill); border-color: var(--oc2-skill); }
 .oc2-pop-badge.gui { color: var(--oc2-link); border-color: var(--oc2-link); }
 .oc2-pop-badge.file { color: var(--oc2-link); border-color: var(--oc2-link); }
 .oc2-pop-name {

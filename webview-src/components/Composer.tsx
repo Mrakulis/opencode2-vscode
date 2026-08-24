@@ -404,7 +404,7 @@ export function Composer(props: Props) {
             <div className="oc2-popover-head">
               <span>commands &amp; skills</span>
               <span className="oc2-pop-filters" role="group" aria-label="Filter by type">
-                {(["all", "command", "skill"] as const).map((k) => (
+                {(["all", "command", "skill", "gui"] as const).map((k) => (
                   <button
                     key={k}
                     type="button"
@@ -412,7 +412,7 @@ export function Composer(props: Props) {
                     aria-pressed={slashKind === k}
                     onClick={() => setSlashKind(k)}
                   >
-                    {k === "all" ? "All" : k === "command" ? "Commands" : "Skills"}
+                    {k === "all" ? "All" : k === "command" ? "Commands" : k === "skill" ? "Skills" : "GUI"}
                   </button>
                 ))}
               </span>

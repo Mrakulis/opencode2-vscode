@@ -33,6 +33,20 @@ describe("filterSlashEntries", () => {
     assert.equal(filterSlashEntries(entries, "re", "command").length, 1); // review
     assert.equal(filterSlashEntries(entries, "zzz", "skill").length, 0);
   });
+  it("routes local (gui) entries to their own filter", () => {
+    const withGui: SlashEntry[] = [
+      ...entries,
+      { kind: "command", name: "undo", description: "revert", local: true },
+    ];
+    // plain Commands excludes gui entries…
+    assert.equal(filterSlashEntries(withGui, "", "command").some((e) => e.local), false);
+    // …the GUI filter shows only them…
+    const gui = filterSlashEntries(withGui, "", "gui");
+    assert.equal(gui.length, 1);
+    assert.equal(gui[0]!.name, "undo");
+    // …and All still shows everything.
+    assert.equal(filterSlashEntries(withGui, "", "all").length, 5);
+  });
   it("caps results at 40", () => {
     const many: SlashEntry[] = Array.from({ length: 60 }, (_, i) => ({ kind: "command", name: `cmd${i}` }));
     assert.equal(filterSlashEntries(many, "").length, 40);
