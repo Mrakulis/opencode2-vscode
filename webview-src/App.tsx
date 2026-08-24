@@ -381,6 +381,9 @@ export function App() {
           setConn(msg.state);
           setConnDetail(msg.detail);
           if (msg.state === "connected") {
+            // Fresh connection: stale failure state must not linger.
+            setRetryPending(false);
+            setRetryInfo(undefined);
             void (async () => {
               const list = await refreshSessions();
               await refreshPickers();
@@ -656,6 +659,7 @@ export function App() {
       };
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [activeId]: true }));
+      setRetryInfo(undefined); // a fresh run must not inherit stale retry state
       try {
         const params: Record<string, unknown> = {
           sessionID: activeId,

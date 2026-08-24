@@ -103,7 +103,11 @@ export function Feed({
         scrollToBottom(scrollRef.current);
       });
     });
-    ro.observe(content);
+        ro.observe(content);
+    // Also watch the scroller itself: dock pills appearing/disappearing
+    // change the feed height, which would otherwise leave you shy of the
+    // latest after Jump.
+    ro.observe(el);
     return () => {
       ro.disconnect();
       if (roRafRef.current) cancelAnimationFrame(roRafRef.current);
