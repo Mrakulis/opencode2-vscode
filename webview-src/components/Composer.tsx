@@ -19,6 +19,7 @@ interface Props {
   busy: boolean;
   sendKey: "enter" | "ctrlEnter";
   catalogTick?: number;
+  builtins?: SlashEntry[];
   onSend(text: string, files?: Array<{ uri: string; name?: string }>, delivery?: "queue"): Promise<void> | void;
   onSendCommand(command: string, args: string): Promise<void> | void;
   onSendSkill(skill: string): Promise<void> | void;
@@ -84,7 +85,10 @@ export function Composer(props: Props) {
     })();
   }, [props.disabled, props.catalogTick]);
 
-  const filteredSlash = useMemo(() => filterSlashEntries(slashEntries, slashFilter, slashKind), [slashEntries, slashFilter, slashKind]);
+  const filteredSlash = useMemo(
+    () => filterSlashEntries([...(props.builtins ?? []), ...slashEntries], slashFilter, slashKind),
+    [slashEntries, slashFilter, slashKind, props.builtins],
+  );
 
   useEffect(() => setSlashIndex(0), [slashFilter, slashOpen, slashKind]);
   useEffect(() => setAtIndex(0), [atQuery, atOpen]);
@@ -138,6 +142,13 @@ export function Composer(props: Props) {
 
   const submitSlash = useCallback(
     (entry: SlashEntry) => {
+      if (entry.local && entry.run) {
+        entry.run();
+        setText("");
+        setSlashOpen(false);
+        setPreview(false);
+        return;
+      }
       const rest = text.replace(/^\s*\/[^\s]*$/, "").trim();
       setText("");
       setSlashOpen(false);
@@ -420,7 +431,7 @@ export function Composer(props: Props) {
                   onClick={() => submitSlash(entry)}
                   title={`${entry.kind === "skill" ? "Skill" : "Command"} /${entry.name}${entry.description ? ` — ${entry.description}` : ""}`}
                 >
-                  <span className={`oc2-pop-badge ${entry.kind}`}>{entry.kind === "skill" ? "skill" : "cmd"}</span>
+                  <span className={`oc2-pop-badge ${entry.kind}${entry.local ? " gui" : ""}`}>{entry.local ? "gui" : entry.kind === "skill" ? "skill" : "cmd"}</span>
                   <span className="oc2-pop-name">/{entry.name}</span>
                   {entry.description && <span className="oc2-pop-desc">{truncate(entry.description, 44)}</span>}
                 </button>

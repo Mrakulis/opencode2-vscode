@@ -7,6 +7,9 @@ export interface SlashEntry {
   kind: "command" | "skill";
   name: string;
   description?: string;
+  /** Local GUI action (no server round-trip) — run() executes it. */
+  local?: boolean;
+  run?: () => void;
 }
 
 export type SlashKind = "all" | "command" | "skill";

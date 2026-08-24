@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isInbound } from "../src/protocol";
 import type { ResolvedConfig, SettingKey, WireForm } from "../src/protocol";
+import { THEME_IDS } from "../src/protocol";
+import type { SlashEntry } from "./lib/slash";
 import {
   isAssistant,
   isUser,
@@ -421,6 +423,27 @@ export function App() {
     }
   }, [activeId]);
 
+  const updateSettings = useCallback(async (updates: Array<{ key: SettingKey; value: unknown }>) => {
+    try {
+      await rpc.call("settings.update", { updates });
+      // host pushes the fresh config automatically on settings change
+    } catch {
+      /* config push will reflect reality */
+    }
+  }, []);
+
+  const newSession = useCallback(async () => {
+    try {
+      const def = resolveDefault(cfg?.models.default ?? "", serverDefault);
+      const session = await rpc.call<SessionSummary>("session.create", def ? { model: def } : {});
+      await refreshSessions();
+      selectSession(session.id);
+      setDrawerOpen(false);
+    } catch {
+      /* error toast comes from rpc rejection path */
+    }
+  }, [cfg, serverDefault, refreshSessions, selectSession]);
+
   /** Export the session in V2 transfer format (JSON, re-importable). */
   const exportSession = useCallback(async () => {
     if (!activeId) return;
@@ -493,26 +516,47 @@ export function App() {
     }
   }, []);
 
-  const updateSettings = useCallback(async (updates: Array<{ key: SettingKey; value: unknown }>) => {
-    try {
-      await rpc.call("settings.update", { updates });
-      // host pushes the fresh config automatically on settings change
-    } catch {
-      /* config push will reflect reality */
-    }
-  }, []);
+  const cycleTheme = useCallback(() => {
+    const current = cfg?.ui.theme ?? "dark";
+    const idx = THEME_IDS.indexOf(current as typeof THEME_IDS[number]);
+    const next = THEME_IDS[(idx + 1) % THEME_IDS.length] ?? "dark";
+    void updateSettings([{ key: "ui.theme", value: next }]);
+  }, [cfg?.ui.theme, updateSettings]);
 
-  const newSession = useCallback(async () => {
-    try {
-      const def = resolveDefault(cfg?.models.default ?? "", serverDefault);
-      const session = await rpc.call<SessionSummary>("session.create", def ? { model: def } : {});
-      await refreshSessions();
-      selectSession(session.id);
-      setDrawerOpen(false);
-    } catch {
-      /* error toast comes from rpc rejection path */
-    }
-  }, [cfg, serverDefault, refreshSessions, selectSession]);
+  /** Client-side builtins surfaced in the slash menu — the official apps
+   * hard-code these; the V2 API does not serve them. Each maps to a real
+   * GUI action that already exists here. */
+  const slashBuiltins = useMemo<SlashEntry[]>(() => [
+    { kind: "command", name: "new", description: "Start a new session", local: true, run: () => void newSession() },
+    { kind: "command", name: "sessions", description: "Open the sessions drawer", local: true, run: () => setDrawerOpen(true) },
+    { kind: "command", name: "models", description: "Open the model manager", local: true, run: () => setManagerOpen(true) },
+    {
+      kind: "command",
+      name: "compact",
+      description: "Compact the current session",
+      local: true,
+      run: () => {
+        if (activeId) void rpc.call("session.compact", { sessionID: activeId }).catch(() => undefined);
+      },
+    },
+    { kind: "command", name: "undo", description: "Undo last turn + revert files", local: true, run: () => void undoLastTurn() },
+    { kind: "command", name: "redo", description: "Redo the reverted turn", local: true, run: () => void redoRevert() },
+    { kind: "command", name: "export", description: "Export session as JSON", local: true, run: () => void exportSession() },
+    { kind: "command", name: "import", description: "Import a session export", local: true, run: () => void importSessionFile() },
+    {
+      kind: "command",
+      name: "thinking",
+      description: "Cycle reasoning visibility (hidden → collapsed → expanded)",
+      local: true,
+      run: () => {
+        const order = ["hide", "collapsed", "expanded"] as const;
+        const cur = cfg?.ui.showReasoning ?? "collapsed";
+        const next = order[(order.indexOf(cur) + 1) % order.length]!;
+        void updateSettings([{ key: "ui.showReasoning", value: next }]);
+      },
+    },
+    { kind: "command", name: "themes", description: `Cycle theme (current: ${cfg?.ui.theme ?? "dark"})`, local: true, run: cycleTheme },
+  ], [newSession, activeId, undoLastTurn, redoRevert, exportSession, importSessionFile, cfg?.ui.showReasoning, cfg?.ui.theme, updateSettings, cycleTheme]);
 
   const replyPermission = useCallback(
     async (requestID: string, reply: "once" | "always" | "reject") => {
@@ -624,19 +668,16 @@ export function App() {
         onOpenWorkingDiff={() => void openWorkingDiff()}
         onOpenSettings={() => void rpc.call("settings.open").catch(() => undefined)}
         theme={cfg?.ui.theme ?? "dark"}
-        themes={[
-          { id: "dark", label: "OpenCode Dark" },
-          { id: "light", label: "OpenCode Light" },
-          { id: "tokyonight", label: "Tokyo Night" },
-          { id: "gruvbox", label: "Gruvbox Dark" },
-          { id: "nord", label: "Nord" },
-          { id: "catppuccin", label: "Catppuccin Mocha" },
-        ]}
+        themes={THEME_IDS.map((id) => ({
+          id,
+          label: id === "dark" ? "OpenCode Dark" : id === "light" ? "OpenCode Light" : id.charAt(0).toUpperCase() + id.slice(1),
+        }))}
         onToggleTheme={(id) => {
-          const ids = ["dark", "light", "tokyonight", "gruvbox", "nord", "catppuccin"];
-          const current = cfg?.ui.theme ?? "dark";
-          const next = id ?? ids[(ids.indexOf(current) + 1) % ids.length] ?? "dark";
-          void updateSettings([{ key: "ui.theme", value: next }]);
+          if (id) {
+            void updateSettings([{ key: "ui.theme", value: id }]);
+          } else {
+            cycleTheme();
+          }
         }}
         onCopyTranscript={async () => {
           const md = buildTranscript(messages);
@@ -779,6 +820,7 @@ export function App() {
         busy={busy}
         sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
+        builtins={slashBuiltins}
         onSend={(t, files) => void sendMessage(t, files)}
         onSendCommand={async (command, args) => {
           if (!activeId) return;

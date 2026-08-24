@@ -1582,6 +1582,7 @@ button:focus-visible {
   text-transform: lowercase;
 }
 .oc2-pop-badge.skill { color: var(--oc2-accent); border-color: var(--oc2-accent); }
+.oc2-pop-badge.gui { color: var(--oc2-link); border-color: var(--oc2-link); }
 .oc2-pop-badge.file { color: var(--oc2-link); border-color: var(--oc2-link); }
 .oc2-pop-name {
   font-weight: 600;
