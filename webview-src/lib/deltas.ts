@@ -60,7 +60,10 @@ export function applyDelta(
 ): AnyMessage[] | null {
   const data = evt.data;
 
-  // ---- terminal / tool deltas (shell output streams via tool progress) ----
+  // ---- terminal / write deltas (shell output + file writes stream) ----
+  // shell output comes via `session.tool.progress` (output side),
+  // file writes come via `session.tool.input.delta` (input side — the file
+  // content / newString being streamed). Handle both so the diff view grows live.
   if (
     evt.type === "session.tool.progress" ||
     evt.type === "session.tool.input.delta"
@@ -71,8 +74,9 @@ export function applyDelta(
     const toolID =
       (data?.id as string | undefined) ?? (data as { toolID?: string })?.toolID;
     const delta = extractToolDelta(data);
-    if (!assistantMessageID || !toolID || typeof delta !== "string") return null;
-
+    if (!assistantMessageID || typeof delta !== "string") return null;
+    // toolID may not be present on very early input deltas — still try to
+    // attach to the last tool in the message.
     const idx = messages.findIndex((m) => m.id === assistantMessageID);
     if (idx === -1) return null;
     const candidate = messages[idx] as unknown as {
@@ -86,21 +90,69 @@ export function applyDelta(
     )
       return null;
 
-    const toolIdx = candidate.content.findIndex(
-      (p) => p.type === "tool" && (p.id === toolID || (p as { toolID?: string }).toolID === toolID),
-    );
+    let toolIdx = -1;
+    if (toolID) {
+      toolIdx = candidate.content.findIndex(
+        (p) => p.type === "tool" && (p.id === toolID || (p as { toolID?: string }).toolID === toolID),
+      );
+    }
+    // Early input deltas can arrive before the tool part exists in the
+    // snapshot — fall back to the last tool (the one currently streaming).
+    if (toolIdx === -1) {
+      for (let i = candidate.content.length - 1; i >= 0; i--) {
+        if (candidate.content[i]?.type === "tool") { toolIdx = i; break; }
+      }
+    }
     if (toolIdx === -1) return null;
 
     const tool = candidate.content[toolIdx] as unknown as {
       id: string;
       type: string;
-      state?: { status?: string; content?: Array<Record<string, unknown>> };
+      name?: string;
+      state?: {
+        status?: string;
+        input?: Record<string, unknown>;
+        content?: Array<Record<string, unknown>>;
+      };
     };
+
+    // For input deltas (write/edit) update the *input* field so the
+    // synthesized diff (which reads oldString/newString/content) grows live.
+    if (evt.type === "session.tool.input.delta") {
+      const input = { ...(tool.state?.input ?? {}) };
+      const name = typeof tool.name === "string" ? tool.name.toLowerCase() : "";
+      // Heuristic: write → "content", edit → "newString", otherwise first string field.
+      let field: string | undefined;
+      if (name === "write" && typeof input.content === "string") field = "content";
+      else if (name === "edit" && typeof input.newString === "string") field = "newString";
+      else if (typeof input.content === "string") field = "content";
+      else if (typeof input.newString === "string") field = "newString";
+      else {
+        for (const [k, v] of Object.entries(input)) if (typeof v === "string") { field = k; break; }
+      }
+      // If the input object is still empty (very early delta), create the field.
+      if (!field) {
+        field = name === "write" ? "content" : "newString";
+        (input as Record<string, unknown>)[field] = delta;
+      } else {
+        (input as Record<string, unknown>)[field] = ((input[field] as string) ?? "") + delta;
+      }
+      const nextTool = { ...tool, state: { ...(tool.state ?? {}), input } };
+      const nextContent = [...candidate.content];
+      nextContent[toolIdx] = nextTool as unknown as Record<string, unknown>;
+      const out = [...messages];
+      out[idx] = {
+        ...(messages[idx] as unknown as Record<string, unknown>),
+        content: nextContent,
+      } as unknown as AnyMessage;
+      return out;
+    }
+
+    // Progress → append to the tool's output content (terminal streaming).
     const state = tool.state ?? {};
     const toolContent: Array<Record<string, unknown>> = Array.isArray(state.content)
       ? [...state.content]
       : [];
-    // Append to the last text block inside the tool, or create one.
     const last = toolContent[toolContent.length - 1];
     if (last && last.type === "text" && typeof last.text === "string") {
       toolContent[toolContent.length - 1] = { ...last, text: (last.text as string) + delta };
