@@ -57,30 +57,38 @@ export function Feed({
     if (!el) return;
     lastScrollTopRef.current = el.scrollTop;
     /**
-     * Only a real upward scroll unpins. Growing content (shell blocks,
-     * images, streaming text) increases scrollHeight WITHOUT firing a
-     * scroll event, so it can never be mistaken for the user scrolling —
-     * that was the miscalculation with the old distance-only heuristic.
+     * Bottom-first pin logic.
+     *
+     * 1) If we're within 1px of the scroll max, ALWAYS pin: a content-shrink
+     *    clamp lands scrollTop exactly on max, which must never be mistaken
+     *    for the user scrolling up (source of both the phantom pill and
+     *    autoscroll cutting out at turn end).
+     * 2) A deliberate upward gesture (>24px or 2% of feed) unpins — one
+     *    wheel notch / line doesn't flash the pill.
+     * 3) Scrolling down into the tolerance zone re-pins.
      */
     const onScroll = (): void => {
       const prev = lastScrollTopRef.current;
       const dy = el.scrollTop - prev;
       lastScrollTopRef.current = el.scrollTop;
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      // Only a deliberate upward gesture unpins — one wheel notch / one
-      // line (~19px) must not flash the pill. Hysteresis: >24px up (or 2%
-      // of the feed, whichever is larger).
+      const dist =
+        el.scrollHeight - el.clientHeight - el.scrollTop;
+
+      if (Math.abs(dist) <= 1) {
+        pinnedRef.current = true;
+        setShowJump(false);
+        return;
+      }
       if (dy < -Math.max(24, el.clientHeight * 0.02)) {
         pinnedRef.current = false;
         setShowJump(true);
         return;
       }
-      const threshold = Math.max(48, el.clientHeight * 0.05);
-      if (distance < threshold) {
+      if (dist < Math.max(48, el.clientHeight * 0.05)) {
         pinnedRef.current = true;
         setShowJump(false);
       }
-      // otherwise: keep the current pin state (downward drift while reading)
+      // otherwise keep the current pin state (drift while reading)
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
