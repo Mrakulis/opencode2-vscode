@@ -1510,6 +1510,14 @@ button:focus-visible {
   justify-content: flex-end;
   padding: 4px var(--oc2-space-2) 0;
 }
+.retry-pill {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-muted);
+  border: 1px solid var(--oc2-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
 .oc2-theme-sub {
   display: flex;
   flex-direction: column;

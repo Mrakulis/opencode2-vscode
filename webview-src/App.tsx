@@ -112,6 +112,12 @@ export function App() {
   );
   const busy = activeId ? busySessions[activeId] === true : false;
 
+  /** Server-driven auto-retry state (SessionRetry) for visibility. */
+  const [retryInfo, setRetryInfo] = useState<
+    | { attempt?: number; message?: string; action?: { title?: string; message?: string; label?: string; link?: string } }
+    | undefined
+  >(undefined);
+
   // Keep a ref of activeId so push handlers never go stale.
   const activeIdRef = useRef(activeId);
   useEffect(() => {
@@ -451,9 +457,48 @@ export function App() {
             }
             if (
               evt.type === "session.execution.started" ||
-              evt.type === "session.status.updated"
+              evt.type === "session.status.updated" ||
+              evt.type === "session.status"
             ) {
               setBusySessions((b) => ({ ...b, [sid]: true }));
+            }
+            // Server-driven auto-retry (SessionRetry) visibility.
+            if (evt.type === "session.retry.scheduled") {
+              const d = evt.data as
+                | { attempt?: number; error?: { message?: string } }
+                | undefined;
+              setBusySessions((b) => ({ ...b, [sid]: true }));
+              setRetryInfo({ attempt: d?.attempt ?? 1, message: d?.error?.message });
+              setRetryPending(false);
+            }
+            if (evt.type === "session.status") {
+              const st = (
+                evt.data as {
+                  status?: {
+                    type?: string;
+                    attempt?: number;
+                    message?: string;
+                    action?: {
+                      title?: string;
+                      message?: string;
+                      label?: string;
+                      link?: string;
+                    };
+                  };
+                }
+              | undefined
+              )?.status;
+              if (st?.type === "retry") {
+                setBusySessions((b) => ({ ...b, [sid]: true }));
+                setRetryInfo({
+                  attempt: st.attempt ?? 1,
+                  message: st.message,
+                  ...(st.action ? { action: st.action } : {}),
+                });
+                setRetryPending(false);
+              } else if (st?.type === "idle") {
+                setRetryInfo(undefined);
+              }
             }
             if (
               evt.type === "session.execution.succeeded" ||
@@ -462,6 +507,7 @@ export function App() {
               evt.type === "session.idle"
             ) {
               setBusySessions((b) => ({ ...b, [sid]: false }));
+              setRetryInfo(undefined);
               if (evt.type === "session.execution.failed") setRetryPending(true);
               else setRetryPending(false);
             }
@@ -521,6 +567,26 @@ export function App() {
     const id = setInterval(() => void refreshMessages(activeId), 1500);
     return () => clearInterval(id);
   }, [busy, activeId, refreshMessages]);
+
+  // Derive server auto-retry state from the latest assistant message too — the
+  // `retry: { attempt, at, error }` field survives REST snapshots, so even if
+  // an event was missed the retry pill still appears while the run is alive.
+  useEffect(() => {
+    if (!busy || !activeId) return;
+    const last = [...messages].reverse().find(isAssistant);
+    const r = (
+      last as unknown as
+        | { retry?: { attempt?: number; error?: { message?: string } } }
+        | undefined
+    )?.retry;
+    if (r?.attempt) {
+      setRetryInfo((prev) => ({
+        ...(prev ?? {}),
+        attempt: r.attempt,
+        message: r.error?.message ?? prev?.message,
+      }));
+    }
+  }, [messages, busy, activeId]);
 
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
@@ -1138,6 +1204,60 @@ export function App() {
               ))}
           </div>
         )}
+
+      {retryInfo?.action && (
+        <div className="permissions">
+          <div
+            className="perm-card"
+            data-action="retry-action"
+            style={{ borderLeftColor: "var(--oc2-question)" }}
+          >
+            <div className="perm-header">
+              <span
+                className="perm-badge"
+                style={{
+                  color: "var(--oc2-question)",
+                  borderColor: "var(--oc2-tool-shell-dim)",
+                }}
+              >
+                provider
+              </span>
+              <span>{retryInfo.action.title ?? "Provider action required"}</span>
+            </div>
+            {retryInfo.action.message && (
+              <div className="perm-res" style={{ whiteSpace: "pre-wrap" }}>
+                {retryInfo.action.message}
+              </div>
+            )}
+            {retryInfo.action.link && (
+              <div className="perm-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() =>
+                    void rpc
+                      .call("url.open", { url: retryInfo.action!.link })
+                      .catch(() => undefined)
+                  }
+                >
+                  {retryInfo.action.label ?? "Open"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {busy && retryInfo && !retryInfo.action && (
+        <div className="retry-bar">
+          <span
+            className="retry-pill"
+            title={retryInfo.message ?? ""}
+          >
+            ↻ retrying{retryInfo.attempt ? ` (attempt ${retryInfo.attempt})` : ""}…
+          </span>
+        </div>
+      )}
 
       {retryPending && !busy && (
         <div className="retry-bar">

@@ -220,6 +220,7 @@ export type RpcMethod =
   | "ui.activeSession"
   | "settings.update"
   | "settings.open"
+  | "url.open"
   | "workspace.directory"
   | "project.current"
   | "dialog.saveText"

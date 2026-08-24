@@ -361,6 +361,11 @@ export function createRpcDispatcher(
       );
       return true;
     },
+    "url.open": async (p) => {
+      const uri = vscode.Uri.parse(str(p, "url"), true);
+      await vscode.env.openExternal(uri);
+      return true;
+    },
     "file.open": async (p) => {
       const raw = str(p, "path");
       // handle file:line or file:line:col suffix

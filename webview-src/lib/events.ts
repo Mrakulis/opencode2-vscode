@@ -61,6 +61,9 @@ const TABLE: Record<string, UiAction[]> = {
   "session.usage.recorded": ["sessions"],
   "session.usage.updated": [],
 
+  // server-driven auto-retry (SessionRetry) — keep the UI aware
+  "session.retry.scheduled": ["messages"],
+
   // compaction
   "session.compaction.started": ["messages"],
   "session.compaction.delta": [],

@@ -27,6 +27,10 @@ describe("actionsForEvent", () => {
     assert.deepEqual(actionsForEvent("installation.update.available"), []);
     assert.deepEqual(actionsForEvent("unknown.event"), []);
   });
+  it("routes retry/status events", () => {
+    assert.ok(actionsForEvent("session.retry.scheduled").includes("messages"));
+    assert.ok(actionsForEvent("session.status").includes("sessions"));
+  });
   it("does not refetch on delta events (accumulator owns those)", () => {
     assert.deepEqual(actionsForEvent("session.text.delta"), []);
     assert.deepEqual(actionsForEvent("session.reasoning.delta"), []);
