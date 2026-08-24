@@ -1,8 +1,14 @@
 import { OpenCode, type OpenCodeClient, type OpenCodeEvent } from "@opencode-ai/client";
-import { Service, type Endpoint, type EnsureReason } from "@opencode-ai/client/service";
+import { Service, type Endpoint } from "@opencode-ai/client/service";
+import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 import { spawnArgv, type ResolvedCli } from "./cli";
 import { Log } from "./log";
+
+/** Resolve after `ms` milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type ConnectionState = "connected" | "connecting" | "error";
 export type CliResolver = () => Promise<ResolvedCli | undefined>;
@@ -275,13 +281,69 @@ export class OpenCodeController implements vscode.Disposable {
       }
       spawnCommand = [...spawnArgv(resolved, "serve", "--service")];
     }
-    this.log.debug(`ensuring service via command: ${spawnCommand.join(" ")}`);
-    const endpoint = await Service.ensure({
-      command: spawnCommand,
-      onStart: (reason: EnsureReason, previousVersion?: string) =>
-        this.log.info(`starting background service (${reason}${previousVersion ? `, was ${previousVersion}` : ""})`),
-    });
+    // Start the shared service ourselves, hidden — the client's Service.ensure()
+    // spawns with `detached: true` and no `windowsHide`, which opens a console
+    // window on Windows. We keep detached+unref (survives the host, machine-wide
+    // singleton) but add windowsHide + silent stdio so no window appears.
+    this.log.debug(`starting hidden background service: ${spawnCommand.join(" ")}`);
+    await this.startHiddenService(spawnCommand);
+    // The CLI writes the global registration file itself — poll discovery until
+    // it appears, replicating ensure()'s wait without its visible spawn.
+    const endpoint = await this.waitForDiscovery();
     return this.makeFor(endpoint);
+  }
+
+  /** Spawn <cli> serve --service detached + hidden; resolves once spawned. */
+  private async startHiddenService(spawnCommand: string[]): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const fail = (error: Error): void => {
+        if (settled) return;
+        settled = true;
+        this.log.error("hidden service spawn failed", error);
+        reject(error);
+      };
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn(spawnCommand[0]!, spawnCommand.slice(1), {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true, // CREATE_NO_WINDOW — suppresses the detached console window
+          env: process.env,
+        });
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      child.once("error", fail);
+      child.once("spawn", () => {
+        if (settled) return;
+        settled = true;
+        this.log.info(`background service spawned (pid ${child.pid}); waiting for registration`);
+        resolve();
+      });
+      // The service is shared and intentionally outlives this extension host.
+      child.unref();
+    });
+  }
+
+  /** Poll Service.discover() until a healthy registration appears (≤15s). */
+  private async waitForDiscovery(): Promise<Endpoint> {
+    const deadline = Date.now() + 15_000;
+    let delay = 400;
+    while (Date.now() < deadline) {
+      const endpoint = await Service.discover().catch((error: unknown) => {
+        this.log.debug("discover during start failed", error);
+        return undefined;
+      });
+      if (endpoint) {
+        this.log.info(`background service registered at ${endpoint.url}`);
+        return endpoint;
+      }
+      await sleep(delay);
+      delay = Math.min(delay * 1.7, 2000);
+    }
+    throw new Error("OpenCode service failed to register within 15s of starting it.");
   }
 
   private makeFor(endpoint: Endpoint): OpenCodeClient {
