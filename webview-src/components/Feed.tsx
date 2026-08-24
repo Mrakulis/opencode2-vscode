@@ -53,8 +53,10 @@ export function Feed({
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = (): void => {
+      // Shell/terminal blocks can be ~420px tall; a small threshold made a
+      // pinned user look "scrolled up" as soon as a shell expanded.
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      const isPinned = distance < 80;
+      const isPinned = distance < 150;
       pinnedRef.current = isPinned;
       setShowJump(!isPinned);
     };
