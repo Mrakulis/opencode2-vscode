@@ -59,6 +59,19 @@ describe("groupByProvider", () => {
     );
     assert.equal(groups[0]?.models.length, 2);
   });
+  it("puts opencode (zen) first, then opencode-go, then alphabetical", () => {
+    const groups = groupByProvider([
+      m("openrouter", "1"),
+      m("opencode-go", "2"),
+      m("google", "3"),
+      m("opencode", "4"),
+      m("alibaba-token-plan", "5"),
+    ]);
+    assert.deepEqual(
+      groups.map((g) => g.providerID),
+      ["opencode", "opencode-go", "alibaba-token-plan", "google", "openrouter"],
+    );
+  });
 });
 
 describe("toggleProviderModels", () => {

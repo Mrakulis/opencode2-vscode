@@ -27,6 +27,14 @@ export function filterVisibleModels<T extends PickerModel>(
   return models.filter((m) => !set.has(modelKey(m)));
 }
 
+function providerRank(id: string): number {
+  const lower = id.toLowerCase();
+  // "opencode" is the Zen free tier (7 models); treat any zen variant as top priority
+  if (lower === "opencode" || lower === "opencode-zen" || lower.includes("zen")) return 0;
+  if (lower === "opencode-go") return 1;
+  return 2;
+}
+
 export function groupByProvider<T extends PickerModel>(
   models: T[],
 ): Array<{ providerID: string; models: T[] }> {
@@ -43,7 +51,12 @@ export function groupByProvider<T extends PickerModel>(
         (a.name ?? a.id).localeCompare(b.name ?? b.id),
       ),
     }))
-    .sort((a, b) => a.providerID.localeCompare(b.providerID));
+    .sort((a, b) => {
+      const ra = providerRank(a.providerID);
+      const rb = providerRank(b.providerID);
+      if (ra !== rb) return ra - rb;
+      return a.providerID.localeCompare(b.providerID);
+    });
 }
 
 export function toggleInList(list: string[], key: string): string[] {
