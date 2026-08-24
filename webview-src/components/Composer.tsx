@@ -423,6 +423,9 @@ export function Composer(props: Props) {
       <span className="row-label">
         {opts?.compact ? truncate(m.name ?? m.id, 26) : (m.name ?? m.id)}
       </span>
+      <span className="row-provider" title={m.providerID}>
+        {m.providerID}
+      </span>
       {props.defaultKey === modelKey(m) && (
         <span className="row-default" title="default">
           ◉
