@@ -213,8 +213,17 @@ export function Composer(props: Props) {
       const border =
         parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
       const max = Math.round(window.innerHeight * 0.4);
-      const capped = el.scrollHeight + border > max;
-      el.style.height = `${Math.min(el.scrollHeight + border, max)}px`;
+      const contentH = el.scrollHeight + border;
+      const minH = parseFloat(cs.minHeight) || 0;
+      // Single-line / empty content should stay at the CSS min-height
+      // to avoid a 1-2px jump on the first keystroke due to border rounding.
+      if (contentH <= minH + 1) {
+        el.style.height = "";
+        el.style.overflowY = "hidden";
+        return;
+      }
+      const capped = contentH > max;
+      el.style.height = `${Math.min(contentH, max)}px`;
       el.style.overflowY = capped ? "auto" : "hidden";
     };
     resize();
