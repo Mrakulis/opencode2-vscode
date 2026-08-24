@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAssistant, isUser, type AnyMessage, type MessagePartText, type MessagePartReasoning, type MessagePartTool } from "../lib/rpc";
 import { renderMarkdown } from "../lib/markdown";
 import { diffLines, formatCost, formatTokens, toolTitle, truncate } from "../lib/format";
+import { synthEditDiff, synthWriteDiff } from "../lib/difftext";
 import { rpc } from "../lib/rpc";
 
 export function Feed({
@@ -281,6 +282,26 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
   if (part.state.status === "completed") {
     // shell header should just say "shell" — command goes inside the body as terminal
     title = kind === "shell" ? "shell" : toolTitle(part.name, part.state.input ?? {});
+    const input = (part.state.input ?? {}) as Record<string, unknown>;
+    const fileHint =
+      typeof input.filePath === "string"
+        ? input.filePath
+        : typeof input.path === "string"
+          ? input.path
+          : typeof input.file === "string"
+            ? input.file
+            : undefined;
+    // V2 edit/write results carry no diff — synthesize one from their inputs.
+    // (write tools classify as kind "edit"; detect by input shape, not name)
+    const synth =
+      typeof input.oldString === "string" || typeof input.newString === "string"
+        ? synthEditDiff(
+            typeof input.oldString === "string" ? input.oldString : "",
+            typeof input.newString === "string" ? input.newString : "",
+          )
+        : typeof input.content === "string"
+          ? synthWriteDiff(input.content)
+          : "";
     const shellCmd =
       kind === "shell" && typeof (part.state.input as Record<string, unknown> | undefined)?.command === "string"
         ? ((part.state.input as Record<string, unknown>).command as string)
@@ -324,50 +345,8 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
               </pre>
             );
           }
-          const maybeDiff = (c as { diff?: unknown }).diff;
-          if (typeof maybeDiff === "string") {
-            const input = (part.state as { input?: Record<string, unknown> }).input;
-            const fileHint =
-              (typeof input === "object" &&
-                input !== null &&
-                (typeof input.filePath === "string"
-                  ? (input.filePath as string)
-                  : typeof input.path === "string"
-                    ? (input.path as string)
-                    : typeof input.file === "string"
-                      ? (input.file as string)
-                      : undefined)) || "edit.diff";
-            return (
-              <div key={i}>
-                <pre className="diff">
-                  {diffLines(maybeDiff).map((l, j) => (
-                    <span key={j} className={`line ${l.cls}`}>
-                      {l.text}
-                      {"\n"}
-                    </span>
-                  ))}
-                </pre>
-                <button
-                  type="button"
-                  className="chip"
-                  style={{ marginTop: "6px" }}
-                  onClick={() => void rpc.call("diff.open", { file: fileHint, diff: maybeDiff }).catch(() => undefined)}
-                  title="Open diff in editor"
-                >
-                  ↔ Open diff
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  style={{ marginLeft: "6px" }}
-                  onClick={() => void rpc.call("file.open", { path: fileHint }).catch(() => undefined)}
-                  title="Open file"
-                >
-                  ↗ Open file
-                </button>
-              </div>
-            );
-          }
+          // Explicit diffs from the server are rendered once below via DiffView.
+          if (typeof (c as { diff?: unknown }).diff === "string") return null;
           // Tool-produced files (screenshots, exports): render images inline,
           // everything else as a clickable file chip.
           if (c.type === "file") {
@@ -386,6 +365,16 @@ function ToolCard({ part, expandShellTools, expandEditTools, fullShellOutput }: 
           }
           return null;
         })}
+        {(() => {
+          // Prefer an explicit server-provided diff; otherwise synthesize one
+          // from the edit/write inputs so every change shows what replaced what.
+          const explicit = part.state.content?.find((c) => typeof (c as { diff?: unknown }).diff === "string") as
+            | { diff: string }
+            | undefined;
+          const diff = explicit?.diff ?? synth;
+          if (!diff) return null;
+          return <DiffView diff={diff} file={fileHint ?? "edit.diff"} />;
+        })()}
       </>
     );
   } else if (part.state.status === "error") {
@@ -412,4 +401,40 @@ function stringifyError(error: unknown): string {
   } catch {
     return String(error);
   }
+}
+
+/** Colored diff body with open-in-editor / open-file actions. */
+function DiffView({ diff, file }: { diff: string; file?: string }) {
+  return (
+    <div>
+      <pre className="diff">
+        {diffLines(diff).map((l, j) => (
+          <span key={j} className={`line ${l.cls}`}>
+            {l.text}
+            {"\n"}
+          </span>
+        ))}
+      </pre>
+      <button
+        type="button"
+        className="chip"
+        style={{ marginTop: "6px" }}
+        onClick={() => void rpc.call("diff.open", { file, diff }).catch(() => undefined)}
+        title="Open diff in editor"
+      >
+        ↔ Open diff
+      </button>
+      {file && (
+        <button
+          type="button"
+          className="chip"
+          style={{ marginLeft: "6px" }}
+          onClick={() => void rpc.call("file.open", { path: file }).catch(() => undefined)}
+          title="Open file"
+        >
+          ↗ Open file
+        </button>
+      )}
+    </div>
+  );
 }
