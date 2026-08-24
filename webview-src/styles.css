@@ -384,12 +384,6 @@ button:focus-visible {
   box-shadow: inset 0 0 0 1px var(--oc2-border);
 }
 
-.brand {
-  font-family: var(--oc2-mono);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
 .title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -560,11 +554,6 @@ button:focus-visible {
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.chip-provider {
-  font-family: var(--oc2-mono);
-  font-size: 0.85em;
-  opacity: 0.65;
 }
 .row-star,
 .row-default {
@@ -1252,11 +1241,6 @@ button:focus-visible {
   color: var(--oc2-fg-subtle);
   white-space: nowrap;
 }
-.perm-title {
-  font-family: var(--oc2-mono);
-  font-size: calc(var(--oc2-font-size) - 2px);
-  color: var(--oc2-fg-subtle);
-}
 .perm-resources {
   display: flex;
   flex-direction: column;
@@ -1589,11 +1573,6 @@ button:focus-visible {
   gap: var(--oc2-space-1);
   align-items: center;
   padding: 0 0 var(--oc2-space-2) 26px;
-}
-.retry-bar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px var(--oc2-space-2) 0;
 }
 
 /* ---------- consolidated bottom dock ---------- */

@@ -2,7 +2,7 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.3.29",
+  "version": "0.3.30",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -295,6 +295,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
+    "audit": "node scripts/audit-consistency.mjs && node scripts/check-themes.mjs",
     "format": "prettier --write .",
     "package": "npm run build && vsce package"
   },
