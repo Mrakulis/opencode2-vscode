@@ -64,17 +64,19 @@ export function Feed({
      */
     const onScroll = (): void => {
       const prev = lastScrollTopRef.current;
+      const dy = el.scrollTop - prev;
       lastScrollTopRef.current = el.scrollTop;
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (el.scrollTop < prev - 1) {
-        // scrolled up → unpin
+      // Only a deliberate upward gesture (with a little hysteresis) unpins;
+      // 1px rounding shifts from layout changes must not.
+      if (dy < -2) {
         pinnedRef.current = false;
         setShowJump(true);
         return;
       }
       const threshold = Math.max(48, el.clientHeight * 0.05);
       if (distance < threshold) {
-        if (!pinnedRef.current) pinnedRef.current = true;
+        pinnedRef.current = true;
         setShowJump(false);
       }
       // otherwise: keep the current pin state (downward drift while reading)
@@ -110,7 +112,10 @@ export function Feed({
   // Follow output only while the user stays pinned to the bottom.
   // Resumes automatically after the user clicks "Jump to latest".
   useEffect(() => {
-    if (pinnedRef.current) scrollToBottom(scrollRef.current);
+    if (pinnedRef.current) {
+      scrollToBottom(scrollRef.current);
+      setShowJump(false); // actively following → the pill must be hidden
+    }
   }, [sortedMessages]);
 
   /**

@@ -198,6 +198,35 @@ export function App() {
               return { ...p, text: localText };
             }
           }
+          // Streamed SHELL OUTPUT lives in tool.state.content — protect it
+          // from snapshots that arrive with the tool truncated/empty.
+          if (p.type === "tool") {
+            const toolId = typeof p.id === "string" ? p.id : undefined;
+            const localTool =
+              toolId != null && Array.isArray(lm.content)
+                ? lm.content.find(
+                    (lp) =>
+                      lp.type === "tool" &&
+                      (lp as { id?: unknown }).id === toolId,
+                  )
+                : undefined;
+            const len = (c?: unknown): number => {
+              const st = (c as { state?: { content?: unknown[] } } | undefined)
+                ?.state;
+              const arr = Array.isArray(st?.content) ? st!.content : [];
+              let n = 0;
+              for (const blk of arr) {
+                const t = (blk as { text?: unknown }).text;
+                if (typeof t === "string") n += t.length;
+              }
+              return n;
+            };
+            const localLen = len(localTool);
+            if (localTool && localLen > len(p)) {
+              changed = true;
+              return localTool;
+            }
+          }
           return p;
         });
         if (!changed) return m;
