@@ -89,13 +89,25 @@ export function HeaderBar(props: Props) {
       ) : (
         <span
           className="title"
-          title="Double-click to rename"
+          title="Click ✎ to rename (or double-click the title)"
           onDoubleClick={() => {
             setDraft(props.title ?? "");
             setRenaming(true);
           }}
         >
           {truncate(props.title ?? "New session", 34)}
+          <button
+            type="button"
+            className="rename-pencil"
+            title="Rename session"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDraft(props.title ?? "");
+              setRenaming(true);
+            }}
+          >
+            ✎
+          </button>
         </span>
       )}
       {props.workspaceName && (

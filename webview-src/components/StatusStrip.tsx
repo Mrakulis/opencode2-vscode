@@ -36,6 +36,11 @@ export function StatusStrip({
   return (
     <footer className="strip">
       <span className={`dot ${connected ? "ok" : "off"}`} />
+      {!connected && (
+        <span className="micro" title="Not connected to the OpenCode service">
+          offline
+        </span>
+      )}
       {tokens && (
         <>
           <span className="micro stat" title="prompt (input) tokens">

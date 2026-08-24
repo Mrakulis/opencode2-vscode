@@ -1137,6 +1137,17 @@ export function App() {
             >
               New session
             </button>
+            <div className="empty-hints">
+              <span className="micro">
+                <kbd>/</kbd> commands &amp; skills
+              </span>
+              <span className="micro">
+                <kbd>@</kbd> attach a file
+              </span>
+              <span className="micro">
+                <kbd>⋯</kbd> themes, inbox &amp; more
+              </span>
+            </div>
           </div>
         ) : (
           <Feed
@@ -1461,15 +1472,13 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
       />
 
-      {conn === "connected" && (
-        <StatusStrip
-          connected
-          cost={active?.cost}
-          tokens={active?.tokens}
-          ctxPct={ctxPct}
-          ctxLimit={ctxLimit}
-        />
-      )}
+      <StatusStrip
+        connected={conn === "connected"}
+        cost={active?.cost}
+        tokens={active?.tokens}
+        ctxPct={ctxPct}
+        ctxLimit={ctxLimit}
+      />
     </div>
   );
 }
