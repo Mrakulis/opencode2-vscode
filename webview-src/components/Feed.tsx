@@ -103,6 +103,23 @@ export function Feed({
     if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
   }, [sortedMessages]);
 
+  // A newly sent prompt ALWAYS jumps into view and re-pins the feed —
+  // even if the user was scrolled up reading earlier messages.
+  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  const lastPromptId =
+    lastMessage && isUser(lastMessage) ? (lastMessage as { id: string }).id : undefined;
+  useEffect(() => {
+    if (!lastPromptId) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = true;
+    setShowJump(false);
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      lastScrollTopRef.current = el.scrollTop;
+    });
+  }, [lastPromptId]);
+
   if (sortedMessages.length === 0 && !busy) {
     return (
       <div className="feed-scroll" ref={scrollRef}>
