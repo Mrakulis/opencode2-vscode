@@ -52,19 +52,43 @@ export function Feed({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const onScroll = (): void => {
-      pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-      setShowJump(!pinnedRef.current);
+    const updatePinned = (): void => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const isPinned = distance < 80;
+      if (pinnedRef.current !== isPinned) {
+        pinnedRef.current = isPinned;
+        setShowJump(!isPinned);
+      }
     };
-    el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
+    const onScroll = (): void => updatePinned();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    // initial state (handles short content / no scroll needed)
+    updatePinned();
+    // Keep pinned when content resizes (images, code blocks, streaming deltas)
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) {
+        el.scrollTop = el.scrollHeight;
+      } else {
+        updatePinned();
+      }
+    });
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
   }, []);
 
   // Follow output only while the user stays pinned to the bottom.
+  // Resumes automatically after the user clicks "Jump to latest".
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
-  }, [sortedMessages]);
+    if (el && pinnedRef.current) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [sortedMessages, busy]);
 
   if (sortedMessages.length === 0 && !busy) {
     return (
@@ -82,20 +106,22 @@ export function Feed({
   }
 
   return (
-    <div className="feed-scroll" ref={scrollRef}>
-      {sortedMessages.map((m) => (
-        <MessageGroup
-          key={m.id}
-          message={m}
-          busy={busy}
-          showReasoning={showReasoning}
-          expandShellTools={expandShellTools}
-          expandEditTools={expandEditTools}
-          fullShellOutput={fullShellOutput}
-          messageStats={messageStats}
-        />
-      ))}
-      {busy && <div className="streaming-caret" aria-label="working" />}
+    <div className="feed">
+      <div className="feed-scroll" ref={scrollRef}>
+        {sortedMessages.map((m) => (
+          <MessageGroup
+            key={m.id}
+            message={m}
+            busy={busy}
+            showReasoning={showReasoning}
+            expandShellTools={expandShellTools}
+            expandEditTools={expandEditTools}
+            fullShellOutput={fullShellOutput}
+            messageStats={messageStats}
+          />
+        ))}
+        {busy && <div className="streaming-caret" aria-label="working" />}
+      </div>
 
       {showJump && (
         <button
@@ -103,12 +129,19 @@ export function Feed({
           className="jump"
           onClick={() => {
             const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-            pinnedRef.current = true;
-            setShowJump(false);
+            if (el) {
+              pinnedRef.current = true;
+              setShowJump(false);
+              requestAnimationFrame(() => {
+                el.scrollTop = el.scrollHeight;
+              });
+            } else {
+              pinnedRef.current = true;
+              setShowJump(false);
+            }
           }}
         >
-          ↓ latest
+          ↓ Jump to latest
         </button>
       )}
     </div>
