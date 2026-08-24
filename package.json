@@ -2,9 +2,10 @@
   "name": "opencode2-vscode",
   "displayName": "OpenCode 2 for VS Code",
   "description": "VS Code sidebar client for OpenCode, built on the OpenCode V2 API.",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "license": "MIT",
   "publisher": "Mrakulis",
+  "icon": "resources/marketplace-icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Mrakulis/opencode2-vscode"
