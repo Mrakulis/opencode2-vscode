@@ -146,6 +146,7 @@ export function createRpcDispatcher(
         p.reply === "always" || p.reply === "reject" ? p.reply : "once",
       ),
     "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
+    "file.read": (p) => api.fileRead(str(p, "path")),
     "commands.list": () => api.commands(),
     "skills.list": () => api.skills(),
     "session.command": (p) => {

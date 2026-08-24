@@ -208,6 +208,12 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         query,
         location: directory ? { directory } : undefined,
       }),
+    fileRead: async (path: string): Promise<string> => {
+      const res = await getClient().file.read({ path });
+      const bytes =
+        res instanceof Uint8Array ? res : new Uint8Array(res as ArrayBuffer);
+      return new TextDecoder().decode(bytes).slice(0, 4000);
+    },
     commands: async (): Promise<
       Array<{ name: string; description?: string }>
     > => {

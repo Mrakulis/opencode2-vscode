@@ -1631,6 +1631,30 @@ button:focus-visible {
   border-top: 1px solid var(--oc2-border);
   margin-top: 2px;
 }
+.oc2-pop-preview {
+  border-top: 1px solid var(--oc2-border);
+  margin-top: 2px;
+  padding: var(--oc2-space-1) var(--oc2-space-2);
+}
+.oc2-pop-preview-head {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-muted);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc2-pop-preview pre {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-subtle);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  margin: 0;
+}
 .oc2-pop-item {
   display: flex;
   align-items: center;

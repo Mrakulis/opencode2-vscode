@@ -216,6 +216,7 @@ export type RpcMethod =
   | "mcp.disconnect"
   // misc
   | "files.find"
+  | "file.read"
   | "transcript.copy"
   | "ui.activeSession"
   | "settings.update"

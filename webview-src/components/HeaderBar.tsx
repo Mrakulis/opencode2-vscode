@@ -13,6 +13,7 @@ interface Props {
   onCopyTranscript(): Promise<void>;
   onFork(): Promise<void>;
   onCompact(): Promise<void>;
+  onOpenInbox(): void;
   onExport(): void;
   onImport(): void;
   onUndo(): void;
@@ -171,6 +172,17 @@ export function HeaderBar(props: Props) {
                 }}
               >
                 Instructions…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                disabled={!props.sessionId}
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenInbox();
+                }}
+              >
+                Inbox…
               </button>
               <button
                 type="button"

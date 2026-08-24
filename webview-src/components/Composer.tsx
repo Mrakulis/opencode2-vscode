@@ -81,6 +81,7 @@ export function Composer(props: Props) {
   const [atQuery, setAtQuery] = useState("");
   const [atHits, setAtHits] = useState<FileHit[]>([]);
   const [atIndex, setAtIndex] = useState(0);
+  const [atPreview, setAtPreview] = useState<{ path: string; text: string } | undefined>(undefined);
   const [delivery, setDelivery] = useState<"queue" | undefined>(undefined);
 
   // Load the V2 command/skill catalog once per mount (cheap list endpoints);
@@ -176,6 +177,35 @@ export function Composer(props: Props) {
       clearTimeout(t);
     };
   }, [atOpen, atQuery]);
+
+  // File-content preview of the highlighted mention (debounced), via file.read.
+  useEffect(() => {
+    if (!atOpen) {
+      setAtPreview(undefined);
+      return;
+    }
+    const hit = atHits[atIndex];
+    const path = hit?.path ?? hit?.name;
+    if (!path) {
+      setAtPreview(undefined);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      void rpc
+        .call<string>("file.read", { path })
+        .then((text) => {
+          if (!cancelled) setAtPreview({ path, text });
+        })
+        .catch(() => {
+          if (!cancelled) setAtPreview(undefined);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [atOpen, atIndex, atHits]);
 
   const submitSlash = useCallback(
     (entry: SlashEntry) => {
@@ -650,6 +680,12 @@ export function Composer(props: Props) {
                   </button>
                 );
               })
+            )}
+            {atPreview && (
+              <div className="oc2-pop-preview" title={atPreview.path}>
+                <div className="oc2-pop-preview-head">{atPreview.path}</div>
+                <pre>{atPreview.text}</pre>
+              </div>
             )}
             <div className="oc2-popover-hint">
               ↑↓ navigate · Enter attach · Esc close

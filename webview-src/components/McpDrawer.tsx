@@ -47,6 +47,36 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
     }
   }, []);
 
+  // MCP resource catalog browser (read-only).
+  const [resources, setResources] = useState<
+    Array<{ server: string; name: string; uri: string; description?: string }>
+  >([]);
+  const [showResources, setShowResources] = useState(false);
+  useEffect(() => {
+    if (!showResources) return;
+    void rpc
+      .call<{
+        data: {
+          resources?: Array<Record<string, unknown>>;
+          templates?: Array<Record<string, unknown>>;
+        };
+      }>("mcp.resources")
+      .then((res) => {
+        setResources(
+          ((res.data?.resources ?? []) as Array<Record<string, unknown>>).map(
+            (r) => ({
+              server: typeof r.server === "string" ? r.server : "?",
+              name: typeof r.name === "string" ? r.name : "?",
+              uri: typeof r.uri === "string" ? r.uri : "",
+              description:
+                typeof r.description === "string" ? r.description : undefined,
+            }),
+          ),
+        );
+      })
+      .catch(() => setResources([]));
+  }, [showResources]);
+
   useEffect(() => {
     if (refreshTick > 0) void refresh();
   }, [refreshTick, refresh]);
@@ -351,7 +381,34 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
       <div className="strip">
         <span className="micro">changes apply to the running service</span>
         <span className="spacer" />
+        <button
+          type="button"
+          className={`chip${showResources ? " on" : ""}`}
+          onClick={() => setShowResources((v) => !v)}
+          title="Browse available MCP resources"
+        >
+          resources
+        </button>
       </div>
+
+      {showResources && (
+        <div className="drawer-list">
+          <div className="menu-section">mcp resources</div>
+          {resources.length === 0 && (
+            <div className="drawer-empty">No resources reported.</div>
+          )}
+          {resources.map((r, i) => (
+            <div key={`${r.uri}:${i}`} className="model-row">
+              <span className="model-name" title={r.uri}>
+                {r.name}
+              </span>
+              <span className="model-meta" title={r.server}>
+                {r.server}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

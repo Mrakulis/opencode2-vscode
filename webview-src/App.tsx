@@ -28,6 +28,7 @@ import { FormCard } from "./components/FormCard";
 import { SavedPermissionsDrawer } from "./components/SavedPermissionsDrawer";
 import { InstructionsDrawer } from "./components/InstructionsDrawer";
 import { WorktreesDrawer } from "./components/WorktreesDrawer";
+import { InboxDrawer } from "./components/InboxDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 
@@ -90,6 +91,8 @@ export function App() {
   const [savedPermsOpen, setSavedPermsOpen] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [worktreesOpen, setWorktreesOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [compacting, setCompacting] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const [serverDefault, setServerDefault] = useState<
     { id: string; providerID: string; name?: string } | undefined
@@ -519,6 +522,14 @@ export function App() {
               if (evt.type === "session.execution.failed") setRetryPending(true);
               else setRetryPending(false);
             }
+            // Compaction progress pill.
+            if (evt.type === "session.compaction.started")
+              setCompacting(true);
+            if (
+              evt.type === "session.compaction.ended" ||
+              evt.type === "session.compaction.failed"
+            )
+              setCompacting(false);
           }
 
           if (evt.type === "permission.asked") {
@@ -1043,6 +1054,9 @@ export function App() {
           if (activeId) setInstructionsOpen(true);
         }}
         onOpenWorktrees={() => setWorktreesOpen(true)}
+        onOpenInbox={() => {
+          if (activeId) setInboxOpen(true);
+        }}
         onExport={() => void exportSession()}
         onImport={() => void importSessionFile()}
         onUndo={() => void undoLastTurn()}
@@ -1210,6 +1224,9 @@ export function App() {
             onClose={() => setWorktreesOpen(false)}
           />
         )}
+        {inboxOpen && activeId && (
+          <InboxDrawer sessionId={activeId} onClose={() => setInboxOpen(false)} />
+        )}
       </main>
 
       {actionError && (
@@ -1230,7 +1247,32 @@ export function App() {
         permissions.filter((p) => p.action.toLowerCase() !== "question")
           .length > 0 &&
         activeId && (
-          <div className="permissions">
+          <div
+            className="permissions"
+            tabIndex={0}
+            aria-label="Permission requests — Enter allow once · A allow always · D or Esc reject"
+            onKeyDown={(e) => {
+              // Keep button focus behavior (space/enter already activate);
+              // add TUI-like shortcuts when focus is on the container.
+              const target = e.target as HTMLElement;
+              if (target.closest("button")) return;
+              const pending = permissions.filter(
+                (p) => p.action.toLowerCase() !== "question",
+              );
+              const first = pending[0];
+              if (!first) return;
+              if (e.key === "a" || e.key === "A") {
+                e.preventDefault();
+                void replyPermission(first.requestID, "always");
+              } else if (e.key === "d" || e.key === "D" || e.key === "Escape") {
+                e.preventDefault();
+                void replyPermission(first.requestID, "reject");
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                void replyPermission(first.requestID, "once");
+              }
+            }}
+          >
             {permissions
               .filter((p) => p.action.toLowerCase() !== "question")
               .map((p) => (
@@ -1283,6 +1325,17 @@ export function App() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {compacting && (
+        <div className="retry-bar">
+          <span
+            className="retry-pill"
+            title="The server is compacting this session's context"
+          >
+            ↻ compacting…
+          </span>
         </div>
       )}
 
