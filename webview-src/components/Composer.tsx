@@ -806,10 +806,7 @@ export function Composer(props: Props) {
             <span className="chevron">▾</span>
           </button>
           {menu === "model" && (
-            <div
-              className="menu"
-              style={{ width: "min(320px, 100%)", minWidth: 0 }}
-            >
+            <div className="menu">
               <input
                 className="filter"
                 placeholder="Search models..."
