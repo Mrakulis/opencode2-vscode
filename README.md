@@ -1,6 +1,8 @@
 # OpenCode 2 for VS Code
 
-A VS Code sidebar client for [OpenCode](https://opencode.ai), built natively on the **OpenCode V2 API** (`@opencode-ai/client`) with a GUI-first experience — not a terminal clone.
+> **Independent project** — not affiliated with, endorsed by, or maintained by the OpenCode team ([anomalyco/opencode](https://github.com/anomalyco/opencode)). Built on the public **OpenCode V2 API**.
+
+A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GUI-first (not a terminal clone), with full V2 API coverage: slash commands, skills, `@` file mentions, forms, worktrees, undo/redo with file reversion, and more.
 
 ## Features
 
