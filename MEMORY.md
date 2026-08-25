@@ -4,6 +4,8 @@
 
 ## Status
 
+- **v0.6.4 (2026-08-26)** - hotfix batch from the comprehensive six-slice audit (~65 findings: P0x1/P1x10/P2x15/P3x28). Full report + prioritized roadmap: plan dir file comprehensive-audit-findings.md. Remaining P1 backlog: describe() POSIX gate (plain-Linux CLI resolution), autoCompact cumulative tokens, mcp.resources wiring, worktree create/phantom-fields chain, oauthConnect methodID, failed-send text retention, event-debounce merge, permission-card rollback.
+- **Gates:** typecheck - 101 unit tests - build - npm run audit (theme/rpc surface) - live smoke (scripts/smoke.mjs incl. session-create canary)
 - **v0.3.37 (2026-08-25)** — full V2 GUI parity shipped. Docs consolidated: `plan.md`/`todo.md`/`AUDIT_AND_PLAN.md` deleted after completion (git history retains them). Living docs = this file + `agents.md` + `README.md`.
 - **Gates:** typecheck · 65/65 unit tests · build · `npm run audit` · live smoke (`scripts/smoke.mjs`)
 - **Maintenance:** client re-pinned to `@opencode-ai/client@beta-18050` in v0.4.0, matching the live server (typecheck + 65 tests + full smoke green against it). Future server betas: bump the pin deliberately and re-run gates + `scripts/smoke.mjs`. `vsce` not on PATH → `npx --yes @vscode/vsce package`.
