@@ -253,9 +253,10 @@ export function App() {
   }, []);
 
   const refreshPickers = useCallback(async () => {
-    try {
-      const [m, a, def] = await Promise.all([
-        rpc.call<
+    // Per-call catches: one drifted endpoint must not blank the other pickers.
+    const [m, a, def] = await Promise.all([
+      rpc
+        .call<
           Array<{
             id: string;
             providerID: string;
@@ -263,25 +264,31 @@ export function App() {
             context: number;
             variants?: Array<{ id: string }>;
           }>
-        >("models.list"),
-        rpc.call<{ id: string; name: string }[]>("agents.list"),
-        rpc
-          .call<{ id?: string; providerID?: string; name?: string } | null>(
-            "models.default",
-          )
-          .catch(() => null),
-      ]);
-      setModels(m);
-      setAgents(a);
-      if (def?.id && def?.providerID) {
-        setServerDefault({
-          id: def.id,
-          providerID: def.providerID,
-          name: def.name,
-        });
-      }
-    } catch {
-      /* not connected yet */
+        >("models.list")
+        .catch((e: unknown) => {
+          console.warn("[oc2] models.list failed", e);
+          return undefined;
+        }),
+      rpc
+        .call<{ id: string; name: string }[]>("agents.list")
+        .catch((e: unknown) => {
+          console.warn("[oc2] agents.list failed", e);
+          return undefined;
+        }),
+      rpc
+        .call<{ id?: string; providerID?: string; name?: string } | null>(
+          "models.default",
+        )
+        .catch(() => null),
+    ]);
+    if (m) setModels(m);
+    if (a) setAgents(a);
+    if (def?.id && def?.providerID) {
+      setServerDefault({
+        id: def.id,
+        providerID: def.providerID,
+        name: def.name,
+      });
     }
   }, []);
 
@@ -1058,8 +1065,12 @@ export function App() {
     return hit?.context ?? hit?.limit?.context;
   }, [effectiveModel, models]);
   const ctxPct = useMemo(
-    () => contextPercent(lastAssistant?.tokens ?? active?.tokens, ctxLimit),
-    [lastAssistant, active, ctxLimit],
+    // Session-level tokens win: after compaction the last assistant message
+    // still carries PRE-compact counts, which would pin the bar high until
+    // the next turn completes. `session.usage.recorded` keeps active.tokens
+    // fresh, so prefer it and fall back to the last assistant message.
+    () => contextPercent(active?.tokens ?? lastAssistant?.tokens, ctxLimit),
+    [active, lastAssistant, ctxLimit],
   );
 
   const isPlan = useMemo(() => {
@@ -1163,10 +1174,19 @@ export function App() {
           }
         }}
         onCompact={async () => {
-          if (activeId)
-            await rpc
-              .call("session.compact", { sessionID: activeId })
-              .catch(() => undefined);
+          if (!activeId) return;
+          await rpc
+            .call("session.compact", { sessionID: activeId })
+            .catch(() => undefined);
+          // Compaction is async server-side; `session.compaction.ended`
+          // normally drives the refresh, but some server builds don't emit
+          // it — poll a few times so the context bar resets promptly.
+          for (const delay of [1_500, 4_000, 8_000]) {
+            setTimeout(() => {
+              void refreshSessions();
+              void refreshMessages(activeId);
+            }, delay);
+          }
         }}
       />
 
@@ -1469,6 +1489,7 @@ export function App() {
         }}
         onStop={() => void interrupt()}
         agents={agents}
+        connected={conn === "connected"}
         activeAgent={active?.agent}
         agentName={agents.find((a) => a.id === active?.agent)?.name}
         models={models}

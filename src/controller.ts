@@ -15,6 +15,26 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * True when two service URLs point at the same local endpoint — hostnames
+ * are normalized so `localhost`, `127.0.0.1`, and `[::1]` all match.
+ */
+export function sameServiceUrl(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    const norm = (h: string): string =>
+      h === "127.0.0.1" || h === "[::1]" || h === "::1" ? "localhost" : h;
+    return (
+      ua.protocol === ub.protocol &&
+      norm(ua.hostname) === norm(ub.hostname) &&
+      ua.port === ub.port
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type ConnectionState = "connected" | "connecting" | "error";
 export type CliResolver = () => Promise<ResolvedCli | undefined>;
 
@@ -113,7 +133,14 @@ export class OpenCodeController implements vscode.Disposable {
       this.log.error("connection failed", error);
       if (generation === this.generation) {
         this.client = undefined;
-        this.lastError = message;
+        // Surface an actionable hint for auth challenges — a local service
+        // always requires basic auth, and explicit URLs may lack credentials.
+        const authHint =
+          /401|unauthorized|authentication/i.test(message) &&
+          !/basic auth/i.test(message)
+            ? `${message} — the service requires basic auth; discovery supplies it automatically, or point opencode2.server.baseUrl at the exact registered URL.`
+            : message;
+        this.lastError = authHint;
         this.emitter.fire("error");
         this.scheduleRetry(generation, cli);
       }
@@ -286,10 +313,20 @@ export class OpenCodeController implements vscode.Disposable {
     const explicitUrl = config.get<string>("server.baseUrl", "").trim();
     const serverMode = config.get<"own" | "discover">("server.mode", "own");
 
-    // 1) Explicit server URL wins — no auth headers are injected.
+    // 1) Explicit server URL wins — no auth headers are injected for remote
+    //    servers. Local services register with basic auth though, so when the
+    //    explicit URL matches a local registration we reuse its credentials;
+    //    otherwise every request 401s (a browser hitting the same URL shows
+    //    the same username/password prompt).
     if (explicitUrl) {
       this.log.debug(`using explicit server url: ${explicitUrl}`);
-      return this.track(OpenCode.make({ baseUrl: explicitUrl }), explicitUrl);
+      const headers = await this.headersForExplicit(explicitUrl);
+      return this.track(
+        headers
+          ? OpenCode.make({ baseUrl: explicitUrl, headers })
+          : OpenCode.make({ baseUrl: explicitUrl }),
+        explicitUrl,
+      );
     }
 
     // 2) "discover" mode: find an already-registered healthy service.
@@ -395,6 +432,33 @@ export class OpenCodeController implements vscode.Disposable {
       }),
       endpoint.url,
     );
+  }
+
+  /**
+   * Auth headers for an explicit `server.baseUrl`. Only loopback URLs are
+   * candidates: if a local registration exists for the same endpoint, its
+   * basic-auth credentials are reused. Remote URLs stay credential-free.
+   */
+  private async headersForExplicit(
+    url: string,
+  ): Promise<Record<string, string> | undefined> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return undefined;
+    }
+    const host = parsed.hostname;
+    const loopback =
+      host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (!loopback) return undefined;
+    const discovered = await Service.discover().catch(() => undefined);
+    if (!discovered?.auth) return undefined;
+    if (!sameServiceUrl(discovered.url, url)) return undefined;
+    this.log.debug(
+      `explicit url matches local registration at ${discovered.url}; attaching its auth`,
+    );
+    return Service.headers(discovered);
   }
 
   private track(client: OpenCodeClient, url: string): OpenCodeClient {

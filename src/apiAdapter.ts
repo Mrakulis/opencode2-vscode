@@ -20,6 +20,23 @@ export interface ApiAdapterDeps {
   getClient(): OpenCodeClient;
 }
 
+/**
+ * Beta drift: several list endpoints return a BARE array while others wrap
+ * `{ data }`. Normalize both so a server-side shape change degrades to an
+ * empty list instead of a TypeError that blanks whole pickers.
+ */
+function asRows<T>(res: unknown): T[] {
+  if (Array.isArray(res)) return res as T[];
+  const data = (res as { data?: unknown } | null | undefined)?.data;
+  return Array.isArray(data) ? (data as T[]) : [];
+}
+
+/** Row shape of model.list entries we rely on (SDK types drift around it). */
+type ModelRow = Omit<ModelInfo, "enabled" | "limit"> & {
+  enabled?: boolean;
+  limit?: { context?: number };
+};
+
 export function createApi({ getClient }: ApiAdapterDeps) {
   return {
     health: () => getClient().health.get(),
@@ -149,20 +166,20 @@ export function createApi({ getClient }: ApiAdapterDeps) {
 
     // -- pickers -------------------------------------------------------------
     models: async (): Promise<Array<ModelInfo & { context: number }>> => {
-      const res = await getClient().model.list();
-      return res.data
-        .filter((m) => m.enabled)
+      const rows = asRows<ModelRow>(await getClient().model.list());
+      return rows
+        .filter((m) => m.enabled !== false)
         .map((m) => ({
           ...m,
           // normalize: downstream expects top-level `context` = limit.context
           // and `id` consistent with ModelRef (modelID is canonical)
           id: (m as unknown as { modelID?: string }).modelID ?? m.id,
-          context: m.limit.context,
+          context: m.limit?.context ?? 0,
         })) as Array<ModelInfo & { context: number }>;
     },
     agents: async (): Promise<AgentInfo[]> => {
-      const res = await getClient().agent.list();
-      return res.data.filter((a) => !a.hidden && a.mode !== "subagent");
+      const rows = asRows<AgentInfo>(await getClient().agent.list());
+      return rows.filter((a) => !a.hidden && a.mode !== "subagent");
     },
     switchModel: (
       sessionID: string,

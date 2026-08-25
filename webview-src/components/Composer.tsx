@@ -34,6 +34,7 @@ interface Props {
   onStop(): void;
   // selectors moved here from header
   agents: Array<{ id: string; name: string }>;
+  connected?: boolean;
   activeAgent?: string;
   agentName?: string;
   models: Array<{
@@ -778,7 +779,11 @@ export function Composer(props: Props) {
           {menu === "agent" && (
             <div className="menu">
               {props.agents.length === 0 ? (
-                <div className="menu-empty">Loading agents…</div>
+                <div className="menu-empty">
+                  {props.connected
+                    ? "No agents returned by the service"
+                    : "Loading agents…"}
+                </div>
               ) : (
                 props.agents.map((a) => (
                   <button
