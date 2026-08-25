@@ -7,7 +7,7 @@ import { Service, type Endpoint } from "@opencode-ai/client/service";
 import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 import { spawnArgvHost, type ResolvedCli } from "./cli";
-import { isFlatpak } from "./flatpak";
+import { isFlatpak, registrationFiles } from "./flatpak";
 import { Log } from "./log";
 
 /** Resolve after `ms` milliseconds. */
@@ -331,10 +331,7 @@ export class OpenCodeController implements vscode.Disposable {
 
     // 2) "discover" mode: find an already-registered healthy service.
     if (serverMode === "discover") {
-      const discovered = await Service.discover().catch((error: unknown) => {
-        this.log.debug("discover failed", error);
-        return undefined;
-      });
+      const discovered = await this.discoverService();
       if (discovered) {
         this.log.debug(`discovered registered service at ${discovered.url}`);
         return this.makeFor(discovered);
@@ -403,15 +400,12 @@ export class OpenCodeController implements vscode.Disposable {
     });
   }
 
-  /** Poll Service.discover() until a healthy registration appears (≤15s). */
+  /** Poll discoverService() until a healthy registration appears (≤15s). */
   private async waitForDiscovery(): Promise<Endpoint> {
     const deadline = Date.now() + 15_000;
     let delay = 400;
     while (Date.now() < deadline) {
-      const endpoint = await Service.discover().catch((error: unknown) => {
-        this.log.debug("discover during start failed", error);
-        return undefined;
-      });
+      const endpoint = await this.discoverService();
       if (endpoint) {
         this.log.info(`background service registered at ${endpoint.url}`);
         return endpoint;
@@ -435,6 +429,29 @@ export class OpenCodeController implements vscode.Disposable {
   }
 
   /**
+   * Discover a healthy registered service across every plausible registration
+   * file. The library default derives the path from XDG_STATE_HOME, which
+   * Flatpak sandboxes redirect to the app-private dir while a HOST-spawned
+   * service registers at the real ~/.local/state — so under Flatpak we probe
+   * host-canonical locations first.
+   */
+  private async discoverService(): Promise<Endpoint | undefined> {
+    for (const file of registrationFiles()) {
+      const found = await Service.discover({ file }).catch(
+        (error: unknown) => {
+          this.log.debug(`discover ${file} failed`, error);
+          return undefined;
+        },
+      );
+      if (found) {
+        this.log.debug(`discovered registered service via ${file}`);
+        return found;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Auth headers for an explicit `server.baseUrl`. Only loopback URLs are
    * candidates: if a local registration exists for the same endpoint, its
    * basic-auth credentials are reused. Remote URLs stay credential-free.
@@ -452,7 +469,7 @@ export class OpenCodeController implements vscode.Disposable {
     const loopback =
       host === "localhost" || host === "127.0.0.1" || host === "::1";
     if (!loopback) return undefined;
-    const discovered = await Service.discover().catch(() => undefined);
+    const discovered = await this.discoverService();
     if (!discovered?.auth) return undefined;
     if (!sameServiceUrl(discovered.url, url)) return undefined;
     this.log.debug(
