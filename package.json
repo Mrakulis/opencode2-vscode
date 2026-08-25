@@ -1,8 +1,8 @@
 {
-  "name": "opencode2-vscode",
+  "name": "opencode2-vscode-gui",
   "displayName": "OpenCode 2 — Sidebar GUI",
   "description": "Independent VS Code sidebar GUI for the OpenCode coding agent — slash commands, skills, forms, worktrees, undo/redo, themes. Not affiliated with the OpenCode team.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
