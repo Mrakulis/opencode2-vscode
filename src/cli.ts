@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { isFlatpak, isPosix } from "./flatpak";
+import { wellKnownCliLocations } from "./locations";
 import { Log } from "./log";
 
 /**
@@ -72,7 +73,7 @@ function isRealExe(p: string): boolean {
 /** All PATH hits for a command name (cross-platform, Flatpak-aware). */
 function whereAll(name: string): Promise<string[]> {
   return new Promise((resolve) => {
-    if (process.platform === "win32") {
+    if (!isPosix()) {
       execFile(
         "where.exe",
         [name],
@@ -158,31 +159,14 @@ function describe(candidate: string): ResolvedCli | undefined {
   return undefined;
 }
 
-/** Well-known real binaries shipped beside the npm packages. */
-function knownRealExes(name: string): string[] {
-  const npmRoot = path.join(process.env.APPDATA ?? "", "npm");
-  const out: string[] = [];
-  if (name === "opencode2" || name === "opencode") {
-    out.push(
-      path.join(
-        npmRoot,
-        "node_modules",
-        "@opencode-ai",
-        "cli",
-        "bin",
-        "opencode2.exe",
-      ),
-      path.join(npmRoot, "node_modules", "opencode-ai", "bin", "opencode.exe"),
-    );
-  }
-  return out;
-}
-
 /**
  * Resolve the OpenCode V2 CLI. Order:
  *  1. explicit `opencode2.cliPath`
  *  2. PATH hits for `opencode2`, preferring real exes over shims
- *  3. known real-exe locations derived from the npm layout
+ *  3. well-known install locations (npm layout on Windows; `~/.local/bin`,
+ *     `~/.npm-global/bin`, `~/.opencode/bin`, `~/bin`, `/usr/local/bin`,
+ *     `/usr/bin` on POSIX — covers installs a GUI-launched editor's PATH
+ *     never sees)
  *  4. PATH hits for legacy `opencode` (only useful for discovery-less spawn)
  */
 export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
@@ -218,8 +202,8 @@ export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
         }
       }
     }
-    // real binaries living inside the npm package folders
-    for (const exe of knownRealExes(name)) {
+    // well-known install locations the build may have dropped the CLI into
+    for (const exe of wellKnownCliLocations(name)) {
       const d = describe(exe);
       if (d) {
         const version = await queryVersion(d);
@@ -234,11 +218,6 @@ export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
 
   log.warn("no usable OpenCode CLI found");
   return undefined;
-}
-
-/** Spawn argv for an arbitrary CLI invocation (service subcommand appended). */
-export function spawnArgv(cli: ResolvedCli, ...args: string[]): string[] {
-  return [cli.program, ...cli.prefixArgs, ...args];
 }
 
 /** Spawn argv for an arbitrary CLI invocation, escaping Flatpak if needed. */
