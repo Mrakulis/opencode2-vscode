@@ -554,7 +554,7 @@ button:focus-visible {
   padding: 1px 6px;
   white-space: nowrap;
   flex: none;
-  max-width: 110px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1429,13 +1429,20 @@ button:focus-visible {
   flex: none;
 }
 /* bottom-row menus open upward and stay anchored to their button */
+/* bottom-row menus open upward and stay anchored to their button */
 .composer-selectors .picker .menu {
   bottom: calc(100% + 6px);
   top: auto;
   left: 0;
   right: auto;
   min-width: 200px;
-  max-width: min(340px, 100%);
+  max-width: min(340px, calc(100vw - 16px));
+}
+/* Model menu needs extra room for names + provider badges */
+.composer-selectors .picker-model .menu {
+  min-width: 280px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
 }
 .composer-selectors .picker:nth-child(3) .menu {
   left: auto;
