@@ -1659,6 +1659,13 @@ button:focus-visible {
   border-radius: 999px;
   padding: 2px 10px;
 }
+/* In-chat retry row attached to a failed assistant message. */
+.msg-retry {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  margin-top: var(--oc2-space-2);
+}
 .oc2-theme-sub {
   display: flex;
   flex-direction: column;

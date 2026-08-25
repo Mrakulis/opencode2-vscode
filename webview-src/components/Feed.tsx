@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   isAssistant,
   isUser,
@@ -7,6 +7,7 @@ import {
   type MessagePartReasoning,
   type MessagePartTool,
 } from "../lib/rpc";
+import { assistantFailed } from "../lib/failure";
 import { renderMarkdown } from "../lib/markdown";
 import {
   diffLines,
@@ -26,7 +27,9 @@ export function Feed({
   expandEditTools,
   fullShellOutput,
   messageStats,
-  tail,
+  onRetry,
+  retryPendingLast,
+  retryNote,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -35,9 +38,12 @@ export function Feed({
   expandEditTools: boolean;
   fullShellOutput: boolean;
   messageStats: boolean;
-  /** Rendered at the end of the message flow (e.g. in-chat retry pill) —
-   *  scrolls away naturally as new content arrives. */
-  tail?: ReactNode;
+  /** Called when the user clicks an inline Retry pill on a failed message. */
+  onRetry?: () => void;
+  /** Transport-level failure with no errored message to attach to. */
+  retryPendingLast?: boolean;
+  /** Server auto-retry status shown under the newest assistant message. */
+  retryNote?: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -189,19 +195,25 @@ export function Feed({
   return (
     <div className="feed-scroll" ref={scrollRef}>
       <div className="feed-content" ref={contentRef}>
-        {sortedMessages.map((m) => (
-          <MessageGroup
-            key={m.id}
-            message={m}
-            busy={busy}
-            showReasoning={showReasoning}
-            expandShellTools={expandShellTools}
-            expandEditTools={expandEditTools}
-            fullShellOutput={fullShellOutput}
-            messageStats={messageStats}
-          />
-        ))}
-        {tail}
+        {(() => {
+          const lastId = sortedMessages[sortedMessages.length - 1]?.id;
+          return sortedMessages.map((m) => (
+            <MessageGroup
+              key={m.id}
+              message={m}
+              busy={busy}
+              showReasoning={showReasoning}
+              expandShellTools={expandShellTools}
+              expandEditTools={expandEditTools}
+              fullShellOutput={fullShellOutput}
+              messageStats={messageStats}
+              isLast={m.id === lastId}
+              onRetry={onRetry}
+              retryPendingLast={retryPendingLast}
+              retryNote={retryNote ?? null}
+            />
+          ));
+        })()}
         {busy && <div className="streaming-caret" aria-label="working" />}
 
         {showJump && (
@@ -232,6 +244,10 @@ function MessageGroup({
   expandEditTools,
   fullShellOutput,
   messageStats,
+  isLast,
+  onRetry,
+  retryPendingLast,
+  retryNote,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -240,6 +256,10 @@ function MessageGroup({
   expandEditTools: boolean;
   fullShellOutput: boolean;
   messageStats: boolean;
+  isLast: boolean;
+  onRetry?: () => void;
+  retryPendingLast?: boolean;
+  retryNote?: string | null;
 }) {
   if (isUser(message)) {
     return (
@@ -331,6 +351,37 @@ function MessageGroup({
       {message.error != null && (
         <pre className="tool-error">{stringifyError(message.error)}</pre>
       )}
+      {(() => {
+        // In-chat retry affordance attached to THIS message: shows only while
+        // it is the newest one, then scrolls away as history grows.
+        const failed = assistantFailed(message);
+        const showButton =
+          !busy && isLast && (failed || (!!retryPendingLast && !!onRetry));
+        const showNote = busy && isLast && !!retryNote;
+        if ((!showButton || !onRetry) && !showNote) return null;
+        return (
+          <div className="msg-retry">
+            {showNote && <span className="retry-pill">{retryNote}</span>}
+            {showButton && onRetry && (
+              <button
+                type="button"
+                className="chip on"
+                title={
+                  message.error != null &&
+                  typeof message.error === "object" &&
+                  "message" in message.error &&
+                  typeof message.error.message === "string"
+                    ? `${message.error.message} — click to send the last prompt again.`
+                    : "The last prompt failed. Click to send it again."
+                }
+                onClick={onRetry}
+              >
+                ↻ Retry
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </article>
   );
 }

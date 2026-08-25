@@ -1253,34 +1253,14 @@ export function App() {
             expandEditTools={cfg?.ui.expandEditTools ?? false}
             fullShellOutput={cfg?.ui.fullShellOutput ?? false}
             messageStats={cfg?.ui.messageStats ?? true}
-            tail={
-              (busy && retryInfo && !retryInfo.action) ||
-              (retryPending && !busy) ? (
-                <div className="dock-status">
-                  {busy && retryInfo && !retryInfo.action && (
-                    <span
-                      className="retry-pill"
-                      title={retryInfo.message ?? ""}
-                    >
-                      ↻ retrying
-                      {retryInfo.attempt
-                        ? ` (attempt ${retryInfo.attempt})`
-                        : ""}
-                      …
-                    </span>
-                  )}
-                  {retryPending && !busy && (
-                    <button
-                      type="button"
-                      className="chip on"
-                      title="The last prompt failed (API/transport). Click to send it again."
-                      onClick={() => void retryLast()}
-                    >
-                      ↻ Retry last prompt
-                    </button>
-                  )}
-                </div>
-              ) : undefined
+            onRetry={() => void retryLast()}
+            retryPendingLast={retryPending}
+            retryNote={
+              busy && retryInfo && !retryInfo.action
+                ? `↻ retrying${
+                    retryInfo.attempt ? ` (attempt ${retryInfo.attempt})` : ""
+                  }…`
+                : null
             }
           />
         )}
