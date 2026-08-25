@@ -82,10 +82,20 @@ export function toggleProviderModels(
   return [...set];
 }
 
+/**
+ * Model for a brand-new session, in priority order:
+ *  1. last-used (client-tracked — config defaults are static by contract)
+ *  2. explicit setting key ("provider/model")
+ *  3. server-reported default
+ */
 export function resolveDefault(
+  lastUsed: Pick<PickerModel, "id" | "providerID"> | undefined | null,
   settingKey: string,
   serverDefault: Pick<PickerModel, "id" | "providerID"> | undefined | null,
 ): { id: string; providerID: string } | undefined {
+  if (lastUsed && lastUsed.id && lastUsed.providerID) {
+    return { id: lastUsed.id, providerID: lastUsed.providerID };
+  }
   if (settingKey.trim()) {
     const parsed = parseModelKey(settingKey.trim());
     if (parsed) return parsed;

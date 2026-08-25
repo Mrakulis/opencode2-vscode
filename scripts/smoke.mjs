@@ -59,6 +59,21 @@ console.log(
 const forms = await client.form.request.list();
 console.log(`pending form requests: ${(forms.data ?? []).length} — OK`);
 
+// Session-create roundtrip canary: the webview's New Session flow depends on
+// a usable `id` coming back from this call (beta drift has changed shapes).
+{
+  const created = await client.session.create({
+    location: { directory: process.cwd() },
+  });
+  if (!created?.id) {
+    console.log("session create: NO ID IN RESPONSE — FAIL");
+    process.exit(1);
+  }
+  console.log(`session create roundtrip: ${created.id} — OK`);
+  const removed = await client.session.remove({ sessionID: created.id });
+  console.log(`session remove: ${removed === undefined ? "void" : "shape?"} — OK`);
+}
+
 let branch;
 try {
   const vcs = await client.vcs.get();

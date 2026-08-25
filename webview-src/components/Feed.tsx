@@ -295,6 +295,9 @@ function MessageGroup({
       compaction: "context compacted",
       skill: "skill ran",
       shell: "shell command",
+      // real payload types (SDK + live): *-switched; older betas used *-selected
+      "agent-switched": "agent switched",
+      "model-switched": "model switched",
       "agent-selected": "agent switched",
       "model-selected": "model switched",
     };

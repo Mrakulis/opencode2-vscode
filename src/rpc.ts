@@ -23,6 +23,7 @@ export function createRpcDispatcher(
   controller: OpenCodeController,
   log: Log,
   resolveCli?: () => Promise<ResolvedCli | undefined>,
+  storage?: vscode.Memento,
 ) {
   const api = createApi({
     getClient: () => controller.getClient(),
@@ -78,6 +79,18 @@ export function createRpcDispatcher(
       const id = optStr(p, "id");
       activeSessionId = id;
       log.debug(`active session reported: ${id ?? "(none)"}`);
+      return Promise.resolve();
+    },
+    "ui.lastModel": () =>
+      Promise.resolve(
+        storage?.get<{ id: string; providerID: string } | undefined>(
+          "lastModel",
+        ),
+      ),
+    "ui.lastModel.set": (p) => {
+      const id = str(p, "id");
+      const providerID = str(p, "providerID");
+      void storage?.update("lastModel", { id, providerID });
       return Promise.resolve();
     },
     "messages.list": (p) => api.messages(str(p, "sessionID")),

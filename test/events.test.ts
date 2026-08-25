@@ -31,6 +31,15 @@ describe("actionsForEvent", () => {
     assert.ok(actionsForEvent("session.retry.scheduled").includes("messages"));
     assert.ok(actionsForEvent("session.status").includes("sessions"));
   });
+  it("maps usage.updated to sessions (recorded does not exist in V2)", () => {
+    assert.ok(actionsForEvent("session.usage.updated").includes("sessions"));
+  });
+  it("routes catalog drift events to pickers", () => {
+    assert.ok(actionsForEvent("models-dev.refreshed").includes("pickers"));
+    assert.ok(actionsForEvent("catalog.updated").includes("pickers"));
+    assert.ok(actionsForEvent("agent.updated").includes("pickers"));
+    assert.ok(actionsForEvent("filesystem.changed").includes("vcs"));
+  });
   it("does not refetch on delta events (accumulator owns those)", () => {
     assert.deepEqual(actionsForEvent("session.text.delta"), []);
     assert.deepEqual(actionsForEvent("session.reasoning.delta"), []);

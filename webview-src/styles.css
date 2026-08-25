@@ -1666,6 +1666,21 @@ button:focus-visible {
   gap: var(--oc2-space-2);
   margin-top: var(--oc2-space-2);
 }
+/* Dismissible error banner between header and feed. */
+.notice-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-bottom: 1px solid var(--oc2-border);
+  background: color-mix(in srgb, var(--oc2-error) 14%, transparent);
+  color: var(--oc2-fg);
+}
+.notice-bar .notice-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .oc2-theme-sub {
   display: flex;
   flex-direction: column;

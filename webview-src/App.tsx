@@ -132,6 +132,13 @@ export function App() {
     | undefined
   >(undefined);
 
+  /** Dismissible error banner — the webview has no other toast surface. */
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Last model the user actually used (persisted host-side in workspaceState). */
+  const [lastUsedModel, setLastUsedModel] = useState<
+    { id: string; providerID: string } | undefined
+  >(undefined);
+
   // Session auto-accept + dedupe tracker (OpenCode permission parity).
   const autoAcceptSessionsRef = useRef(new Set<string>());
   const respondedRef = useRef(new RespondedTracker());
@@ -372,6 +379,16 @@ export function App() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Restore the last-used model once per webview load.
+  useEffect(() => {
+    rpc
+      .call<{ id: string; providerID: string } | undefined>("ui.lastModel")
+      .then((m) => {
+        if (m?.id && m.providerID) setLastUsedModel(m);
+      })
+      .catch(() => undefined);
+  }, []);
 
   // Branch chip: fetch once per connection + on vcs events.
   useEffect(() => {
@@ -711,6 +728,14 @@ export function App() {
         if (delivery) params.delivery = delivery;
         await rpc.call("prompt.send", params);
         setRetryPending(false);
+        // Track the last-used model (client-side; server defaults are static).
+        const used = effectiveModelRef.current;
+        if (used) {
+          setLastUsedModel(used);
+          void rpc
+            .call("ui.lastModel.set", { id: used.id, providerID: used.providerID })
+            .catch(() => undefined);
+        }
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [activeId]: false }));
@@ -768,18 +793,36 @@ export function App() {
 
   const newSession = useCallback(async () => {
     try {
-      const def = resolveDefault(cfg?.models.default ?? "", serverDefault);
-      const session = await rpc.call<SessionSummary>(
-        "session.create",
-        def ? { model: def } : {},
+      // Defaults: last-used model wins; agent is always Build for new sessions.
+      const def = resolveDefault(
+        lastUsedModel,
+        cfg?.models.default ?? "",
+        serverDefault,
       );
+      const session = await rpc.call<SessionSummary>("session.create", {
+        agent: "build",
+        ...(def ? { model: def } : {}),
+      });
+      if (!session?.id) throw new Error("server returned no session id");
       await refreshSessions();
+      // Optimistic insert in case the directory filter would exclude it.
+      setSessions((prev) =>
+        prev.some((s) => s.id === session.id)
+          ? prev
+          : [session as SessionSummary, ...prev],
+      );
       selectSession(session.id);
       setDrawerOpen(false);
-    } catch {
-      /* error toast comes from rpc rejection path */
+      setNotice(null);
+    } catch (error) {
+      console.warn("[oc2] session.create failed", error);
+      setNotice(
+        `Couldn't create session — ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
-  }, [cfg, serverDefault, refreshSessions, selectSession]);
+  }, [cfg, serverDefault, lastUsedModel, refreshSessions, selectSession]);
 
   /** Export the session in V2 transfer format (JSON, re-importable). */
   const exportSession = useCallback(async () => {
@@ -797,7 +840,10 @@ export function App() {
       );
       if (!res.saved && res.path === undefined) return; // user cancelled
     } catch (e) {
-      void e; // surfaced by rpc error path
+      console.warn("[oc2] session.export failed", e);
+      setNotice(
+        `Couldn't export session — ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }, [activeId, active?.title]);
 
@@ -1077,6 +1123,15 @@ export function App() {
     () => contextPercent(liveContextStepTokens(messages), ctxLimit),
     [messages, ctxLimit],
   );
+  // Ref mirror so send-time callbacks can read it without dep churn.
+  const effectiveModelRef = useRef<
+    { id: string; providerID: string } | undefined
+  >(undefined);
+  useEffect(() => {
+    effectiveModelRef.current = effectiveModel
+      ? { id: effectiveModel.id, providerID: effectiveModel.providerID }
+      : undefined;
+  }, [effectiveModel]);
 
   const isPlan = useMemo(() => {
     const id = active?.agent?.toLowerCase() ?? "";
@@ -1172,7 +1227,15 @@ export function App() {
           if (!activeId) return;
           const forked = await rpc
             .call<SessionSummary>("session.fork", { sessionID: activeId })
-            .catch(() => undefined);
+            .catch((e: unknown) => {
+              console.warn("[oc2] session.fork failed", e);
+              setNotice(
+                `Couldn't fork session — ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
+              );
+              return undefined;
+            });
           if (forked) {
             await refreshSessions();
             selectSession(forked.id);
@@ -1194,6 +1257,20 @@ export function App() {
           }
         }}
       />
+
+      {notice && (
+        <div className="notice-bar" role="alert">
+          <span className="notice-text">{notice}</span>
+          <button
+            type="button"
+            className="chip"
+            title="Dismiss"
+            onClick={() => setNotice(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <main className="feed">
         {conn !== "connected" ? (
@@ -1499,6 +1576,10 @@ export function App() {
         onPickModel={async (m) => {
           const key = modelKey(m);
           setRecents((r) => [key, ...r.filter((k) => k !== key)].slice(0, 5));
+          setLastUsedModel({ id: m.id, providerID: m.providerID });
+          void rpc
+            .call("ui.lastModel.set", { id: m.id, providerID: m.providerID })
+            .catch(() => undefined);
           if (activeId) {
             setSessions((prev) =>
               prev.map((s) =>
@@ -1518,6 +1599,12 @@ export function App() {
         }}
         onPickVariant={async (variant) => {
           const am = effectiveModel;
+          if (am) {
+            setLastUsedModel({ id: am.id, providerID: am.providerID });
+            void rpc
+              .call("ui.lastModel.set", { id: am.id, providerID: am.providerID })
+              .catch(() => undefined);
+          }
           if (activeId && am) {
             const nextModel = variant
               ? { id: am.id, providerID: am.providerID, variant }

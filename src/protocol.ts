@@ -219,6 +219,8 @@ export type RpcMethod =
   | "file.read"
   | "transcript.copy"
   | "ui.activeSession"
+  | "ui.lastModel"
+  | "ui.lastModel.set"
   | "settings.update"
   | "settings.open"
   | "url.open"

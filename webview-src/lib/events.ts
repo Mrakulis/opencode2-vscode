@@ -58,8 +58,7 @@ const TABLE: Record<string, UiAction[]> = {
   "session.viewed": [],
 
   // usage & context
-  "session.usage.recorded": ["sessions"],
-  "session.usage.updated": [],
+  "session.usage.updated": ["sessions"],
 
   // server-driven auto-retry (SessionRetry) — keep the UI aware
   "session.retry.scheduled": ["messages"],
@@ -111,6 +110,11 @@ const TABLE: Record<string, UiAction[]> = {
   "worktree.updated": ["worktrees", "sessions"],
   "worktree.resolved": ["worktrees"],
   "server.connected": ["pickers"],
+  // catalog drift — model/agent lists can change without a reconnect
+  "models-dev.refreshed": ["pickers"],
+  "catalog.updated": ["pickers"],
+  "agent.updated": ["pickers"],
+  "filesystem.changed": ["vcs"],
 };
 
 /** Actions the UI should run for one incoming V2 event type. */

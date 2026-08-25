@@ -98,21 +98,34 @@ describe("toggleInList", () => {
 });
 
 describe("resolveDefault", () => {
-  it("prefers the setting key", () => {
+  it("prefers last-used over everything", () => {
     assert.deepEqual(
-      resolveDefault("openai/gpt-5", { id: "claude", providerID: "anthropic" }),
+      resolveDefault(
+        { id: "ox-alpha-free", providerID: "opencode-go" },
+        "openai/gpt-5",
+        { id: "claude", providerID: "anthropic" },
+      ),
+      { id: "ox-alpha-free", providerID: "opencode-go" },
+    );
+  });
+  it("falls back to the setting key when no last-used model", () => {
+    assert.deepEqual(
+      resolveDefault(undefined, "openai/gpt-5", {
+        id: "claude",
+        providerID: "anthropic",
+      }),
       { id: "gpt-5", providerID: "openai" },
     );
   });
   it("falls back to server default", () => {
     assert.deepEqual(
-      resolveDefault("", { id: "claude", providerID: "anthropic" }),
+      resolveDefault(undefined, "", { id: "claude", providerID: "anthropic" }),
       {
         id: "claude",
         providerID: "anthropic",
       },
     );
-    assert.equal(resolveDefault("", null), undefined);
-    assert.equal(resolveDefault("", undefined), undefined);
+    assert.equal(resolveDefault(undefined, "", null), undefined);
+    assert.equal(resolveDefault(undefined, "", undefined), undefined);
   });
 });
