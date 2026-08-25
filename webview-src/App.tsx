@@ -1507,6 +1507,7 @@ export function App() {
 
       <StatusStrip
         connected={conn === "connected"}
+        busy={busy}
         cost={active?.cost}
         tokens={active?.tokens}
         ctxPct={ctxPct}

@@ -9,6 +9,7 @@ export interface TokenUsage {
 
 interface Props {
   connected: boolean;
+  busy?: boolean;
   cost?: number;
   tokens?: TokenUsage;
   ctxPct: number | null;
@@ -18,6 +19,7 @@ interface Props {
 /** Full token counter: input / output / reasoning / cache, plus cost + context. */
 export function StatusStrip({
   connected,
+  busy = false,
   cost,
   tokens,
   ctxPct,
@@ -35,7 +37,10 @@ export function StatusStrip({
 
   return (
     <footer className="strip">
-      <span className={`dot ${connected ? "ok" : "off"}`} />
+      <span
+        className={`dot ${connected ? "ok" : "off"}${busy ? " busy" : ""}`}
+        title={busy ? "Agent is working…" : connected ? "Connected" : "Offline"}
+      />
       {!connected && (
         <span className="micro" title="Not connected to the OpenCode service">
           offline
