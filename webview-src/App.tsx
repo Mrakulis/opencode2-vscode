@@ -9,7 +9,12 @@ import {
   type AnyMessage,
   type SessionSummary,
 } from "./lib/rpc";
-import { contextPercent, formatCost, formatTokens } from "./lib/format";
+import {
+  contextPercent,
+  formatCost,
+  formatTokens,
+  liveContextStepTokens,
+} from "./lib/format";
 import { modelKey, resolveDefault, toggleInList } from "./lib/models";
 import { chime } from "./lib/sound";
 import { actionsForEvent } from "./lib/events";
@@ -1065,12 +1070,12 @@ export function App() {
     return hit?.context ?? hit?.limit?.context;
   }, [effectiveModel, models]);
   const ctxPct = useMemo(
-    // Session-level tokens win: after compaction the last assistant message
-    // still carries PRE-compact counts, which would pin the bar high until
-    // the next turn completes. `session.usage.recorded` keeps active.tokens
-    // fresh, so prefer it and fall back to the last assistant message.
-    () => contextPercent(active?.tokens ?? lastAssistant?.tokens, ctxLimit),
-    [active, lastAssistant, ctxLimit],
+    // Step snapshots only: session-level tokens are cumulative lifetime usage
+    // (they survive compaction and would peg the meter at 100). Steps newer
+    // than the newest compaction checkpoint approximate the live window;
+    // right after compacting there is none yet, so the meter honestly hides.
+    () => contextPercent(liveContextStepTokens(messages), ctxLimit),
+    [messages, ctxLimit],
   );
 
   const isPlan = useMemo(() => {

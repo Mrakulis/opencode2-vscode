@@ -56,6 +56,57 @@ export function contextPercent(
   return Math.min(100, Math.round((total / contextLimit) * 100));
 }
 
+/** Minimal message view needed to locate live context usage. */
+export interface UsageMessage {
+  type: string;
+  time?: { created?: number };
+  tokens?: {
+    input: number;
+    output: number;
+    reasoning: number;
+    cache: { read: number; write: number };
+  };
+}
+
+/**
+ * The newest assistant usage snapshot taken AFTER the latest compaction
+ * checkpoint, or undefined when there isn't one.
+ *
+ * Session-level token totals are CUMULATIVE lifetime usage and survive
+ * compaction — they never approximate the live window. Only per-step
+ * snapshots do. Compaction leaves a token-less `synthetic` marker message,
+ * so steps at/before the newest marker are pre-compaction and must be
+ * ignored; until a fresh step lands post-compact there is no honest number.
+ */
+export function liveContextStepTokens(
+  messages: readonly UsageMessage[] | undefined,
+): UsageMessage["tokens"] {
+  if (!messages || messages.length === 0) return undefined;
+  let cutoff = 0;
+  for (const m of messages) {
+    if (m.type === "synthetic") {
+      const t = m.time?.created ?? 0;
+      if (t > cutoff) cutoff = t;
+    }
+  }
+  let best: UsageMessage["tokens"];
+  let bestAt = -1;
+  for (const m of messages) {
+    const at = m.time?.created ?? 0;
+    if (
+      m.type !== "assistant" ||
+      !m.tokens ||
+      !(m.tokens.input > 0) ||
+      at <= cutoff ||
+      at < bestAt
+    )
+      continue;
+    bestAt = at;
+    best = m.tokens;
+  }
+  return best;
+}
+
 export function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
   const minutes = Math.floor(diff / 60_000);

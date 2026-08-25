@@ -87,7 +87,7 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     // -- conversation --------------------------------------------------------
     messages: async (sessionID: string): Promise<SessionMessageInfo[]> => {
       const res = await getClient().message.list({ sessionID });
-      return res.data;
+      return asRows<SessionMessageInfo>(res);
     },
     prompt: (input: {
       sessionID: string;
