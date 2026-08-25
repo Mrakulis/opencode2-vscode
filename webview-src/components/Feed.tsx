@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   isAssistant,
   isUser,
@@ -26,6 +26,7 @@ export function Feed({
   expandEditTools,
   fullShellOutput,
   messageStats,
+  tail,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -34,6 +35,9 @@ export function Feed({
   expandEditTools: boolean;
   fullShellOutput: boolean;
   messageStats: boolean;
+  /** Rendered at the end of the message flow (e.g. in-chat retry pill) —
+   *  scrolls away naturally as new content arrives. */
+  tail?: ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +201,7 @@ export function Feed({
             messageStats={messageStats}
           />
         ))}
+        {tail}
         {busy && <div className="streaming-caret" aria-label="working" />}
 
         {showJump && (
@@ -272,13 +277,15 @@ function MessageGroup({
       shell: "shell command",
       "agent-selected": "agent switched",
       "model-selected": "model switched",
-      synthetic: "note",
     };
     const type =
       typeof (message as { type?: string }).type === "string"
         ? (message as { type: string }).type
         : "";
     if (type.length === 0) return null;
+    // Synthetic messages are token-less checkpoint markers (e.g. compaction
+    // bookkeeping) — they carry no user-facing content, so render nothing.
+    if (type === "synthetic") return null;
     return (
       <article className="msg meta" title={type}>
         <span className="meta-label">{label[type] ?? type}</span>
