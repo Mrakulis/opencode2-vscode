@@ -1177,6 +1177,14 @@ export function App() {
               <>
                 <h2>Connecting…</h2>
                 <p>Looking for the OpenCode V2 background service.</p>
+                <button
+                  type="button"
+                  className="chip"
+                  style={{ marginTop: "var(--oc2-space-2)" }}
+                  onClick={() => void rpc.call("settings.open")}
+                >
+                                    Open Settings
+                </button>
               </>
             ) : (
               <>

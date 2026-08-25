@@ -777,19 +777,23 @@ export function Composer(props: Props) {
           </button>
           {menu === "agent" && (
             <div className="menu">
-              {props.agents.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`menu-item${props.activeAgent === a.id ? " selected" : ""}`}
-                  onClick={() => {
-                    setMenu(undefined);
-                    void props.onPickAgent(a.id);
-                  }}
-                >
-                  {a.name}
-                </button>
-              ))}
+              {props.agents.length === 0 ? (
+                <div className="menu-empty">Loading agents…</div>
+              ) : (
+                props.agents.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className={`menu-item${props.activeAgent === a.id ? " selected" : ""}`}
+                    onClick={() => {
+                      setMenu(undefined);
+                      void props.onPickAgent(a.id);
+                    }}
+                  >
+                    {a.name}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
