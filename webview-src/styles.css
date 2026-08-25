@@ -1041,14 +1041,34 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
-.streaming-caret::after {
-  content: "▍";
-  color: var(--oc2-accent);
-  animation: blink 900ms steps(2) infinite;
+/* Streaming caret — a breathing violet bar that signals active work */
+.streaming-caret {
+  width: 10px;
+  height: 24px;
+  border-radius: 3px;
+  background: var(--oc2-accent);
+  margin: var(--oc2-space-2) auto 0;
+  transform-origin: center bottom;
+  animation: caret-breathe 1.15s ease-in-out infinite;
 }
-@keyframes blink {
-  to {
-    visibility: hidden;
+@keyframes caret-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scaleY(0.62);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+    box-shadow:
+      0 0 14px rgba(124, 92, 255, 0.55),
+      0 0 4px rgba(124, 92, 255, 0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streaming-caret {
+    animation: none;
+    opacity: 0.7;
   }
 }
 
