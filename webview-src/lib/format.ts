@@ -1,7 +1,9 @@
 /** Pure formatting helpers — no DOM, unit-testable. */
 
 export function formatCost(usd: number | undefined): string {
-  if (usd === undefined || Number.isNaN(usd)) return "—";
+  if (usd === undefined || Number.isNaN(usd) || !Number.isFinite(usd))
+    return "—";
+  if (usd < 0) return `-$${Math.abs(usd).toFixed(usd > -0.01 ? 4 : 2)}`;
   if (usd === 0) return "$0";
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
   if (usd < 1) return `$${usd.toFixed(3)}`;
@@ -47,12 +49,13 @@ export function contextPercent(
   contextLimit: number | undefined,
 ): number | null {
   if (!tokens || !contextLimit || contextLimit <= 0) return null;
+  const { input, output, reasoning, cache } = tokens;
+  const parts = [input, output, reasoning, cache?.read, cache?.write];
+  // Any NaN/negative component poisons the ratio — report unknown instead.
+  if (parts.some((v) => typeof v !== "number" || Number.isNaN(v) || v < 0))
+    return null;
   const total =
-    tokens.input +
-    tokens.output +
-    tokens.reasoning +
-    tokens.cache.read +
-    tokens.cache.write;
+    input + output + reasoning + cache.read + cache.write;
   return Math.min(100, Math.round((total / contextLimit) * 100));
 }
 

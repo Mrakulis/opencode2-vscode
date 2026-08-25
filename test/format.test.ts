@@ -22,6 +22,11 @@ describe("formatCost", () => {
     assert.equal(formatCost(0), "$0");
     assert.equal(formatCost(undefined), "—");
     assert.equal(formatCost(Number.NaN), "—");
+    assert.equal(formatCost(Number.POSITIVE_INFINITY), "—");
+  });
+  it("formats negatives with a minus sign", () => {
+    assert.equal(formatCost(-5), "-$5.00");
+    assert.equal(formatCost(-0.0012), "-$0.0012");
   });
 });
 
@@ -78,6 +83,22 @@ describe("contextPercent", () => {
     assert.equal(contextPercent(tokens, undefined), null);
     assert.equal(contextPercent(undefined, 1000), null);
     assert.equal(contextPercent(tokens, 0), null);
+  });
+  it("returns null for NaN/poisoned components instead of NaN%", () => {
+    assert.equal(
+      contextPercent(
+        { input: Number.NaN, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+        1000,
+      ),
+      null,
+    );
+    assert.equal(
+      contextPercent(
+        { input: -5, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+        1000,
+      ),
+      null,
+    );
   });
 });
 

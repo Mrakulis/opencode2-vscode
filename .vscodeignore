@@ -31,3 +31,4 @@ AUDIT_AND_PLAN.md
 # secrets
 .env
 .env.*
+*.log

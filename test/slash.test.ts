@@ -14,6 +14,16 @@ describe("filterSlashEntries", () => {
     assert.equal(filterSlashEntries(entries, "").length, 4);
     assert.equal(filterSlashEntries(entries, "   ").length, 4);
   });
+  it("does not throw on drifted catalog rows without a name", () => {
+    const drifted: SlashEntry[] = [
+      { kind: "command", name: undefined as unknown as string },
+      ...entries,
+    ];
+    const got = filterSlashEntries(drifted, "review");
+    assert.deepEqual(got.map((e) => e.name), ["review"]);
+    // unnamed row survives the empty-query pass with an empty-string name
+    assert.ok(filterSlashEntries(drifted, "").some((e) => !e.name));
+  });
   it("matches case-insensitively on name", () => {
     const got = filterSlashEntries(entries, "RE");
     assert.deepEqual(got.map((e) => e.name).sort(), [

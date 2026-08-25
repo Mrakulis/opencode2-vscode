@@ -21,10 +21,12 @@ export function filterSlashEntries(
   kind: SlashKind = "all",
 ): SlashEntry[] {
   const q = query.trim().toLowerCase();
+  // Catalog rows can drift without a name — never let one kill the composer.
+  const safe = entries.map((e) => (e.name ? e : { ...e, name: "" }));
   let rows =
     q.length === 0
-      ? entries
-      : entries.filter((e) => e.name.toLowerCase().includes(q));
+      ? safe
+      : safe.filter((e) => e.name.toLowerCase().includes(q));
   if (kind === "gui") rows = rows.filter((e) => e.local === true);
   else if (kind !== "all")
     rows = rows.filter((e) => e.kind === kind && e.local !== true);

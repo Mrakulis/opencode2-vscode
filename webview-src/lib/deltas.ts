@@ -197,8 +197,14 @@ export function applyDelta(
 
   const partKind = evt.type === "session.text.delta" ? "text" : "reasoning";
   const content: PartLike[] = [...candidate.content];
+  // Ordinal clamp: a hostile/garbled frame with a huge integer must never
+  // trigger the placeholder-fill loop below (verified: ordinal 1e9 OOM-crashes
+  // the webview). Out-of-range ordinals fall back to append-to-matching.
   const ordinal =
-    typeof data?.ordinal === "number" && Number.isInteger(data.ordinal)
+    typeof data?.ordinal === "number" &&
+    Number.isInteger(data.ordinal) &&
+    data.ordinal >= 0 &&
+    data.ordinal <= 256
       ? data.ordinal
       : undefined;
 
@@ -211,10 +217,11 @@ export function applyDelta(
       // The part exists but is a different kind (e.g. ordinal is a global part
       // index across text/reasoning) — find the matching part instead.
       appendToMatching(content, partKind, delta);
-    } else {
-      // Insert a new part at the ordinal slot (may fill leading gaps as {}).
-      while (content.length < ordinal) content.push({ type: partKind, text: "" });
+    } else if (ordinal <= content.length) {
+      // Append at the next free slot.
       content[ordinal] = { type: partKind, text: delta };
+    } else {
+      appendToMatching(content, partKind, delta);
     }
   } else {
     appendToMatching(content, partKind, delta);

@@ -91,13 +91,34 @@ describe("applyDelta", () => {
     assert.equal(m.content.length, 2);
     assert.equal(m.content[1]!.type, "reasoning");
   });
+  it("clamps hostile huge ordinals (no allocation storm)", () => {
+    const out = applyDelta(base, evt({ text: "X", ordinal: 1e9 }));
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    // falls back to append-to-matching; no placeholder parts allocated
+    assert.equal(m.content.length, 1);
+    assert.equal((m.content[0] as { text: string }).text, "HelX");
+  });
+  it("rejects negative ordinals via the same fallback", () => {
+    const out = applyDelta(base, evt({ text: "X", ordinal: -3 }));
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal(m.content.length, 1);
+    assert.equal((m.content[0] as { text: string }).text, "HelX");
+  });
+  it("assigns at the next free slot for sequential ordinals", () => {
+    const out = applyDelta(base, evt({ text: "X", ordinal: 1 }));
+    assert.ok(out);
+    const m = out![1] as Extract<AnyMessage, { type: "assistant" }>;
+    assert.equal(m.content.length, 2);
+    assert.equal((m.content[1] as { text: string }).text, "X");
+  });
   it("returns null for unknown messages / malformed payloads", () => {
     assert.equal(applyDelta(base, evt({ messageID: "nope", text: "x" })), null);
     assert.equal(
       applyDelta(base, evt({ messageID: undefined, text: "x" })),
       null,
-    );
-    assert.equal(
+    );    assert.equal(
       applyDelta(base, { type: "session.tool.progress", data: {} }),
       null,
     );

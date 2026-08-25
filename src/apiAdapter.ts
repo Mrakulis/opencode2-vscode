@@ -220,11 +220,19 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     },
 
     // -- misc ----------------------------------------------------------------
-    findFiles: (query: string, directory?: string) =>
-      getClient().file.find({
+    findFiles: async (
+      query: string,
+      directory?: string,
+    ): Promise<Array<Record<string, unknown>>> => {
+      // FileFindOutput is a raw {location,data} wrapper on this beta — the
+      // @-mention picker consumed it bare and crashed into its own catch,
+      // leaving mentions permanently empty.
+      const res = await getClient().file.find({
         query,
         location: directory ? { directory } : undefined,
-      }),
+      });
+      return asRows<Record<string, unknown>>(res);
+    },
     fileRead: async (path: string): Promise<string> => {
       const res = await getClient().file.read({ path });
       const bytes =

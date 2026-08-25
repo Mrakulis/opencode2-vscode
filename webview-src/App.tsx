@@ -623,12 +623,16 @@ export function App() {
           }
 
           if (evt.type === "permission.asked") {
-            const data = evt.data as unknown as PermissionCardData | undefined;
-            if (data?.sessionID && data.requestID) {
+            const data = evt.data as unknown as
+              | (PermissionCardData & { id?: string })
+              | undefined;
+            // SDK field is `id`; tolerate `requestID` for older betas.
+            const requestID = data?.id ?? data?.requestID;
+            if (data?.sessionID && requestID) {
               setPermissions((list) =>
-                list.some((p) => p.requestID === data.requestID)
+                list.some((p) => p.requestID === requestID)
                   ? list
-                  : [...list, data],
+                  : [...list, { ...data, requestID }],
               );
             }
           }
@@ -1283,7 +1287,9 @@ export function App() {
                   type="button"
                   className="chip"
                   style={{ marginTop: "var(--oc2-space-2)" }}
-                  onClick={() => void rpc.call("settings.open")}
+                  onClick={() =>
+                    void rpc.call("settings.open").catch(() => undefined)
+                  }
                 >
                                     Open Settings
                 </button>
@@ -1536,7 +1542,9 @@ export function App() {
         sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
         builtins={slashBuiltins}
-        onSend={(t, files) => void sendMessage(t, files)}
+        onSend={(t, files, delivery) =>
+          void sendMessage(t, files, delivery)
+        }
         onSendCommand={async (command, args) => {
           if (!activeId) return;
           setBusySessions((b) => ({ ...b, [activeId]: true }));
