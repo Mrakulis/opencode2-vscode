@@ -203,7 +203,20 @@
         "opencode2.server.baseUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Explicit OpenCode V2 server URL (e.g. `http://127.0.0.1:4096`). Leave empty to auto-discover/start the shared background service."
+          "markdownDescription": "Explicit OpenCode V2 server URL (e.g. `http://127.0.0.1:4096`). Leave empty to use `server.mode`."
+        },
+        "opencode2.server.mode": {
+          "type": "string",
+          "enum": [
+            "own",
+            "discover"
+          ],
+          "enumDescriptions": [
+            "Start our own hidden background service (default — no external CLI process needed)",
+            "Discover an already-running OpenCode service"
+          ],
+          "default": "own",
+          "description": "How to connect to the OpenCode service."
         },
         "opencode2.server.autoStart": {
           "type": "boolean",

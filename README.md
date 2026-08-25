@@ -62,8 +62,8 @@ The extension is developed and tested against a specific client pin (`@opencode-
 
 | Setting | Default | Description |
 |---|---|---|
-| `server.baseUrl` | `""` | Explicit server URL; empty = auto-discover/start |
-| `server.autoStart` | `true` | Start the shared service when none is running |
+| `server.baseUrl` | `""` | Explicit server URL; empty = use `server.mode` |
+| `server.mode` | `own` | `own` (start our own hidden service) / `discover` (find an already-running one) |
 | `cliPath` | `""` | Custom CLI path; empty = try `opencode2` then `opencode` |
 | `debug.logs` | `false` | Verbose logging in the output channel |
 | `ui.theme` | `dark` | Built-in theme: `dark` / `light` |

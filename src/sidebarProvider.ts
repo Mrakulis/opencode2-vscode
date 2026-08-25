@@ -99,6 +99,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       } satisfies InboundMessage);
     };
 
+    // Immediate push + delayed safety net — the webview JS may not have
+    // registered its message listener yet when resolveWebviewView runs,
+    // especially during auto-start where connect() resolves asynchronously.
+    pushState();
+        const repush1 = setTimeout(pushState, 1000);
+    const repush2 = setTimeout(pushState, 3000);
+    this.disposables.push({
+      dispose: () => {
+        clearTimeout(repush1);
+        clearTimeout(repush2);
+      },
+    });
+
     view.onDidDispose(
       () => {
         this.view = undefined;

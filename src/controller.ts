@@ -283,7 +283,7 @@ export class OpenCodeController implements vscode.Disposable {
   private async createClient(cli?: ResolvedCli): Promise<OpenCodeClient> {
     const config = vscode.workspace.getConfiguration("opencode2");
     const explicitUrl = config.get<string>("server.baseUrl", "").trim();
-    const autoStart = config.get<boolean>("server.autoStart", true);
+    const serverMode = config.get<"own" | "discover">("server.mode", "own");
 
     // 1) Explicit server URL wins — no auth headers are injected.
     if (explicitUrl) {
@@ -291,22 +291,22 @@ export class OpenCodeController implements vscode.Disposable {
       return this.track(OpenCode.make({ baseUrl: explicitUrl }), explicitUrl);
     }
 
-    // 2) Discover an already-registered healthy service.
-    const discovered = await Service.discover().catch((error: unknown) => {
-      this.log.debug("discover failed", error);
-      return undefined;
-    });
-    if (discovered) {
-      this.log.debug(`discovered registered service at ${discovered.url}`);
-      return this.makeFor(discovered);
-    }
-    // 3) Start one via the CLI's `serve --service` mode (CLI required here).
-    if (!autoStart) {
+    // 2) "discover" mode: find an already-registered healthy service.
+    if (serverMode === "discover") {
+      const discovered = await Service.discover().catch((error: unknown) => {
+        this.log.debug("discover failed", error);
+        return undefined;
+      });
+      if (discovered) {
+        this.log.debug(`discovered registered service at ${discovered.url}`);
+        return this.makeFor(discovered);
+      }
       throw new Error(
-        "No running OpenCode service found and auto-start is disabled (opencode2.server.autoStart).",
+        "No running OpenCode service found in discover mode. Start one with `opencode serve` or switch opencode2.server.mode to 'own'.",
       );
     }
 
+    // 3) "own" mode (default): spawn our own hidden background service.
     let spawnCommand: string[];
     if (cli) {
       spawnCommand = [...spawnArgv(cli), "serve", "--service"];
@@ -319,16 +319,10 @@ export class OpenCodeController implements vscode.Disposable {
       }
       spawnCommand = [...spawnArgv(resolved, "serve", "--service")];
     }
-    // Start the shared service ourselves, hidden — the client's Service.ensure()
-    // spawns with `detached: true` and no `windowsHide`, which opens a console
-    // window on Windows. We keep detached+unref (survives the host, machine-wide
-    // singleton) but add windowsHide + silent stdio so no window appears.
     this.log.debug(
       `starting hidden background service: ${spawnCommand.join(" ")}`,
     );
     await this.startHiddenService(spawnCommand);
-    // The CLI writes the global registration file itself — poll discovery until
-    // it appears, replicating ensure()'s wait without its visible spawn.
     const endpoint = await this.waitForDiscovery();
     return this.makeFor(endpoint);
   }
