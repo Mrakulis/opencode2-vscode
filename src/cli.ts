@@ -3,15 +3,21 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { isFlatpak, isPosix } from "./flatpak";
 import { Log } from "./log";
 
 /**
  * Resolves the OpenCode V2 CLI into something Node can actually spawn.
  *
  * Windows reality: npm installs `.cmd` shims that child_process refuses to
- * execute directly (EINVAL since the 2024 patch). We therefore resolve the
- * REAL binary behind the shim and fall back to `cmd /c <shim>` only when no
- * real binary exists.
+ * execute directly (EINVAL since the 2024 patch). We resolve the REAL binary
+ * behind the shim and fall back to `cmd /c <shim>` only when no real binary
+ * exists.
+ *
+ * Flatpak reality: VS Code running as a Flatpak is sandboxed — host binaries,
+ * filesystem paths, and PATH are all isolated. We detect the sandbox and
+ * escape it with `flatpak-spawn --host` so the CLI is found and runs on the
+ * host system where it was installed.
  */
 export interface ResolvedCli {
   /** Absolute program to spawn (an .exe, or cmd.exe for shim fallback). */
@@ -49,23 +55,60 @@ function run(
   });
 }
 
+/** Wrapped/escaped run for host commands (Flatpak-aware). */
+function runHost(
+  program: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> {
+  return isFlatpak()
+    ? run("flatpak-spawn", ["--host", program, ...args])
+    : run(program, args);
+}
+
 function isRealExe(p: string): boolean {
   return /\.exe$/i.test(p);
 }
 
-/** All PATH hits for a command name (shims and exes alike). */
+/** All PATH hits for a command name (cross-platform, Flatpak-aware). */
 function whereAll(name: string): Promise<string[]> {
   return new Promise((resolve) => {
-    execFile("where.exe", [name], { windowsHide: true }, (error, stdout) => {
-      if (error) return resolve([]);
-      resolve(
-        stdout
-          .toString()
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter((l) => l.length > 0),
+    if (process.platform === "win32") {
+      execFile(
+        "where.exe",
+        [name],
+        { windowsHide: true, timeout: 10_000 },
+        (error, stdout) => {
+          if (error) return resolve([]);
+          resolve(
+            stdout
+              .toString()
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter((l) => l.length > 0),
+          );
+        },
       );
-    });
+      return;
+    }
+    // POSIX: prefer host lookup when sandboxed; otherwise local shell.
+    const probe = isFlatpak()
+      ? ["flatpak-spawn", "--host", "sh", "-lc", `command -v -a ${name}`]
+      : ["sh", "-lc", `command -v -a ${name}`];
+    execFile(
+      probe[0]!,
+      probe.slice(1),
+      { windowsHide: true, timeout: 10_000 },
+      (error, stdout) => {
+        if (error) return resolve([]);
+        resolve(
+          stdout
+            .toString()
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0),
+        );
+      },
+    );
   });
 }
 
@@ -73,7 +116,7 @@ async function queryVersion(
   resolved: ResolvedCli,
 ): Promise<string | undefined> {
   try {
-    const { stdout } = await run(resolved.program, [
+    const { stdout } = await runHost(resolved.program, [
       ...resolved.prefixArgs,
       "--version",
     ]);
@@ -86,6 +129,12 @@ async function queryVersion(
 /** Build a spawnable descriptor from any candidate file path. */
 function describe(candidate: string): ResolvedCli | undefined {
   const expanded = expandHome(candidate);
+  // In Flatpak we cannot stat host paths directly; existence was already
+  // validated via the host `command -v`. Return the host path as-is and let
+  // flatpak-spawn handle execution.
+  if (isFlatpak()) {
+    return expanded ? { program: expanded, prefixArgs: [], display: expanded } : undefined;
+  }
   let stat: fs.Stats;
   try {
     stat = fs.statSync(expanded);
@@ -192,6 +241,12 @@ export function spawnArgv(cli: ResolvedCli, ...args: string[]): string[] {
   return [cli.program, ...cli.prefixArgs, ...args];
 }
 
+/** Spawn argv for an arbitrary CLI invocation, escaping Flatpak if needed. */
+export function spawnArgvHost(cli: ResolvedCli, ...args: string[]): string[] {
+  const base = [cli.program, ...cli.prefixArgs, ...args];
+  return isFlatpak() ? ["flatpak-spawn", "--host", ...base] : base;
+}
+
 /** Install/update the OpenCode V2 CLI globally via npm. */
 export async function installCli(log: Log): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
@@ -206,7 +261,5 @@ export async function installCli(log: Log): Promise<void> {
   });
   terminal.show();
   terminal.sendText("npm install -g opencode-ai@beta", true);
-  log.info(
-    "npm global install started in terminal 'OpenCode 2 — CLI install'.",
-  );
+  log.info("npm global install started in terminal 'OpenCode 2 — CLI install'.");
 }

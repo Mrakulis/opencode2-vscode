@@ -30,6 +30,8 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 - VS Code 1.96+
 - An OpenCode V2 CLI installed locally (`opencode2`, or `opencode` from npm). The extension can install it via the command palette (`OpenCode 2: Install CLI`).
 
+> **Flatpak (Linux)** — VS Code installed as a Flatpak runs the extension host in a sandbox where host binaries and PATH are invisible. The extension detects the sandbox and escapes it automatically with `flatpak-spawn --host`, so make sure the CLI is installed **on the host system** (e.g. `sudo npm install -g opencode-ai@beta`), not inside the sandbox. The `OpenCode 2: Restart Background Service` command will surface a message pointing at host install if the CLI cannot be found. If the service starts but never connects, grant home/filesystem access to the Flatpak: `flatpak override --user --filesystem=home com.visualstudio.code`.
+
 ### Version compatibility
 
 The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18050**. Because OpenCode itself moves fast on the beta channel:

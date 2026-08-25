@@ -6,7 +6,8 @@ import {
 import { Service, type Endpoint } from "@opencode-ai/client/service";
 import { spawn } from "node:child_process";
 import * as vscode from "vscode";
-import { spawnArgv, type ResolvedCli } from "./cli";
+import { spawnArgvHost, type ResolvedCli } from "./cli";
+import { isFlatpak } from "./flatpak";
 import { Log } from "./log";
 
 /** Resolve after `ms` milliseconds. */
@@ -309,15 +310,17 @@ export class OpenCodeController implements vscode.Disposable {
     // 3) "own" mode (default): spawn our own hidden background service.
     let spawnCommand: string[];
     if (cli) {
-      spawnCommand = [...spawnArgv(cli), "serve", "--service"];
+      spawnCommand = spawnArgvHost(cli, "serve", "--service");
     } else {
       const resolved = await this.resolveCli();
       if (!resolved) {
         throw new Error(
-          "OpenCode CLI not found for auto-start. Run 'OpenCode 2: Install CLI' or set opencode2.cliPath.",
+          isFlatpak()
+            ? "OpenCode CLI not found on the host system. Flatpak detected — install the CLI on the host (not inside the sandbox): `npm install -g opencode-ai@beta`, or set opencode2.cliPath."
+            : "OpenCode CLI not found for auto-start. Run 'OpenCode 2: Install CLI' or set opencode2.cliPath.",
         );
       }
-      spawnCommand = [...spawnArgv(resolved, "serve", "--service")];
+      spawnCommand = spawnArgvHost(resolved, "serve", "--service");
     }
     this.log.debug(
       `starting hidden background service: ${spawnCommand.join(" ")}`,
