@@ -973,11 +973,16 @@ button:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--oc2-fg);
-  /* ~8 visible lines, internally scrollable — same budget as terminals */
+  /* ~8 visible lines, internally scrollable — same budget as terminals.
+     overflow is REQUIRED: without it a capped pre paints past its box and
+     overlaps the content below (e.g. the "Command exited…" tail). */
   max-height: calc(8 * 1.45em + var(--oc2-space-2) * 2);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .tool-out.full {
   max-height: 80vh;
+  overflow: auto;
 }
 /* Shell output: cap at ~8 visible lines (internally scrollable) so long
    running commands don't swallow the whole feed. */
