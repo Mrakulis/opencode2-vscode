@@ -702,7 +702,7 @@ export function App() {
     async (
       text: string,
       files?: Array<{ uri: string; name?: string }>,
-      delivery?: "queue",
+      delivery?: "steer" | "queue",
     ) => {
       if (!activeId || (!text.trim() && (!files || files.length === 0))) return;
       const optimistic: Extract<AnyMessage, { type: "user" }> = {
@@ -1332,6 +1332,9 @@ export function App() {
             messageStats={cfg?.ui.messageStats ?? true}
             onRetry={() => void retryLast()}
             retryPendingLast={retryPending}
+            onAnswer={(text) =>
+              void sendMessage(text, undefined, busy ? "steer" : undefined)
+            }
             retryNote={
               busy && retryInfo && !retryInfo.action
                 ? `↻ retrying${

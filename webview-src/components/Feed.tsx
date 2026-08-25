@@ -30,6 +30,7 @@ export function Feed({
   onRetry,
   retryPendingLast,
   retryNote,
+  onAnswer,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -44,6 +45,8 @@ export function Feed({
   retryPendingLast?: boolean;
   /** Server auto-retry status shown under the newest assistant message. */
   retryNote?: string | null;
+  /** Delivers a chosen question-option label into the conversation. */
+  onAnswer?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +214,7 @@ export function Feed({
               onRetry={onRetry}
               retryPendingLast={retryPendingLast}
               retryNote={retryNote ?? null}
+              onAnswer={onAnswer}
             />
           ));
         })()}
@@ -248,6 +252,7 @@ function MessageGroup({
   onRetry,
   retryPendingLast,
   retryNote,
+  onAnswer,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -260,6 +265,7 @@ function MessageGroup({
   onRetry?: () => void;
   retryPendingLast?: boolean;
   retryNote?: string | null;
+  onAnswer?: (text: string) => void;
 }) {
   if (isUser(message)) {
     return (
@@ -330,6 +336,7 @@ function MessageGroup({
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
           fullShellOutput={fullShellOutput}
+          onAnswer={onAnswer}
         />
       ))}
       {messageStats &&
@@ -428,6 +435,7 @@ function Part({
   expandShellTools,
   expandEditTools,
   fullShellOutput,
+  onAnswer,
 }: {
   part: MessagePartText | MessagePartReasoning | MessagePartTool;
   busy: boolean;
@@ -435,6 +443,7 @@ function Part({
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  onAnswer?: (text: string) => void;
 }) {
   if (part.type === "text") {
     return (
@@ -462,6 +471,7 @@ function Part({
         expandShellTools={expandShellTools}
         expandEditTools={expandEditTools}
         fullShellOutput={fullShellOutput}
+        onAnswer={onAnswer}
       />
     );
   }
@@ -561,11 +571,14 @@ function ToolCard({
   expandShellTools,
   expandEditTools,
   fullShellOutput,
+  onAnswer,
 }: {
   part: ToolPart;
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  /** Delivers the chosen option label back into the conversation. */
+  onAnswer?: (text: string) => void;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -580,8 +593,7 @@ function ToolCard({
   const kind = toolKind(part.name);
 
   // Reads aren't worth expanding — just announce the file being read.
-  if (kind === "read") {
-    const st = part.state as {
+  if (kind === "read") {    const st = part.state as {
       status: string;
       input?: Record<string, unknown>;
       error?: { message?: string };
@@ -605,6 +617,73 @@ function ToolCard({
             <span className="tool-error-inline">
               {(st.error?.message ?? "").slice(0, 120)}
             </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Agent-asked questions: render the actual questions + clickable options.
+  // The beta protocol has no dedicated answer endpoint — a choice is delivered
+  // as a chat message (steered while the turn is active), same as typing it.
+  if (part.name === "question") {
+    const st = part.state as {
+      status: string;
+      input?: {
+        questions?: Array<{
+          question?: string;
+          header?: string;
+          options?: Array<{ label?: string; description?: string }>;
+        }>;
+      };
+      error?: { message?: string };
+    };
+    const qs = Array.isArray(st.input?.questions) ? st.input!.questions! : [];
+    const active = st.status === "running" || st.status === "streaming";
+    return (
+      <div className={`tool-card kind-question st-${st.status} static`}>
+        <div className="tool-head">❓ question</div>
+        <div className="tool-body">
+          {qs.map((q, qi) => {
+            const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
+            const opts = Array.isArray(q.options) ? q.options : [];
+            return (
+              <div key={qi} className="q-item">
+                <div className="q-title">{qTitle}</div>
+                {opts.map((o, oi) => {
+                  const label = o.label ?? `Option ${oi + 1}`;
+                  return active && onAnswer ? (
+                    <button
+                      key={oi}
+                      type="button"
+                      className="q-opt"
+                      title={o.description}
+                      onClick={() => onAnswer(label)}
+                    >
+                      <span className="q-label">{label}</span>
+                      {o.description && (
+                        <span className="q-desc">{o.description}</span>
+                      )}
+                    </button>
+                  ) : (
+                    <div key={oi} className={`q-opt${active ? "" : " done"}`}>
+                      <span className="q-label">{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {qs.length === 0 && (
+            <pre className="tool-error">
+              {st.error?.message ?? "no question data"}
+            </pre>
+          )}
+          {!active && st.status === "error" && (
+            <div className="q-note">
+              question closed without an answer
+              {st.error?.message ? ` (${st.error.message})` : ""}
+            </div>
           )}
         </div>
       </div>
