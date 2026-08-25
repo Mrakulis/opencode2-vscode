@@ -627,66 +627,11 @@ function ToolCard({
   // The beta protocol has no dedicated answer endpoint — a choice is delivered
   // as a chat message (steered while the turn is active), same as typing it.
   if (part.name === "question") {
-    const st = part.state as {
-      status: string;
-      input?: {
-        questions?: Array<{
-          question?: string;
-          header?: string;
-          options?: Array<{ label?: string; description?: string }>;
-        }>;
-      };
-      error?: { message?: string };
-    };
-    const qs = Array.isArray(st.input?.questions) ? st.input!.questions! : [];
-    const active = st.status === "running" || st.status === "streaming";
     return (
-      <div className={`tool-card kind-question st-${st.status} static`}>
-        <div className="tool-head">❓ question</div>
-        <div className="tool-body">
-          {qs.map((q, qi) => {
-            const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
-            const opts = Array.isArray(q.options) ? q.options : [];
-            return (
-              <div key={qi} className="q-item">
-                <div className="q-title">{qTitle}</div>
-                {opts.map((o, oi) => {
-                  const label = o.label ?? `Option ${oi + 1}`;
-                  return active && onAnswer ? (
-                    <button
-                      key={oi}
-                      type="button"
-                      className="q-opt"
-                      title={o.description}
-                      onClick={() => onAnswer(label)}
-                    >
-                      <span className="q-label">{label}</span>
-                      {o.description && (
-                        <span className="q-desc">{o.description}</span>
-                      )}
-                    </button>
-                  ) : (
-                    <div key={oi} className={`q-opt${active ? "" : " done"}`}>
-                      <span className="q-label">{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-          {qs.length === 0 && (
-            <pre className="tool-error">
-              {st.error?.message ?? "no question data"}
-            </pre>
-          )}
-          {!active && st.status === "error" && (
-            <div className="q-note">
-              question closed without an answer
-              {st.error?.message ? ` (${st.error.message})` : ""}
-            </div>
-          )}
-        </div>
-      </div>
+      <QuestionCard
+        state={part.state as QuestionToolState}
+        onAnswer={onAnswer}
+      />
     );
   }
 
@@ -854,6 +799,125 @@ function stringifyError(error: unknown): string {
   } catch {
     return String(error);
   }
+}
+
+interface QuestionOption {
+  label?: string;
+  description?: string;
+}
+interface QuestionItem {
+  question?: string;
+  header?: string;
+  options?: QuestionOption[];
+}
+interface QuestionToolState {
+  status: string;
+  input?: { questions?: QuestionItem[] };
+  error?: { message?: string };
+}
+
+/** Card for agent-asked questions (`question` tool parts). While the turn is
+ *  active, every option is clickable AND a free-text "Other…" input lets the
+ *  user answer with something the agent didn't offer. Answers are delivered
+ *  as chat messages (steered mid-turn) — the beta has no dedicated endpoint. */
+function QuestionCard({
+  state,
+  onAnswer,
+}: {
+  state: QuestionToolState;
+  onAnswer?: (text: string) => void;
+}) {
+  const qs = Array.isArray(state.input?.questions)
+    ? state.input!.questions!
+    : [];
+  const active = state.status === "running" || state.status === "streaming";
+  const answer = (text: string): void => onAnswer?.(text);
+  return (
+    <div className={`tool-card kind-question st-${state.status} static`}>
+      <div className="tool-head">❓ question</div>
+      <div className="tool-body">
+        {qs.map((q, qi) => {
+          const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
+          const opts = Array.isArray(q.options) ? q.options : [];
+          return (
+            <div key={qi} className="q-item">
+              <div className="q-title">{qTitle}</div>
+              {opts.map((o, oi) => {
+                const label = o.label ?? `Option ${oi + 1}`;
+                return active && onAnswer ? (
+                  <button
+                    key={oi}
+                    type="button"
+                    className="q-opt"
+                    title={o.description}
+                    onClick={() => answer(label)}
+                  >
+                    <span className="q-label">{label}</span>
+                    {o.description && (
+                      <span className="q-desc">{o.description}</span>
+                    )}
+                  </button>
+                ) : (
+                  <div key={oi} className={`q-opt${active ? "" : " done"}`}>
+                    <span className="q-label">{label}</span>
+                  </div>
+                );
+              })}
+              {active && onAnswer && (
+                <OtherRow onSubmit={(text) => answer(`${qTitle}: ${text}`)} />
+              )}
+            </div>
+          );
+        })}
+        {qs.length === 0 && (
+          <pre className="tool-error">
+            {state.error?.message ?? "no question data"}
+          </pre>
+        )}
+        {!active && state.status === "error" && (
+          <div className="q-note">
+            question closed without an answer
+            {state.error?.message ? ` (${state.error.message})` : ""}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Free-text alternative to the preset options ("Other…"). */
+function OtherRow({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const submit = (): void => {
+    const t = text.trim();
+    if (!t) return;
+    setText("");
+    onSubmit(t);
+  };
+  return (
+    <div className="q-other">
+      <input
+        className="q-other-input"
+        placeholder="Other… type your own answer"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
+      <button
+        type="button"
+        className="chip"
+        disabled={!text.trim()}
+        onClick={submit}
+      >
+        Send
+      </button>
+    </div>
+  );
 }
 
 /** Colored diff body + editor actions. Primary action opens VS Code's

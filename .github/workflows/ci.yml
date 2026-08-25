@@ -100,12 +100,14 @@ jobs:
       - name: Build + package vsix
         run: |
           npm run build
-          npx --yes @vscode/vsce package --no-git-tag-version -o opencode2-vscode.vsix
+          # Versioned name keeps release assets unique & pretty; without this,
+          # manually-attached builds and CI builds would collide as duplicates.
+          npx --yes @vscode/vsce package --no-git-tag-version -o "opencode2-vscode-gui-${GITHUB_REF_NAME#v}.vsix"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: opencode2-vscode.vsix
+          files: opencode2-vscode-gui-*.vsix
       - name: Publish to VS Code Marketplace
         if: env.VSCE_PAT != ''
         env:

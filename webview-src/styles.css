@@ -1727,6 +1727,30 @@ button:focus-visible {
   font-size: calc(var(--oc2-font-size) - 1px);
   margin-top: var(--oc2-space-2);
 }
+.q-other {
+  display: flex;
+  gap: var(--oc2-space-2);
+  margin-top: var(--oc2-space-2);
+}
+.q-other-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--oc2-terminal-bg);
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  padding: var(--oc2-space-1) var(--oc2-space-2);
+  color: var(--oc2-fg);
+  font-family: inherit;
+  font-size: var(--oc2-font-size);
+}
+.q-other-input:focus {
+  outline: none;
+  border-color: var(--oc2-accent);
+}
+.q-other .chip[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
 .oc2-theme-sub {
   display: flex;
   flex-direction: column;
