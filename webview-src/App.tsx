@@ -61,6 +61,8 @@ export function App() {
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<AnyMessage[]>([]);
   const [retryPending, setRetryPending] = useState(false);
+  /** Full streamed text per `${messageId}|${kind}` — survives refetches. */
+  const deltaAccRef = useRef(new Map<string, string>());
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
   const [models, setModels] = useState<
@@ -184,6 +186,15 @@ export function App() {
             typeof p.text === "string"
           ) {
             localParts.set(p.type, p.text);
+          }
+        }
+        // Fold in the delta accumulator: it holds every streamed chunk even
+        // when the snapshot hasn't caught up yet.
+        const msgId = (m as { id?: string }).id ?? "";
+        for (const kind of ["text", "reasoning"]) {
+          const acc = deltaAccRef.current.get(`${msgId}|${kind}`);
+          if (acc && acc.length > (localParts.get(kind) ?? "").length) {
+            localParts.set(kind, acc);
           }
         }
         let changed = false;
@@ -481,6 +492,26 @@ export function App() {
             const isDelta =
               evt.type === "session.text.delta" ||
               evt.type === "session.reasoning.delta";
+
+            // ALWAYS accumulate deltas — including chunks that arrive before
+            // the assistant message exists in our cache. Dropping those is
+            // what used to lose the start of the thinking.
+            if (isDelta) {
+              const d = evt.data as DeltaEvent["data"];
+              const id = d?.assistantMessageID ?? d?.messageID;
+              const chunk =
+                typeof d?.delta === "string"
+                  ? d.delta
+                  : typeof d?.text === "string"
+                    ? d.text
+                    : undefined;
+              if (id && chunk) {
+                const kind = evt.type === "session.reasoning.delta" ? "reasoning" : "text";
+                const key = `${id}|${kind}`;
+                deltaAccRef.current.set(key, (deltaAccRef.current.get(key) ?? "") + chunk);
+              }
+            }
+
             // Try the incremental accumulator first for a smooth stream.
             const merged = applyDelta(messagesRef.current, {
               type: evt.type,
@@ -490,12 +521,10 @@ export function App() {
               messagesRef.current = merged;
               setMessages(merged);
             } else if (wantsMessages || isTerminal || isDelta) {
-              // Deltas that can't be merged (message not loaded yet / shape
-              // drift) still deserve a poll so partial content shows up.
               clearTimeout(messageTimer);
               messageTimer = setTimeout(
                 () => void refreshMessages(sid),
-                isDelta ? 250 : 120,
+                isDelta ? 80 : 120,
               );
             }
             if (
