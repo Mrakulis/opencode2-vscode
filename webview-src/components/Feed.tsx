@@ -36,6 +36,7 @@ export function Feed({
   onQueuedOpen,
   onUnqueue,
   onAnswer,
+  onQuestionReply,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -66,6 +67,7 @@ export function Feed({
   onUnqueue?: (id: string) => void;
   /** Delivers a chosen question-option label into the conversation. */
   onAnswer?: (text: string) => void;
+  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -234,6 +236,7 @@ export function Feed({
               retryPendingLast={retryPendingLast}
               retryNote={retryNote ?? null}
               onAnswer={onAnswer}
+              onQuestionReply={onQuestionReply}
             />
           ));
         })()}
@@ -330,6 +333,7 @@ function MessageGroup({
   retryPendingLast,
   retryNote,
   onAnswer,
+  onQuestionReply,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -343,6 +347,7 @@ function MessageGroup({
   retryPendingLast?: boolean;
   retryNote?: string | null;
   onAnswer?: (text: string) => void;
+  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
 }) {
   if (isUser(message)) {
     return (
@@ -441,6 +446,7 @@ function MessageGroup({
           expandEditTools={expandEditTools}
           fullShellOutput={fullShellOutput}
           onAnswer={onAnswer}
+          onQuestionReply={onQuestionReply}
         />
       ))}
       {messageStats &&
@@ -538,15 +544,7 @@ function handleFileClick(e: React.MouseEvent) {
   }
 }
 
-function Part({
-  part,
-  busy,
-  showReasoning,
-  expandShellTools,
-  expandEditTools,
-  fullShellOutput,
-  onAnswer,
-}: {
+function Part(props: {
   part: MessagePartText | MessagePartReasoning | MessagePartTool;
   busy: boolean;
   showReasoning: "hide" | "collapsed" | "expanded";
@@ -554,7 +552,19 @@ function Part({
   expandEditTools: boolean;
   fullShellOutput: boolean;
   onAnswer?: (text: string) => void;
+  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
 }) {
+  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, onAnswer, onQuestionReply } =
+    props as {
+      part: MessagePartText | MessagePartReasoning | MessagePartTool;
+      busy: boolean;
+      showReasoning: "hide" | "collapsed" | "expanded";
+      expandShellTools: boolean;
+      expandEditTools: boolean;
+      fullShellOutput: boolean;
+      onAnswer?: (text: string) => void;
+      onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+    };
   if (part.type === "text") {
     return (
       <div
@@ -582,6 +592,7 @@ function Part({
         expandEditTools={expandEditTools}
         fullShellOutput={fullShellOutput}
         onAnswer={onAnswer}
+        onQuestionReply={onQuestionReply}
       />
     );
   }
@@ -828,6 +839,7 @@ function ToolCard({
   expandEditTools,
   fullShellOutput,
   onAnswer,
+  onQuestionReply,
 }: {
   part: ToolPart;
   expandShellTools: boolean;
@@ -835,6 +847,7 @@ function ToolCard({
   fullShellOutput: boolean;
   /** Delivers the chosen option label back into the conversation. */
   onAnswer?: (text: string) => void;
+  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -885,14 +898,17 @@ function ToolCard({
     );
   }
 
-  // Agent-asked questions: render the actual questions + clickable options.
-  // The beta protocol has no dedicated answer endpoint — a choice is delivered
-  // as a chat message (steered while the turn is active), same as typing it.
+  // Agent-asked questions: V2 has a dedicated question reply endpoint
+  // (POST /api/session/:id/question/:requestID/reply) with batch answers.
+  // We render all questions visible, one expanded at a time, and submit the
+  // batch via that endpoint so the tool actually resumes.
   if (part.name === "question") {
     return (
       <QuestionCard
         state={part.state as QuestionToolState}
-        onAnswer={onAnswer}
+        onBatchReply={(answers: (string | null)[]) =>
+          onQuestionReply?.(answers, (part as unknown as { id?: string }).id)
+        }
       />
     );
   }
@@ -1102,9 +1118,11 @@ interface QuestionToolState {
 function QuestionCard({
   state,
   onAnswer,
+  onBatchReply,
 }: {
   state: QuestionToolState;
   onAnswer?: (text: string) => void;
+  onBatchReply?: (answers: (string | null)[]) => void;
 }) {
   const qs = Array.isArray(state.input?.questions)
     ? state.input!.questions!
@@ -1117,6 +1135,10 @@ function QuestionCard({
     setAnswers(Array(qs.length).fill(null));
   }, [qs.length]);
   const submitBatch = (current: (string | null)[]) => {
+    if (onBatchReply) {
+      onBatchReply(current);
+      return;
+    }
     const formatted = qs
       .map((q, i) => `"${q.header ?? q.question ?? `Question ${i + 1}`}"="${current[i] ?? "Unanswered"}"`)
       .join(", ");

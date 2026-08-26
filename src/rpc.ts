@@ -237,6 +237,12 @@ export function createRpcDispatcher(
       return api.formReply(str(p, "sessionID"), str(p, "formID"), clean);
     },
     "form.cancel": (p) => api.formCancel(str(p, "sessionID"), str(p, "formID")),
+    "question.list": (p) => api.questionList(str(p, "sessionID")),
+    "question.reply": (p) => {
+      const answers = p.answers as unknown;
+      if (!Array.isArray(answers)) throw new Error("rpc: answers must be string[][]");
+      return api.questionReply(str(p, "sessionID"), str(p, "requestID"), answers as string[][]);
+    },
 
     // -- session parity ---------------------------------------------------------
     "session.export": (p) => api.exportSession(str(p, "sessionID")),

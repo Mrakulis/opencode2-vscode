@@ -219,6 +219,52 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       await getClient().form.cancel({ sessionID, formID });
     },
 
+    // -- questions (V2 experimental) ------------------------------------------
+    questionList: async (
+      sessionID: string,
+    ): Promise<Array<Record<string, unknown>>> => {
+      try {
+        const { Service } = await import("@opencode-ai/client/service");
+        const endpoint = await Service.discover().catch(() => undefined);
+        if (!endpoint) return [];
+        const url = `${endpoint.url}/api/session/${sessionID}/question`;
+        const res = await fetch(url, {
+          headers: Service.headers(endpoint) as unknown as Record<string, string>,
+        });
+        if (!res.ok) return [];
+        const data = (await res.json()) as unknown;
+        return Array.isArray(data)
+          ? (data as Array<Record<string, unknown>>)
+          : (((data as { data?: unknown[] }).data ?? []) as Array<
+              Record<string, unknown>
+            >);
+      } catch {
+        return [];
+      }
+    },
+    questionReply: async (
+      sessionID: string,
+      requestID: string,
+      answers: string[][],
+    ): Promise<void> => {
+      const { Service } = await import("@opencode-ai/client/service");
+      const endpoint = await Service.discover().catch(() => undefined);
+      if (!endpoint) throw new Error("No service discovered for question reply");
+      const url = `${endpoint.url}/api/session/${sessionID}/question/${requestID}/reply`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...(Service.headers(endpoint) as unknown as Record<string, string>),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ answers }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Question reply failed: ${res.status}`);
+      }
+    },
+
     // -- misc ----------------------------------------------------------------
     findFiles: async (
       query: string,

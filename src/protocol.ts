@@ -220,6 +220,9 @@ export type RpcMethod =
   | "mcp.disconnect"
   | "mcp.resources"
   | "mcp.codemode"
+  // questions (V2 experimental, batch)
+  | "question.list"
+  | "question.reply"
   // misc
   | "files.find"
   | "service.restart"

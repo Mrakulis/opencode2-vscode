@@ -386,7 +386,7 @@ export function App() {
           ...(key ? { modelKey: key } : {}),
           message: msg,
           providerish:
-            /provider|invalid-request|policy|guardrail|no endpoints|model/i.test(
+            /provider|invalid-request|policy|guardrail|no endpoints|model|finish_reason|stream ended/i.test(
               msg,
             ),
         };
@@ -832,7 +832,7 @@ export function App() {
                     ? { modelKey: activeModelKeyRef.current }
                     : {}),
                   message: msg,
-                  providerish: /provider|invalid-request|policy|guardrail|no endpoints/i.test(
+                  providerish: /provider|invalid-request|policy|guardrail|no endpoints|finish_reason|stream ended/i.test(
                     msg,
                   ),
                 };
@@ -1769,8 +1769,6 @@ export function App() {
                 )
             }
             onAnswer={(text) => {
-              // Question answers must always steer the active turn, never queue — otherwise the question never clears.
-              // Per V2 durable inbox spec, steer promotes at next safe provider-turn boundary; queue waits FIFO until idle.
               setMessages((prev) =>
                 prev.map((msg) => {
                   const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
@@ -1789,6 +1787,40 @@ export function App() {
               void sendMessage(text, undefined, "steer").catch((e: unknown) =>
                 setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
               );
+            }}
+            onQuestionReply={async (answers, toolCallId) => {
+              setMessages((prev) =>
+                prev.map((msg) => {
+                  const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
+                  if (!Array.isArray(m.content)) return msg;
+                  let changed = false;
+                  const nextContent = m.content.map((part) => {
+                    if (part.type === "tool" && part.name === "question" && (part.state?.status === "running" || part.state?.status === "streaming")) {
+                      changed = true;
+                      return { ...part, state: { ...part.state, status: "completed" } } as typeof part;
+                    }
+                    return part;
+                  });
+                  return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
+                }),
+              );
+              const batch: string[][] = answers.map((a) => (a == null ? [] : [a]));
+              try {
+                const pending = await rpc.call<Array<Record<string, unknown>>>("question.list", { sessionID: activeId! });
+                const match = pending.find((r) => {
+                  const tool = (r.tool ?? (r as any).metadata?.tool ?? {}) as Record<string, unknown>;
+                  return tool.callID === toolCallId || (r as { id?: string }).id === toolCallId;
+                }) as Record<string, unknown> | undefined;
+                const requestID = (match?.id ?? (match as any)?.requestID ?? toolCallId ?? "") as string;
+                if (!requestID) throw new Error("No pending question found");
+                await rpc.call("question.reply", { sessionID: activeId!, requestID, answers: batch });
+                void refreshMessages(activeId!);
+              } catch (e) {
+                const fallback = batch.map((a, i) => `"Q${i + 1}"="${a[0] ?? "Unanswered"}"`).join(", ");
+                void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
+                  setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
+                );
+              }
             }}
             retryNote={
               busy && retryInfo && !retryInfo.action
