@@ -29,7 +29,7 @@ describe("event routing drift guard", () => {
     // (table not exported) — instead parse events.ts source for quoted keys.
     const src = readFileSync("webview-src/lib/events.ts", "utf8");
     const tableKeys = [
-      ...src.matchAll(/^\s{2}"([a-z]+(?:\.[a-z]+)+)":/gm),
+      ...src.matchAll(/^\s{2}"([a-z-]+(?:\.[a-z-]+)+)":/gm),
     ].map((m) => m[1]);
     assert.ok(tableKeys.length > 40, `expected many routes, got ${tableKeys.length}`);
 
@@ -70,7 +70,7 @@ describe("event routing drift guard", () => {
       "websearch.updated",
     ]);
     const tableKeys = new Set(
-      [...src.matchAll(/^\s{2}"([a-z]+(?:\.[a-z]+)+)":/gm)].map((m) => m[1]),
+      [...src.matchAll(/^\s{2}"([a-z-]+(?:\.[a-z-]+)+)":/gm)].map((m) => m[1]),
     );
     const unrouted = [...literals].filter(
       (l) =>

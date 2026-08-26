@@ -60,10 +60,9 @@ const TABLE: Record<string, UiAction[]> = {
 
   // usage & context
   "session.usage.updated": ["sessions"],
-  // NOTE: "session.usage.recorded" exists on newer SERVERS (payload:
-  // {sessionID, source:"title"|"compaction", cost, tokens}) but is NOT in the
-  // pinned client's V2Event union yet — add it here when the pin is bumped
-  // past beta-18050 (drift-guard enforces this).
+  // NOTE: "session.usage.recorded" existed in the beta-18050 types file but
+  // was NOT in its V2Event union, and is gone entirely in beta-18230 — do not
+  // route it unless a future server reintroduces it (drift-guard enforces).
 
   // server-driven auto-retry (SessionRetry) — keep the UI aware
   "session.retry.scheduled": ["messages"],
@@ -103,7 +102,6 @@ const TABLE: Record<string, UiAction[]> = {
   "mcp.status.changed": ["mcp"],
   "mcp.resources.changed": ["mcp"],
   "integration.updated": ["providers"],
-  "integration.connection.updated": ["providers"],
   "config.updated": [],
   "command.updated": ["commands"],
   "skill.updated": ["commands"],
@@ -120,6 +118,12 @@ const TABLE: Record<string, UiAction[]> = {
   "catalog.updated": ["pickers"],
   "agent.updated": ["pickers"],
   "filesystem.changed": ["vcs"],
+  // beta-18230 additions
+  "credential.updated": ["providers"],
+  "credential.switched": ["providers"],
+  "project.updated": ["sessions"],
+  "persistent-pty.added": [],
+  "persistent-pty.removed": [],
 };
 
 /** Actions the UI should run for one incoming V2 event type. */

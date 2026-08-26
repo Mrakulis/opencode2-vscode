@@ -105,7 +105,7 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         files: input.files,
         delivery: input.delivery,
       }),
-    interrupt: (sessionID: string): Promise<void> =>
+    interrupt: (sessionID: string): Promise<unknown> =>
       getClient().session.interrupt({ sessionID }),
     compact: (sessionID: string): Promise<unknown> =>
       getClient().session.compact({ sessionID }),
@@ -265,9 +265,12 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       command: string,
       args?: string,
     ): Promise<unknown> =>
+      // beta-18230 made `text` required: the rendered prompt body the TUI
+      // would show for this invocation.
       getClient().session.command({
         sessionID,
         command,
+        text: args ?? "",
         ...(args !== undefined && args.length > 0 ? { arguments: args } : {}),
       }),
     sessionSkill: (sessionID: string, skill: string): Promise<void> =>
