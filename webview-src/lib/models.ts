@@ -86,7 +86,15 @@ export function toggleProviderModels(
  * Model for a brand-new session, in priority order:
  *  1. last-used (client-tracked — config defaults are static by contract)
  *  2. explicit setting key ("provider/model")
- *  3. server-reported default
+ *  3. first enabled FREE OpenCode Zen model in the catalog (prefers
+ *     "big-pickle") — guarantees a working binding instead of a possibly
+ *     broken/unconfigured server default (P0: fresh sessions were unusable)
+ *  4. server-reported default
+ *
+ * Every candidate is validated against the catalog when one is available;
+ * a model that has left the catalog can no longer be bound to new sessions.
+ * With an empty catalog (list fetch failed) validation is skipped so stale
+ * behavior degrades gracefully instead of blocking session creation.
  */
 export function resolveDefault(
   lastUsed: Pick<PickerModel, "id" | "providerID"> | undefined | null,
@@ -104,4 +112,87 @@ export function resolveDefault(
     return { id: serverDefault.id, providerID: serverDefault.providerID };
   }
   return undefined;
+}
+
+/** Catalog row subset used for default-model validation/fallback. */
+export interface DefaultCandidate {
+  id: string;
+  providerID: string;
+}
+
+/**
+ * True when a catalog entry costs nothing to run. Cost shapes drift between
+ * betas: models.dev uses `{input, output, ...}` while Zen rows have been seen
+ * as `[{input, output, cache}]` — accept both.
+ */
+export function isFreeCatalogModel(
+  m: Pick<DefaultCandidate, "id" | "providerID"> & { cost?: unknown },
+): boolean {
+  const zero = (v: unknown): boolean =>
+    typeof v === "number" ? v === 0 : false;
+  const c = m.cost as
+    | { input?: unknown; output?: unknown }
+    | Array<{ input?: unknown; output?: unknown }>
+    | undefined;
+  if (!c) return false;
+  const rows = Array.isArray(c) ? c : [c];
+  return (
+    rows.length > 0 &&
+    rows.every((r) => zero(r?.input) && zero(r?.output))
+  );
+}
+
+export interface CatalogRow extends DefaultCandidate {
+  enabled?: boolean;
+  cost?: unknown;
+}
+
+function inCatalog(
+  ref: DefaultCandidate | undefined | null,
+  catalog: CatalogRow[],
+): boolean {
+  if (!ref?.id || !ref.providerID) return false;
+  if (catalog.length === 0) return true; // no catalog → don't block
+  return catalog.some(
+    (m) =>
+      (m.enabled !== false &&
+        m.providerID === ref!.providerID &&
+        m.id === ref!.id),
+  );
+}
+
+/**
+ * Validated default for a NEW session. Order mirrors `resolveDefault`, plus
+ * catalog validation and the free-Zen safety net before the server default.
+ */
+export function pickNewSessionModel(
+  lastUsed: DefaultCandidate | undefined | null,
+  settingKey: string,
+  serverDefault: DefaultCandidate | undefined | null,
+  catalog: CatalogRow[],
+): { id: string; providerID: string } | undefined {
+  // 1+2: user intent (validated only when we actually have a catalog)
+  if (lastUsed && inCatalog(lastUsed, catalog)) return { ...lastUsed };
+  if (settingKey.trim()) {
+    const parsed = parseModelKey(settingKey.trim());
+    if (parsed && inCatalog(parsed, catalog)) return parsed;
+  }
+  // 3: free Zen safety net — prefer big-pickle, then any enabled free Zen model.
+  if (catalog.length > 0) {
+    const zen = catalog.filter(
+      (m) => m.enabled !== false && isFreeCatalogModel(m),
+    );
+    const pickle = zen.find((m) => m.providerID === "opencode" && m.id === "big-pickle");
+    if (pickle) return { id: pickle.id, providerID: pickle.providerID };
+    const firstZen = zen.find((m) => m.providerID === "opencode");
+    if (firstZen) return { id: firstZen.id, providerID: firstZen.providerID };
+    if (zen[0]) return { id: zen[0].id, providerID: zen[0].providerID };
+  }
+  // 4: server default, validated when possible.
+  if (inCatalog(serverDefault, catalog) && serverDefault?.id && serverDefault?.providerID) {
+    return { id: serverDefault.id, providerID: serverDefault.providerID };
+  }
+  // Catalog present but nothing usable — fall back to unvalidated resolution
+  // rather than blocking session creation entirely.
+  return resolveDefault(lastUsed, settingKey, serverDefault);
 }

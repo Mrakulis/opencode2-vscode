@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import {
   filterVisibleModels,
   groupByProvider,
+  isFreeCatalogModel,
   modelKey,
   parseModelKey,
+  pickNewSessionModel,
   resolveDefault,
   toggleInList,
   toggleProviderModels,
@@ -127,5 +129,101 @@ describe("resolveDefault", () => {
     );
     assert.equal(resolveDefault(undefined, "", null), undefined);
     assert.equal(resolveDefault(undefined, "", undefined), undefined);
+  });
+});
+
+describe("pickNewSessionModel", () => {
+  const zen = (id: string, cost: unknown = { input: 0, output: 0 }) => ({
+    providerID: "opencode",
+    id,
+    enabled: true,
+    cost,
+  });
+  const catalog = [
+    zen("big-pickle"),
+    zen("kimi-k2.5-free"),
+    {
+      providerID: "openrouter",
+      id: "deepseek-x",
+      enabled: true,
+      cost: { input: 1, output: 2 },
+    },
+  ];
+
+  it("prefers last-used when it is in the catalog", () => {
+    assert.deepEqual(
+      pickNewSessionModel(
+        { providerID: "openrouter", id: "deepseek-x" },
+        "",
+        null,
+        catalog,
+      ),
+      { providerID: "openrouter", id: "deepseek-x" },
+    );
+  });
+  it("skips a vanished last-used model and uses the setting", () => {
+    assert.deepEqual(
+      pickNewSessionModel(
+        { providerID: "gone", id: "poof" },
+        "opencode/kimi-k2.5-free",
+        null,
+        catalog,
+      ),
+      { providerID: "opencode", id: "kimi-k2.5-free" },
+    );
+  });
+  it("falls back to big-pickle (free Zen) before the server default", () => {
+    assert.deepEqual(
+      pickNewSessionModel(undefined, "", { providerID: "anthropic", id: "claude" }, catalog),
+      { providerID: "opencode", id: "big-pickle" },
+    );
+  });
+  it("falls back to any free Zen model when big-pickle left the catalog", () => {
+    const withoutPickle = catalog.filter((c) => c.id !== "big-pickle");
+    assert.deepEqual(
+      pickNewSessionModel(undefined, "", { providerID: "anthropic", id: "claude" }, withoutPickle),
+      { providerID: "opencode", id: "kimi-k2.5-free" },
+    );
+  });
+  it("uses the server default when no free Zen model exists", () => {
+    const paidOnly = [catalog[2]];
+    assert.deepEqual(
+      pickNewSessionModel(undefined, "", { providerID: "anthropic", id: "claude" }, paidOnly),
+      { providerID: "anthropic", id: "claude" },
+    );
+  });
+  it("does not block on an empty catalog (list fetch failed)", () => {
+    // No catalog → validation is skipped: setting still applies…
+    assert.deepEqual(
+      pickNewSessionModel(undefined, "opencode/big-pickle", null, []),
+      { providerID: "opencode", id: "big-pickle" },
+    );
+    // …and last-used is returned unverifiable rather than blocking creation.
+    assert.deepEqual(
+      pickNewSessionModel({ providerID: "gone", id: "poof" }, "opencode/big-pickle", null, []),
+      { providerID: "gone", id: "poof" },
+    );
+  });
+  it("detects free models across cost shapes (array rows)", () => {
+    assert.equal(
+      isFreeCatalogModel({
+        providerID: "opencode",
+        id: "x",
+        cost: [{ input: 0, output: 0, cache: { read: 0, write: 0 } }],
+      }),
+      true,
+    );
+    assert.equal(
+      isFreeCatalogModel({
+        providerID: "opencode",
+        id: "x",
+        cost: { input: 0.3, output: 1.2 },
+      }),
+      false,
+    );
+    assert.equal(
+      isFreeCatalogModel({ providerID: "opencode", id: "x", cost: undefined }),
+      false,
+    );
   });
 });

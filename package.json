@@ -193,8 +193,8 @@
         },
         "opencode2.models.default": {
           "type": "string",
-          "default": "",
-          "description": "Default model for new sessions, as 'providerID/modelID'. Empty = server default."
+          "default": "opencode/big-pickle",
+          "description": "Default model for new sessions, as 'providerID/modelID'. Empty = server default. The built-in default is OpenCode Zen's free Big Pickle so new sessions always carry a working model binding; if it leaves the catalog, the first available free Zen model is used instead."
         },
         "opencode2.notifications.errors": {
           "type": "boolean",

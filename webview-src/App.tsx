@@ -15,7 +15,13 @@ import {
   formatTokens,
   liveContextStepTokens,
 } from "./lib/format";
-import { modelKey, resolveDefault, toggleInList } from "./lib/models";
+import {
+  modelKey,
+  parseModelKey,
+  pickNewSessionModel,
+  resolveDefault,
+  toggleInList,
+} from "./lib/models";
 import { chime } from "./lib/sound";
 import { actionsForEvent, type UiAction } from "./lib/events";
 import { applyDelta, type DeltaEvent } from "./lib/deltas";
@@ -147,16 +153,32 @@ export function App() {
   const autoAcceptSessionsRef = useRef(new Set<string>());
   const respondedRef = useRef(new RespondedTracker());
 
-  // Keep a ref of activeId so push handlers never go stale.
+   // Keep a ref of activeId so push handlers never go stale.
   const activeIdRef = useRef(activeId);
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
 
+  /** `"providerID/id"` of the active session's bound model (failure tracking). */
+  const activeModelKeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const m = active?.model as
+      | { id?: string; providerID?: string }
+      | undefined;
+    activeModelKeyRef.current =
+      m?.providerID && m?.id ? `${m.providerID}/${m.id}` : undefined;
+  }, [active]);
+
   /** Payload of the most recent failed send (transport/API) — Retry uses this
    *  instead of history, because a failed first prompt leaves no user message. */
   const lastFailedPromptRef = useRef<
     { text: string; files?: Array<{ uri: string; name?: string }> } | undefined
+  >(undefined);
+
+  /** Newest assistant-step failure, keyed by its bound model — drives the
+   *  smart-retry model repair (P0: fresh sessions bound to broken defaults). */
+  const lastFailureRef = useRef<
+    { modelKey?: string; message?: string; providerish?: boolean } | undefined
   >(undefined);
 
   // ---- data loading --------------------------------------------------------
@@ -280,6 +302,33 @@ export function App() {
         } as unknown as AnyMessage;
       });
       setMessages(merged);
+      // Record the newest assistant-step failure (if any) so smart-retry can
+      // repair the model binding and new-session defaults can warn about it.
+      const assistants = list.filter(
+        (m) => (m as { type?: unknown }).type === "assistant",
+      ) as unknown as Array<{
+        finish?: string;
+        error?: { message?: string; type?: string } | null;
+        model?: { id?: string; providerID?: string };
+      }>;
+      const lastA = assistants[assistants.length - 1];
+      if (lastA?.finish === "error" && lastA.error) {
+        const msg = String(lastA.error.message ?? lastA.error.type ?? "unknown error");
+        const key =
+          lastA.model?.providerID && lastA.model?.id
+            ? `${lastA.model.providerID}/${lastA.model.id}`
+            : undefined;
+        lastFailureRef.current = {
+          ...(key ? { modelKey: key } : {}),
+          message: msg,
+          providerish:
+            /provider|invalid-request|policy|guardrail|no endpoints|model/i.test(
+              msg,
+            ),
+        };
+      } else if (lastA && lastA.finish && lastA.finish !== "error") {
+        lastFailureRef.current = undefined;
+      }
     } catch {
       /* transient */
     }
@@ -652,8 +701,29 @@ export function App() {
             ) {
               setBusySessions((b) => ({ ...b, [sid]: false }));
               setRetryInfo(undefined);
-              if (evt.type === "session.execution.failed") setRetryPending(true);
-              else setRetryPending(false);
+              if (evt.type === "session.execution.failed") {
+                setRetryPending(true);
+                // P0: failures were previously invisible (message "vanished").
+                // Surface the server-side reason immediately.
+                const err = (
+                  evt.data as
+                    | { error?: { message?: string; type?: string } }
+                    | undefined
+                )?.error;
+                const msg = err?.message || err?.type || "execution failed";
+                lastFailureRef.current = {
+                  ...(activeModelKeyRef.current
+                    ? { modelKey: activeModelKeyRef.current }
+                    : {}),
+                  message: msg,
+                  providerish: /provider|invalid-request|policy|guardrail|no endpoints/i.test(
+                    msg,
+                  ),
+                };
+                setNotice(`Run failed — ${msg}`);
+              } else {
+                setRetryPending(false);
+              }
             }
             // Compaction progress pill.
             if (evt.type === "session.compaction.started")
@@ -782,6 +852,11 @@ export function App() {
             .call("ui.lastModel.set", { id: used.id, providerID: used.providerID })
             .catch(() => undefined);
         }
+        // The optimistic bubble must not hang if the first refetch raced the
+        // server's persistence of the user message — re-sync shortly after.
+        if (activeId) {
+          window.setTimeout(() => void refreshMessages(activeId), 400);
+        }
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [activeId]: false }));
@@ -792,13 +867,57 @@ export function App() {
         throw error;
       }
     },
-    [activeId],
+    [activeId, refreshMessages],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
-   *  last failed send, falling back to history for older failures. */
+   *  last failed send, falling back to history for older failures.
+   *
+   *  Smart repair (P0): when the newest failure was a provider/model error on
+   *  this session's bound model, first switch to a validated working model
+   *  (configured default → free Zen) so a broken default can't wedge the
+   *  session permanently. */
   const retryLast = useCallback(async () => {
     if (!activeId) return;
+    const failure = lastFailureRef.current;
+    if (
+      failure?.providerish &&
+      failure.modelKey &&
+      failure.modelKey === activeModelKeyRef.current
+    ) {
+      const candidate = pickNewSessionModel(
+        undefined,
+        cfg?.models.default ?? "",
+        serverDefault,
+        models,
+      );
+      const candidateKey = candidate
+        ? `${candidate.providerID}/${candidate.id}`
+        : undefined;
+      if (candidate && candidateKey && candidateKey !== failure.modelKey) {
+        try {
+          await rpc.call("model.switch", {
+            sessionID: activeId,
+            model: candidate,
+          });
+          activeModelKeyRef.current = candidateKey;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === activeId
+                ? ({ ...s, model: { ...candidate } } as SessionSummary)
+                : s,
+            ),
+          );
+          setNotice(
+            `Model ${failure.modelKey} keeps failing (${
+              failure.message ?? "provider error"
+            }) — switched to ${candidateKey}; retrying.`,
+          );
+        } catch {
+          /* switching failed — retry with the current model regardless */
+        }
+      }
+    }
     const retained = lastFailedPromptRef.current;
     if (retained) {
       lastFailedPromptRef.current = undefined;
@@ -830,7 +949,7 @@ export function App() {
     } catch {
       /* composer/props surface the error; retryPending stays set */
     }
-  }, [activeId, sendMessage]);
+  }, [activeId, sendMessage, cfg, serverDefault, models]);
 
   const interrupt = useCallback(async () => {
     if (!activeId) return;
@@ -855,12 +974,24 @@ export function App() {
 
   const newSession = useCallback(async () => {
     try {
-      // Defaults: last-used model wins; agent is always Build for new sessions.
-      const def = resolveDefault(
+      // Defaults: last-used model wins; then the configured default (built-in:
+      // OpenCode Zen's free big-pickle); then the server default. Every
+      // candidate is validated against the catalog with a free-Zen safety net.
+      const def = pickNewSessionModel(
         lastUsedModel,
         cfg?.models.default ?? "",
         serverDefault,
+        models,
       );
+      if (def) {
+        const key = `${def.providerID}/${def.id}`;
+        const failure = lastFailureRef.current;
+        if (failure?.modelKey === key && failure.message) {
+          setNotice(
+            `Heads up: ${key} failed recently (${failure.message}). Consider picking a different model.`,
+          );
+        }
+      }
       const session = await rpc.call<SessionSummary>("session.create", {
         agent: "build",
         ...(def ? { model: def } : {}),
@@ -883,7 +1014,7 @@ export function App() {
         }`,
       );
     }
-  }, [cfg, serverDefault, lastUsedModel, refreshSessions, selectSession]);
+  }, [cfg, serverDefault, lastUsedModel, models, refreshSessions, selectSession]);
 
   /** Export the session in V2 transfer format (JSON, re-importable). */
   const exportSession = useCallback(async () => {
@@ -1413,9 +1544,16 @@ export function App() {
             messageStats={cfg?.ui.messageStats ?? true}
             onRetry={() => void retryLast()}
             retryPendingLast={retryPending}
-            onAnswer={(text) =>
-              void sendMessage(text, undefined, busy ? "steer" : undefined)
-            }
+            onAnswer={(text) => {
+              // Surface transport/API send failures instead of swallowing them
+              // (P0: silent failures made new sessions look dead).
+              void sendMessage(text, undefined, busy ? "steer" : undefined).catch(
+                (e: unknown) =>
+                  setNotice(
+                    `Send failed — ${e instanceof Error ? e.message : String(e)}`,
+                  ),
+              );
+            }}
             retryNote={
               busy && retryInfo && !retryInfo.action
                 ? `↻ retrying${
@@ -1627,9 +1765,14 @@ export function App() {
         sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
         builtins={slashBuiltins}
-        onSend={(t, files, delivery) =>
-          void sendMessage(t, files, delivery)
-        }
+        onSend={(t, files, delivery) => {
+          // Surface transport/API send failures instead of swallowing them.
+          void sendMessage(t, files, delivery).catch((e: unknown) =>
+            setNotice(
+              `Send failed — ${e instanceof Error ? e.message : String(e)}`,
+            ),
+          );
+        }}
         onSendCommand={async (command, args) => {
           if (!activeId) return;
           setBusySessions((b) => ({ ...b, [activeId]: true }));
