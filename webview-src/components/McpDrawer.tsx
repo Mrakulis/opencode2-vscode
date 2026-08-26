@@ -40,6 +40,7 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   const [url, setUrl] = useState("");
   const [command, setCommand] = useState("");
   const [disabled, setDisabled] = useState(false);
+  const [codemodeNew, setCodemodeNew] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
@@ -102,19 +103,20 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
       if (kind === "remote") {
         await rpc.call("mcp.add", {
           name: clean,
-          config: { type: "remote", url: url.trim(), disabled },
+          config: { type: "remote", url: url.trim(), disabled, codemode: codemodeNew },
         });
       } else {
         const argv = command.trim().split(/\s+/).filter(Boolean);
         await rpc.call("mcp.add", {
           name: clean,
-          config: { type: "local", command: argv, disabled },
+          config: { type: "local", command: argv, disabled, codemode: codemodeNew },
         });
       }
       setAdding(false);
       setName("");
       setUrl("");
       setCommand("");
+      setCodemodeNew(true);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -263,6 +265,17 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
               onChange={(e) => setDisabled(e.target.checked)}
             />
             add as disabled
+          </label>
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={codemodeNew}
+              onChange={(e) => setCodemodeNew(e.target.checked)}
+            />
+            route tools through Code Mode{" "}
+            <span className="micro" style={{ opacity: 0.7 }}>
+              (server default: on)
+            </span>
           </label>
           <button
             type="button"
