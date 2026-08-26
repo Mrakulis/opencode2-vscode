@@ -345,6 +345,7 @@ export function createRpcDispatcher(
       return api.mcpAdd(name, config);
     },
     "mcp.remove": (p) => api.mcpRemove(str(p, "name")),
+    "mcp.resources": () => api.mcpResources(),
     "mcp.connect": (p) => api.mcpConnect(str(p, "name")),
     "mcp.disconnect": (p) => api.mcpDisconnect(str(p, "name")),
     "providers.authCli": async (p) => {
@@ -510,7 +511,7 @@ export function createRpcDispatcher(
 }
 
 /** Multi-root: prefer the workspace folder of the focused editor, else first. */
-function preferredDirectory(): string | undefined {
+export function preferredDirectory(): string | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor) {
     const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);

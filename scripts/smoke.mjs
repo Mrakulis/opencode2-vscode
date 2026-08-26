@@ -82,6 +82,16 @@ try {
 } catch {
   branch = "(vcs unavailable)";
 }
-console.log(`vcs branch: ${branch ?? "(none)"} — OK`);
+console.log(`vcs branch: ${branch ?? "(none)"} - OK`);
+
+// @-mention dependency: fs.find must return a usable rows array.
+try {
+  const ff = await client.file.find({ query: "package.json" });
+  const rows = Array.isArray(ff) ? ff : (ff?.data ?? []);
+  console.log(`fs.find rows: ${rows.length} (wrapped: ${!Array.isArray(ff)}) - OK`);
+} catch (e) {
+  console.log(`fs.find FAILED: ${e.message}`);
+  process.exit(1);
+}
 
 console.log("SMOKE PASSED");

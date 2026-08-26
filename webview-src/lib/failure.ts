@@ -19,7 +19,7 @@ export function assistantFailed(
 } {
   if (!isAssistantMessage(m)) return false;
   return (
-    m.error !== undefined ||
+    m.error != null ||
     m.finish === "error" ||
     (m as unknown as { retry?: unknown }).retry !== undefined
   );

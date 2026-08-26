@@ -7,7 +7,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 ## Features
 
 - **Native sidebar chat** with an agent that reads and edits your code
-- **Auto-connects** to the shared V2 background service (discover → ensure, no ports to manage)
+- **Auto-connects** to the shared V2 background service (discover → hidden auto-start, no ports to manage)
 - **Live streaming** — incremental text/reasoning deltas plus tool cards and inline diffs
 - **Slash commands & skills** — type `/` for the V2 command catalog (`command.list`), skills included; runs via `session.command` / `session.skill`
 - **`@` file mentions** — fuzzy file picker backed by `file.find`; files attach as prompt context
@@ -66,9 +66,10 @@ The extension is developed and tested against a specific client pin (`@opencode-
 |---|---|---|
 | `server.baseUrl` | `""` | Explicit server URL; empty = use `server.mode` |
 | `server.mode` | `own` | `own` (start our own hidden service) / `discover` (find an already-running one) |
+| `server.autoStart` | `true` | Start a shared background service automatically when discovery finds nothing healthy |
 | `cliPath` | `""` | Custom CLI path; empty = try `opencode2` then `opencode` |
 | `debug.logs` | `false` | Verbose logging in the output channel |
-| `ui.theme` | `dark` | Built-in theme: `dark` / `light` |
+| `ui.theme` | `dark` | Theme preset: dark, light, tokyonight, gruvbox, nord, catppuccin |
 | `ui.density` | `compact` | `compact` / `comfortable` |
 | `ui.accentTint` | `off` | Optional accent color tint |
 | `ui.sounds` | `true` | Subtle chimes on finish/permission |

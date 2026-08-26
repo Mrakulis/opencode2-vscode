@@ -18,9 +18,23 @@ console.log(`union methods: ${methods.length}`);
 // 2) handlers defined in rpc.ts ("name": pattern)
 const handlers = new Set([...rpc.matchAll(/"([a-z.A-Z]+)":\s*(?:\(|async)/g)].map((m) => m[1]));
 
-// rpc calls made from webview
+// rpc calls made from webview.
+// Generic type args can span lines and contain nested generics (e.g.
+// call<Array<Record<string, unknown>>>("mcp.resources")), so strip balanced
+// <...> segments by depth before matching — a flat [^>]* regex silently skips
+// those call sites and hides real drift.
+const stripGeneric = (s) => {
+  let out = "";
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === "<") depth++;
+    else if (ch === ">") { if (depth > 0) depth--; continue; }
+    if (depth === 0) out += ch;
+  }
+  return out;
+};
 const calledFromWebview = new Set(
-  [...all.matchAll(/rpc\.call(?:<[^>]*>)?\(\s*"([a-z.A-Z]+)"/g)].map((m) => m[1]),
+  [...stripGeneric(all).matchAll(/rpc\.call\(\s*"([a-z.A-Z]+)"/g)].map((m) => m[1]),
 );
 // calls made host-side (extension.ts / sidebarProvider use api directly, skip)
 

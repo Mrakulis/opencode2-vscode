@@ -17,7 +17,7 @@ import {
 } from "./lib/format";
 import { modelKey, resolveDefault, toggleInList } from "./lib/models";
 import { chime } from "./lib/sound";
-import { actionsForEvent } from "./lib/events";
+import { actionsForEvent, type UiAction } from "./lib/events";
 import { applyDelta, type DeltaEvent } from "./lib/deltas";
 import {
   autoReplyFor,
@@ -99,6 +99,7 @@ export function App() {
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxTick, setInboxTick] = useState(0);
   const [compacting, setCompacting] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const [serverDefault, setServerDefault] = useState<
@@ -134,6 +135,9 @@ export function App() {
 
   /** Dismissible error banner — the webview has no other toast surface. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** Ref mirror of `sounds` — the push listener must not re-subscribe when the
+   *  setting toggles (that cleared in-flight debounced refresh timers). */
+  const soundsRef = useRef(true);
   /** Last model the user actually used (persisted host-side in workspaceState). */
   const [lastUsedModel, setLastUsedModel] = useState<
     { id: string; providerID: string } | undefined
@@ -148,6 +152,12 @@ export function App() {
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
+
+  /** Payload of the most recent failed send (transport/API) — Retry uses this
+   *  instead of history, because a failed first prompt leaves no user message. */
+  const lastFailedPromptRef = useRef<
+    { text: string; files?: Array<{ uri: string; name?: string }> } | undefined
+  >(undefined);
 
   // ---- data loading --------------------------------------------------------
   const [allProjects, setAllProjects] = useState(false);
@@ -191,34 +201,45 @@ export function App() {
           | { type?: string; content?: Array<Record<string, unknown>> }
           | undefined;
         if (!lm || lm.type !== "assistant" || !Array.isArray(lm.content)) return m;
-        const localParts = new Map<string, string>();
-        for (const p of lm.content) {
-          if (
-            (p.type === "text" || p.type === "reasoning") &&
-            typeof p.text === "string"
-          ) {
-            localParts.set(p.type, p.text);
-          }
-        }
-        // Fold in the delta accumulator: it holds every streamed chunk even
-        // when the snapshot hasn't caught up yet.
+        // Overlay rules (stream-lag protection):
+        //  - text/reasoning: only the LAST local part of each kind may
+        //    overlay, and only when it EXTENDS the server snapshot
+        //    (startsWith). If the server diverged — revert/compaction shrank
+        //    or rewrote it — the authoritative snapshot wins and stale
+        //    streams cannot resurrect old content.
+        //  - tools match by id (shell output protection below).
         const msgId = (m as { id?: string }).id ?? "";
-        for (const kind of ["text", "reasoning"]) {
+        const accFor = (kind: string): string | undefined => {
           const acc = deltaAccRef.current.get(`${msgId}|${kind}`);
-          if (acc && acc.length > (localParts.get(kind) ?? "").length) {
-            localParts.set(kind, acc);
-          }
-        }
+          return typeof acc === "string" ? acc : undefined;
+        };
         let changed = false;
+        const lc: Array<Record<string, unknown>> = lm.content;
         const content = mm.content.map((p) => {
           if (
             (p.type === "text" || p.type === "reasoning") &&
             typeof p.text === "string"
           ) {
-            const localText = localParts.get(p.type) ?? "";
-            if (localText.length > p.text.length) {
-              changed = true;
-              return { ...p, text: localText };
+            let lastIdx = -1;
+            for (let i = lc.length - 1; i >= 0; i--) {
+              if ((lc[i] as { type?: unknown }).type === p.type) {
+                lastIdx = i;
+                break;
+              }
+            }
+            if (lastIdx !== -1) {
+              const lp = lc[lastIdx] as { text?: unknown };
+              const localText = typeof lp.text === "string" ? lp.text : "";
+              const acc = accFor(p.type);
+              const candidate =
+                acc && acc.length > localText.length ? acc : localText;
+              if (
+                candidate.length > p.text.length &&
+                candidate.startsWith(p.text)
+              ) {
+                changed = true;
+                return { ...p, text: candidate };
+              }
             }
           }
           // Streamed SHELL OUTPUT lives in tool.state.content — protect it
@@ -342,6 +363,9 @@ export function App() {
       setActiveId(id);
       setMessages([]);
       setPermissions([]);
+      // Streamed accumulators belong to the abandoned view — drop them so
+      // stale streams can never overlay the next session's transcript.
+      deltaAccRef.current.clear();
       setForms((list) => (id ? list.filter((f) => f.sessionID === id) : []));
       if (id) void refreshMessages(id);
     },
@@ -380,6 +404,10 @@ export function App() {
     messagesRef.current = messages;
   }, [messages]);
 
+  useEffect(() => {
+    soundsRef.current = sounds;
+  }, [sounds]);
+
   // Restore the last-used model once per webview load.
   useEffect(() => {
     rpc
@@ -398,6 +426,9 @@ export function App() {
   // ---- push events ---------------------------------------------------------
   useEffect(() => {
     let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+    // Accumulator for the debounced event router — events within one debounce
+    // window must MERGE their refresh actions, not replace each other's.
+    const pendingActions = new Set<UiAction>();
     let messageTimer: ReturnType<typeof setTimeout> | undefined;
 
     const offPush = rpc.onPush((msg) => {
@@ -477,7 +508,7 @@ export function App() {
           const sid = evt.data?.sessionID;
 
           // Sounds: finish + permission chimes for background sessions only.
-          if (sounds && sid && sid !== activeIdRef.current) {
+          if (soundsRef.current && sid && sid !== activeIdRef.current) {
             if (evt.type === "session.execution.succeeded") chime("done");
             if (evt.type === "permission.asked") chime("attention");
           }
@@ -488,7 +519,7 @@ export function App() {
             evt.type === "session.execution.interrupted";
           if (
             (isTerminal || evt.type === "session.idle") &&
-            sounds &&
+            soundsRef.current &&
             sid === activeIdRef.current
           ) {
             if (isTerminal) chime("done");
@@ -497,11 +528,14 @@ export function App() {
           // ---- typed event router (Q18: every valuable V2 event wired) ----
           const actions = actionsForEvent(evt.type);
           if (actions.length > 0) {
-            // Deltas are applied immediately below (no refetch); everything else
-            // refreshes through the debounced REST path.
+            // MERGE into the pending set — replacing it dropped refreshes when
+            // two action-bearing events landed within the debounce window.
+            for (const a of actions) pendingActions.add(a);
             clearTimeout(sessionTimer);
             sessionTimer = setTimeout(() => {
-              for (const a of actions) {
+              const batch = [...pendingActions];
+              pendingActions.clear();
+              for (const a of batch) {
                 if (a === "sessions") void refreshSessions();
                 if (a === "pickers") void refreshPickers();
                 if (a === "permissions") void refreshPendingPermissions();
@@ -511,6 +545,7 @@ export function App() {
                 if (a === "vcs") void refreshVcs();
                 if (a === "worktrees") setWorktreeTick((t) => t + 1);
                 if (a === "instructions") setInstructionsTick((t) => t + 1);
+                if (a === "inbox") setInboxTick((t) => t + 1);
                 if (a === "commands") void reloadSlash();
               }
             }, 150);
@@ -549,7 +584,15 @@ export function App() {
             if (merged) {
               messagesRef.current = merged;
               setMessages(merged);
-            } else if (wantsMessages || isTerminal || isDelta) {
+            } else if (
+              wantsMessages ||
+              isTerminal ||
+              isDelta ||
+              evt.type === "session.tool.progress" ||
+              evt.type === "session.tool.input.delta"
+            ) {
+              // Unapplied tool deltas/progress mean the snapshot lags (or the
+              // target tool isn't cached) — refetch instead of dropping.
               clearTimeout(messageTimer);
               messageTimer = setTimeout(
                 () => void refreshMessages(sid),
@@ -658,15 +701,14 @@ export function App() {
       clearTimeout(sessionTimer);
       clearTimeout(messageTimer);
     };
-  }, [
-    refreshSessions,
-    refreshMessages,
-    refreshPickers,
-    refreshPendingPermissions,
-    refreshForms,
-    selectSession,
-    sounds,
-  ]);
+   }, [
+     refreshSessions,
+     refreshMessages,
+     refreshPickers,
+     refreshPendingPermissions,
+     refreshForms,
+     selectSession,
+   ]);
 
   // Report the visible session so host notifications skip it.
   useEffect(() => {
@@ -743,7 +785,9 @@ export function App() {
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [activeId]: false }));
-        // Surface a Retry affordance for transport/API failures.
+        // Surface a Retry affordance for transport/API failures — and keep the
+        // exact payload so Retry resends THIS prompt, not an older one.
+        lastFailedPromptRef.current = { text: text || "", files };
         setRetryPending(true);
         throw error;
       }
@@ -751,9 +795,23 @@ export function App() {
     [activeId],
   );
 
-  /** Resend the last user prompt — the recovery path after an API error. */
+  /** Resend the failed prompt — prefers the exact retained payload from the
+   *  last failed send, falling back to history for older failures. */
   const retryLast = useCallback(async () => {
     if (!activeId) return;
+    const retained = lastFailedPromptRef.current;
+    if (retained) {
+      lastFailedPromptRef.current = undefined;
+      try {
+        await sendMessage(
+          retained.text,
+          retained.files && retained.files.length > 0 ? retained.files : undefined,
+        );
+      } catch {
+        /* failure state already surfaced */
+      }
+      return;
+    }
     const last = [...messagesRef.current].reverse().find(isUser);
     if (!last) return;
     const files: Array<{ uri: string; name?: string }> | undefined = (() => {
@@ -817,8 +875,7 @@ export function App() {
       );
       selectSession(session.id);
       setDrawerOpen(false);
-      setNotice(null);
-    } catch (error) {
+      setNotice(null);    } catch (error) {
       console.warn("[oc2] session.create failed", error);
       setNotice(
         `Couldn't create session — ${
@@ -1053,12 +1110,17 @@ export function App() {
         });
         return true;
       } catch {
-        // reappear via next permission.asked; allow a future retry
+        // Restore the card immediately (the agent is still blocked on it) and
+        // schedule a fresh sync in case our copy is stale.
+        setPermissions((list) =>
+          list.some((p) => p.requestID === requestID) ? list : [...list, target],
+        );
         respondedRef.current.clear(requestID);
+        void refreshPendingPermissions();
         return false;
       }
     },
-    [permissions],
+    [permissions, refreshPendingPermissions],
   );
 
   // Keep the active session auto-accepting in `autoAllow` mode (per-session,
@@ -1245,6 +1307,19 @@ export function App() {
             selectSession(forked.id);
           }
         }}
+        onRevertClear={async () => {
+          if (!activeId) return;
+          await rpc
+            .call("session.revert.clear", { sessionID: activeId, files: true })
+            .catch((e: unknown) => {
+              console.warn("[oc2] revert.clear failed", e);
+              setNotice(
+                `Couldn't abandon staged changes — ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
+              );
+            });
+        }}
         onCompact={async () => {
           if (!activeId) return;
           await rpc
@@ -1367,10 +1442,16 @@ export function App() {
             }}
             onNew={() => void newSession()}
             onDelete={async (id) => {
+              let removed = true;
               await rpc
                 .call("session.remove", { sessionID: id })
-                .catch(() => undefined);
-              if (id === activeId) selectSession(undefined);
+                .catch(() => {
+                  removed = false;
+                  setNotice(`Couldn't delete session ${id}`);
+                });
+              // Only deselect when the removal actually succeeded — otherwise
+              // the feed flips to the empty state while the session still exists.
+              if (removed && id === activeId) selectSession(undefined);
               await refreshSessions();
             }}
             onMove={async (id) => {
@@ -1426,7 +1507,11 @@ export function App() {
           />
         )}
         {inboxOpen && activeId && (
-          <InboxDrawer sessionId={activeId} onClose={() => setInboxOpen(false)} />
+          <InboxDrawer
+            sessionId={activeId}
+            refreshTick={inboxTick}
+            onClose={() => setInboxOpen(false)}
+          />
         )}
       </main>
 
@@ -1592,6 +1677,7 @@ export function App() {
             .call("ui.lastModel.set", { id: m.id, providerID: m.providerID })
             .catch(() => undefined);
           if (activeId) {
+            const prevModel = active?.model;
             setSessions((prev) =>
               prev.map((s) =>
                 s.id === activeId
@@ -1602,9 +1688,19 @@ export function App() {
                   : s,
               ),
             );
-            await rpc
-              .call("model.switch", { sessionID: activeId, model: m })
-              .catch(() => undefined);
+            try {
+              await rpc.call("model.switch", { sessionID: activeId, model: m });
+            } catch {
+              // Roll back the optimistic selector update on failure.
+              if (prevModel)
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === activeId
+                      ? ({ ...s, model: prevModel } as SessionSummary)
+                      : s,
+                  ),
+                );
+            }
           }
           void refreshSessions();
         }}

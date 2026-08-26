@@ -132,10 +132,12 @@ export function Composer(props: Props) {
   useEffect(() => setSlashIndex(0), [slashFilter, slashOpen, slashKind]);
   useEffect(() => setAtIndex(0), [atQuery, atOpen]);
 
-  /** Detect a leading `/cmd` or trailing `@query` while typing. */
+  /** Detect a leading `/cmd` (with optional args) or trailing `@query`. */
   const detectTriggers = useCallback((value: string) => {
     const trimmedStart = value.replace(/^\s+/, "");
-    const slashMatch = /^\/([a-z0-9_-]*)$/i.exec(trimmedStart);
+    // Args after the command token keep the popover open so users can type
+    // "/cmd fix the bug" and Enter routes it as a command invocation.
+    const slashMatch = /^\/([a-z0-9_-]*)(?:\s+([^\s].*))?$/i.exec(trimmedStart);
     if (slashMatch) {
       setSlashOpen(true);
       setSlashFilter(slashMatch[1] ?? "");
@@ -217,7 +219,12 @@ export function Composer(props: Props) {
         setPreview(false);
         return;
       }
-      const rest = text.replace(/^\s*\/[^\s]*$/, "").trim();
+      // Everything after the command token is its argument payload.
+      const m = new RegExp(
+        `^\\s*/${entry.name}\\s*([\\s\\S]*)$`,
+        "i",
+      ).exec(text.trim());
+      const rest = (m?.[1] ?? "").trim();
       setText("");
       setSlashOpen(false);
       setPreview(false);

@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         case "error": {
           statusBar.text = "$(warning) OpenCode";
-          statusBar.tooltip = "OpenCode connection error — click for output";
+          statusBar.tooltip = "OpenCode connection error — click to open the sidebar";
           statusBar.backgroundColor = new vscode.ThemeColor(
             "statusBarItem.warningBackground",
           );

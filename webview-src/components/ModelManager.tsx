@@ -31,7 +31,7 @@ export function ModelManager(props: Props) {
   const [filter, setFilter] = useState<VisibilityFilter>("all");
 
   const filtered = useMemo(() => {
-    const q = props.recents.length && false ? "" : query.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
     let list = props.models;
     if (q) {
       list = list.filter(

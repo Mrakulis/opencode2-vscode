@@ -70,9 +70,13 @@ export class AutoCompactWatcher implements vscode.Disposable {
       );
       if (!limit) return;
 
-      const t = session.tokens;
+      // Session-level tokens are CUMULATIVE lifetime usage and survive
+      // compaction — useless for threshold math. Use the newest assistant
+      // step snapshot after the last compaction checkpoint instead.
+      const usage = await this.latestStepUsage(sessionID);
+      if (!usage) return; // nothing post-compaction yet — don't guess
       const total =
-        t.input + t.output + t.reasoning + t.cache.read + t.cache.write;
+        usage.input + usage.output + usage.reasoning + usage.cache.read + usage.cache.write;
       const pct = (total / limit) * 100;
       if (pct < threshold) return;
 
@@ -87,6 +91,53 @@ export class AutoCompactWatcher implements vscode.Disposable {
     } catch (error) {
       this.log.debug("auto-compact check skipped", error);
     }
+  }
+
+  /**
+   * Host-side mirror of the webview's liveContextStepTokens(): the newest
+   * assistant-step token snapshot created AFTER the newest synthetic
+   * compaction marker, or undefined when there isn't one.
+   */
+  private async latestStepUsage(
+    sessionID: string,
+  ): Promise<
+    | { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
+    | undefined
+  > {
+    const client = this.controller.getClient();
+    const res = await client.message.list({ sessionID });
+    const rows = (Array.isArray(res) ? res : res.data ?? []) as Array<{
+      type?: string;
+      time?: { created?: number };
+      tokens?: {
+        input: number;
+        output: number;
+        reasoning: number;
+        cache: { read: number; write: number };
+      };
+    }>;
+    let cutoff = 0;
+    for (const m of rows) {
+      if (m.type === "synthetic") {
+        cutoff = Math.max(cutoff, m.time?.created ?? 0);
+      }
+    }
+    let best;
+    let bestAt = -1;
+    for (const m of rows) {
+      const at = m.time?.created ?? 0;
+      if (
+        m.type !== "assistant" ||
+        !m.tokens ||
+        !(m.tokens.input > 0) ||
+        at <= cutoff ||
+        at < bestAt
+      )
+        continue;
+      bestAt = at;
+      best = m.tokens;
+    }
+    return best;
   }
 
   private refreshLimits(): void {

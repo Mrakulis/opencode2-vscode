@@ -55,23 +55,16 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   useEffect(() => {
     if (!showResources) return;
     void rpc
-      .call<{
-        data: {
-          resources?: Array<Record<string, unknown>>;
-          templates?: Array<Record<string, unknown>>;
-        };
-      }>("mcp.resources")
-      .then((res) => {
+      .call<Array<Record<string, unknown>>>("mcp.resources")
+      .then((rows) => {
         setResources(
-          ((res.data?.resources ?? []) as Array<Record<string, unknown>>).map(
-            (r) => ({
-              server: typeof r.server === "string" ? r.server : "?",
-              name: typeof r.name === "string" ? r.name : "?",
-              uri: typeof r.uri === "string" ? r.uri : "",
-              description:
-                typeof r.description === "string" ? r.description : undefined,
-            }),
-          ),
+          rows.map((r) => ({
+            server: typeof r.server === "string" ? r.server : "?",
+            name: typeof r.name === "string" ? r.name : "?",
+            uri: typeof r.uri === "string" ? r.uri : "",
+            description:
+              typeof r.description === "string" ? r.description : undefined,
+          })),
         );
       })
       .catch(() => setResources([]));

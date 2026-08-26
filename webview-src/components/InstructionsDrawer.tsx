@@ -21,6 +21,7 @@ export function InstructionsDrawer({
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
   const [newKey, setNewKey] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -127,6 +128,7 @@ export function InstructionsDrawer({
                 className="search"
                 rows={3}
                 value={drafts[e.key] ?? ""}
+                autoFocus={focusKey === e.key}
                 onChange={(ev) =>
                   setDrafts((d) => ({ ...d, [e.key]: ev.target.value }))
                 }
@@ -146,12 +148,17 @@ export function InstructionsDrawer({
               className="primary"
               disabled={!newKey.trim()}
               onClick={() => {
-                if (!newKey.trim()) return;
-                setDrafts((d) => ({ ...d, [newKey.trim()]: "" }));
+                const key = newKey.trim();
+                if (!key) return;
+                setDrafts((d) => ({ ...d, [key]: "" }));
                 setEntries((list) => [
-                  ...list.filter((x) => x.key !== newKey.trim()),
-                  { key: newKey.trim(), value: "" },
+                  ...list.filter((x) => x.key !== key),
+                  { key, value: "" },
                 ]);
+                // Persist the entry immediately — blur-save alone loses it if
+                // the drawer closes before the textarea was ever focused.
+                void save(key);
+                setFocusKey(key);
                 setNewKey("");
               }}
             >

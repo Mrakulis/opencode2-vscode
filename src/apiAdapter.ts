@@ -277,6 +277,21 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       return res.data;
     },
     mcpList: () => getClient().mcp.list(),
+    mcpResources: async (): Promise<Array<Record<string, unknown>>> => {
+      // McpResourceCatalogOutput = {location, resources, templates} — the
+      // drawer consumes the resources rows.
+      const res = await getClient().mcp.resource.catalog();
+      const cat = res as unknown as {
+        resources?: unknown;
+        data?: { resources?: unknown };
+      };
+      const rows = Array.isArray(cat?.resources)
+        ? cat.resources
+        : Array.isArray(cat?.data?.resources)
+          ? cat.data.resources
+          : [];
+      return rows as Array<Record<string, unknown>>;
+    },
     mcpAdd: (server: string, config: unknown) =>
       getClient().mcp.add({ server, config: config as never }),
     mcpRemove: (server: string) => getClient().mcp.remove({ server }),
@@ -350,9 +365,33 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       integrationID: string,
       methodID?: string,
     ): Promise<{ attemptID?: string; url?: string }> => {
+      // methodID is REQUIRED by the schema. When the caller doesn't know it,
+      // resolve the integration's first OAuth method instead of sending a
+      // schema-invalid request.
+      let mid = methodID;
+      if (!mid) {
+        const info = await getClient().integration.get({ integrationID });
+        const scan = JSON.stringify(info ?? {});
+        try {
+          const methods = JSON.parse(scan) as unknown;
+          const found: string[] = [];
+          const walk = (v: unknown): void => {
+            if (!v || typeof v !== "object") return;
+            if (Array.isArray(v)) { v.forEach(walk); return; }
+            const rec = v as Record<string, unknown>;
+            if (rec.type === "oauth" && typeof rec.id === "string")
+              found.push(rec.id);
+            for (const k of Object.values(rec)) walk(k);
+          };
+          walk(methods);
+          mid = found[0];
+        } catch {
+          /* fall through — server will reject with its own error */
+        }
+      }
       const res = await getClient().integration.oauth.connect({
         integrationID,
-        ...(methodID ? { methodID } : {}),
+        ...(mid ? { methodID: mid } : {}),
       } as never);
       const d = (res.data ?? {}) as Record<string, unknown>;
       return {
@@ -419,6 +458,17 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       } as never);
       const out = res.data as unknown;
       if (typeof out === "string") return out;
+      // Current beta: data is FileDiffInfo[] ({file,patch,…}) — join patches.
+      if (Array.isArray(out)) {
+        return out
+          .map((r) =>
+            typeof (r as { patch?: unknown }).patch === "string"
+              ? ((r as { patch: string }).patch)
+              : "",
+          )
+          .filter(Boolean)
+          .join("\n");
+      }
       const rec = (out ?? {}) as Record<string, unknown>;
       return typeof rec.diff === "string"
         ? rec.diff
@@ -441,15 +491,19 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     worktreeCreate: (
       projectID: string,
       opts: { from?: string; directory: string; name?: string },
-    ): Promise<unknown> =>
-      getClient().worktree.create({
+    ): Promise<unknown> => {
+      // Schema (verified vs OpenAPI): {strategy:string, directory:string,
+      // from?, branch?, name?} — strategy is a flat REQUIRED string, not an
+      // object; the old nested shape could never validate.
+      const strategy = opts.from ? "from" : "directory";
+      return getClient().worktree.create({
         projectID,
-        strategy: {
-          ...(opts.from ? { from: opts.from } : {}),
-          directory: opts.directory,
-          ...(opts.name ? { name: opts.name } : {}),
-        },
-      } as never),
+        strategy,
+        directory: opts.directory,
+        ...(opts.from ? { from: opts.from } : {}),
+        ...(opts.name ? { name: opts.name } : {}),
+      } as never);
+    },
     worktreeRemove: (
       projectID: string,
       directory: string,

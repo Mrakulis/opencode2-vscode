@@ -108,6 +108,13 @@ export function WorktreesDrawer({
     }
   };
 
+  /** Re-resolve project context and reload (manual refresh affordance). */
+  const refreshNow = async (): Promise<void> => {
+    setProjectID(undefined);
+    setError(undefined);
+    await load();
+  };
+
   const remove = async (directory: string | undefined): Promise<void> => {
     if (!projectID || !directory) return;
     try {
@@ -127,9 +134,19 @@ export function WorktreesDrawer({
       >
         <header className="drawer-head">
           <span className="drawer-title">Worktrees</span>
-          <button type="button" className="iconbtn" onClick={onClose}>
-            ×
-          </button>
+          <span style={{ display: "flex", gap: "6px" }}>
+            <button
+              type="button"
+              className="iconbtn"
+              title="Refresh"
+              onClick={() => void refreshNow()}
+            >
+              ↻
+            </button>
+            <button type="button" className="iconbtn" onClick={onClose}>
+              ×
+            </button>
+          </span>
         </header>
         <div className="drawer-body">
           <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>

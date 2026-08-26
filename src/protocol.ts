@@ -214,6 +214,7 @@ export type RpcMethod =
   | "mcp.remove"
   | "mcp.connect"
   | "mcp.disconnect"
+  | "mcp.resources"
   // misc
   | "files.find"
   | "file.read"

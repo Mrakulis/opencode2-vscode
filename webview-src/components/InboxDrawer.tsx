@@ -16,9 +16,12 @@ interface InboxItem {
  */
 export function InboxDrawer({
   sessionId,
+  refreshTick,
   onClose,
 }: {
   sessionId: string;
+  /** Bumped by inbox.* events so the drawer live-refreshes while open. */
+  refreshTick?: number;
   onClose(): void;
 }) {
   const [items, setItems] = useState<InboxItem[]>([]);
@@ -47,7 +50,7 @@ export function InboxDrawer({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshTick]);
 
   const act = async (
     id: string,

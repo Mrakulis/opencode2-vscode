@@ -79,7 +79,16 @@ export function FormCard({ form }: { form: WireForm }) {
             key={f.key}
             field={f}
             value={values[f.key]}
-            onChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))}
+            onChange={(v) =>
+              setValues((p) => {
+                if (v === undefined) {
+                  const next = { ...p };
+                  delete next[f.key];
+                  return next;
+                }
+                return { ...p, [f.key]: v };
+              })
+            }
           />
         ))}
       </div>
@@ -126,7 +135,8 @@ function FormFieldRow({
 }: {
   field: WireFormField;
   value: string | number | boolean | undefined;
-  onChange(v: string | number | boolean): void;
+  /** `undefined` clears the field (e.g. a number input emptied by the user). */
+  onChange(v: string | number | boolean | undefined): void;
 }) {
   const label = (
     <label className="oc2-form-label" title={field.description}>
@@ -191,7 +201,10 @@ function FormFieldRow({
         onChange={(e) =>
           onChange(
             field.type === "number" || field.type === "integer"
-              ? Number(e.target.value)
+              ? // Clearing the field must clear the value, not submit 0.
+                e.target.value === ""
+                  ? undefined
+                  : Number(e.target.value)
               : e.target.value,
           )
         }

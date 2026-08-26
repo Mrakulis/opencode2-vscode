@@ -47,8 +47,12 @@ function extractToolDelta(data: DeltaEvent["data"]): string | undefined {
     if (typeof m.delta === "string") return m.delta;
     if (typeof m.text === "string") return m.text;
     if (typeof m.output === "string") return m.output;
-    // fallback: first non-empty string value
-    for (const v of Object.values(m)) if (typeof v === "string" && v.length > 0) return v;
+    // Known keys only: a generic "first string value" heuristic grabs human
+    // labels (e.g. metadata.title) and appends them as tool output.
+    for (const k of ["output", "delta", "text"] as const) {
+      const v = m[k];
+      if (typeof v === "string" && v.length > 0) return v;
+    }
   }
   return undefined;
 }
@@ -96,9 +100,12 @@ export function applyDelta(
         (p) => p.type === "tool" && (p.id === toolID || (p as { toolID?: string }).toolID === toolID),
       );
     }
-    // Early input deltas can arrive before the tool part exists in the
+    // Early INPUT deltas can arrive before the tool part exists in the
     // snapshot — fall back to the last tool (the one currently streaming).
+    // PROGRESS events must match exactly: falling back would append shell
+    // output to whichever tool happens to be last (misattribution).
     if (toolIdx === -1) {
+      if (evt.type !== "session.tool.input.delta") return null;
       for (let i = candidate.content.length - 1; i >= 0; i--) {
         if (candidate.content[i]?.type === "tool") { toolIdx = i; break; }
       }
@@ -119,12 +126,27 @@ export function applyDelta(
     // For input deltas (write/edit) update the *input* field so the
     // synthesized diff (which reads oldString/newString/content) grows live.
     if (evt.type === "session.tool.input.delta") {
-      const input = { ...(tool.state?.input ?? {}) };
+      // SDK streaming shape: `input` is a raw JSON STRING, not an object.
+      // Spreading a string would explode it into numeric-keyed chars and
+      // destroy the payload — parse first; if unparseable let REST refetch
+      // render the card instead of corrupting state.
+      let base: Record<string, unknown> | undefined;
+      const raw = tool.state?.input;
+      if (typeof raw === "string") {
+        try { base = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+      } else if (raw && typeof raw === "object") {
+        base = { ...raw };
+      }
+      const input: Record<string, unknown> = { ...(base ?? {}) };
       const name = typeof tool.name === "string" ? tool.name.toLowerCase() : "";
-      // Heuristic: write → "content", edit → "newString", otherwise first string field.
+      // Only write/edit stream input content — other tools' inputs arrive as
+      // complete objects, so mutating their first string field is wrong.
+      if (name !== "write" && name !== "edit" && name !== "edit_file" && name !== "write_file")
+        return null;
+      // Heuristic: write → "content", edit → "newString".
       let field: string | undefined;
-      if (name === "write" && typeof input.content === "string") field = "content";
-      else if (name === "edit" && typeof input.newString === "string") field = "newString";
+      if ((name === "write" || name === "write_file") && typeof input.content === "string") field = "content";
+      else if ((name === "edit" || name === "edit_file") && typeof input.newString === "string") field = "newString";
       else if (typeof input.content === "string") field = "content";
       else if (typeof input.newString === "string") field = "newString";
       else {
@@ -132,7 +154,7 @@ export function applyDelta(
       }
       // If the input object is still empty (very early delta), create the field.
       if (!field) {
-        field = name === "write" ? "content" : "newString";
+        field = name === "write" || name === "write_file" ? "content" : "newString";
         (input as Record<string, unknown>)[field] = delta;
       } else {
         (input as Record<string, unknown>)[field] = ((input[field] as string) ?? "") + delta;

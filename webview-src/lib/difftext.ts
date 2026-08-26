@@ -52,10 +52,14 @@ export function synthEditDiff(
 
 function applyCap(lines: string[], maxLines: number): string {
   if (lines.length === 0) return "";
-  if (lines.length > maxLines) {
+  // Degenerate cap: keep at least one content line so the notice isn't the
+  // whole diff. The notice uses "… " (no +/- prefix) so it renders as
+  // context, not as an added line.
+  const cap = Math.max(1, maxLines);
+  if (lines.length > cap) {
     return [
-      ...lines.slice(0, maxLines),
-      `+ … (${lines.length - maxLines} more lines truncated)`,
+      ...lines.slice(0, cap),
+      `… (${lines.length - cap} more lines truncated)`,
     ].join("\n");
   }
   return lines.join("\n");

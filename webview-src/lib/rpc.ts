@@ -11,7 +11,11 @@ class RpcClient {
   private nextId = 1;
   private readonly pending = new Map<
     number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+    {
+      resolve: (v: unknown) => void;
+      reject: (e: Error) => void;
+      timer?: ReturnType<typeof setTimeout>;
+    }
   >();
   private readonly pushHandlers = new Set<PushHandler>();
   private readonly api: { postMessage(message: unknown): void };
@@ -25,6 +29,9 @@ class RpcClient {
         const entry = this.pending.get(data.id);
         if (!entry) return;
         this.pending.delete(data.id);
+        // Settle the timeout too — otherwise timers accumulate during
+        // streaming (dozens per minute).
+        if (entry.timer) clearTimeout(entry.timer);
         if (data.ok) entry.resolve(data.result);
         else entry.reject(new Error(data.error ?? "rpc failed"));
         return;
@@ -41,16 +48,16 @@ class RpcClient {
   ): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, {
-        resolve: resolve as (v: unknown) => void,
-        reject,
-      });
-      this.api.postMessage({ type: "rpc", id, method, params: params ?? {} });
-      // Safety net: host always answers; reject stragglers after 30s.
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.pending.delete(id))
           reject(new Error(`rpc ${method} timed out`));
       }, 30_000);
+      this.pending.set(id, {
+        resolve: resolve as (v: unknown) => void,
+        reject,
+        timer,
+      });
+      this.api.postMessage({ type: "rpc", id, method, params: params ?? {} });
     });
   }
 

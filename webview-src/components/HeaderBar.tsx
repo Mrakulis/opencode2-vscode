@@ -13,6 +13,8 @@ interface Props {
   onCopyTranscript(): Promise<void>;
   onFork(): Promise<void>;
   onCompact(): Promise<void>;
+  /** Abandon a staged revert (session.revert.clear) when available. */
+  onRevertClear?(): Promise<void> | void;
   onOpenInbox(): void;
   onExport(): void;
   onImport(): void;
@@ -166,6 +168,17 @@ export function HeaderBar(props: Props) {
                 }}
               >
                 Fork session
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void props.onRevertClear?.();
+                }}
+                disabled={!props.sessionId || !props.onRevertClear}
+              >
+                Abandon staged changes
               </button>
               <button
                 type="button"
@@ -353,38 +366,6 @@ export function HeaderBar(props: Props) {
                 ↻ Cycle theme
               </button>
               <div className="menu-sep" />
-              <button
-                type="button"
-                className="menu-item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  void props.onCopyTranscript();
-                }}
-              >
-                Copy transcript
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                disabled={!props.sessionId}
-                onClick={() => {
-                  setMenuOpen(false);
-                  void props.onFork();
-                }}
-              >
-                Fork session
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                disabled={!props.sessionId}
-                onClick={() => {
-                  setMenuOpen(false);
-                  void props.onCompact();
-                }}
-              >
-                Compact now
-              </button>
             </div>
           )}
         </div>

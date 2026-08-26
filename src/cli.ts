@@ -155,7 +155,19 @@ function describe(candidate: string): ResolvedCli | undefined {
       display: expanded,
     };
   }
-  // extension-less shims (sh script) -> skip on Windows spawn paths
+  // POSIX: resolved binaries are extension-less (ELF or shebang script) and
+  // node spawns them natively. Require the exec bit so random same-named
+  // files don't pass; the old unconditional rejection here made CLI
+  // resolution impossible everywhere off-Windows.
+  if (isPosix()) {
+    try {
+      fs.accessSync(expanded, fs.constants.X_OK);
+    } catch {
+      return undefined;
+    }
+    return { program: expanded, prefixArgs: [], display: expanded };
+  }
+  // Windows leftovers that are neither exe nor cmd/bat shims: unusable.
   return undefined;
 }
 
@@ -174,8 +186,9 @@ export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
     .getConfiguration("opencode2")
     .get<string>("cliPath", "")
     .trim();
-  const names: string[] = configured ? [configured] : [...CANDIDATE_NAMES];
-  if (!configured) names.push("opencode");
+  const names: string[] = configured
+    ? [configured]
+    : [...new Set<string>([...CANDIDATE_NAMES, "opencode"])];
 
   for (const name of names) {
     const found = await whereAll(name);
@@ -239,6 +252,11 @@ export async function installCli(log: Log): Promise<void> {
     name: "OpenCode 2 — CLI install",
   });
   terminal.show();
-  terminal.sendText("npm install -g opencode-ai@beta", true);
+  // Under Flatpak the integrated terminal runs inside the sandbox, where an
+  // npm -g install is invisible to our host-side resolution — escape it.
+  const installCmd = isFlatpak()
+    ? "flatpak-spawn --host bash -lc 'npm install -g opencode-ai@beta'"
+    : "npm install -g opencode-ai@beta";
+  terminal.sendText(installCmd, true);
   log.info("npm global install started in terminal 'OpenCode 2 — CLI install'.");
 }

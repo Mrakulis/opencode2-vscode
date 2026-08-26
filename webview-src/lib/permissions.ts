@@ -41,6 +41,9 @@ export class RespondedTracker {
   }
 
   had(requestID: string): boolean {
+    // Prune here too: on an idle webview no mark() fires, so expired entries
+    // would otherwise survive forever and block auto-reply for retried asks.
+    this.prune(Date.now());
     return this.map.has(requestID);
   }
 

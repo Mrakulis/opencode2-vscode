@@ -10,6 +10,7 @@ import {
   type WireFormField,
 } from "./protocol";
 import type { RpcDispatcher } from "./rpc";
+import { preferredDirectory } from "./rpc";
 
 export const SIDEBAR_VIEW_ID = "opencode2.sidebar";
 
@@ -194,14 +195,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Push live connection state into the UI (fired by the controller). */
-  notifyConnection(
-    state: "connected" | "connecting" | "error",
-    detail?: string,
-  ): void {
-    this.post({ type: "connection", state, detail });
-  }
-
   /** Ask the webview to refetch everything (workspace scope changed). */
   notifyResync(): void {
     this.post({ type: "resync" });
@@ -211,7 +204,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   async createAndSelectSession(): Promise<void> {
     try {
       const api = createApi({ getClient: () => this.controller.getClient() });
-      const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const directory = preferredDirectory();
       const session = await api.sessionCreate({ directory });
       this.post({
         type: "selectSession",

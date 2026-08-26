@@ -18,6 +18,7 @@ export type UiAction =
   | "vcs" // branch chip / diff refresh
   | "worktrees" // worktree drawer tick
   | "instructions" // instructions drawer tick
+  | "inbox" // inbox drawer tick (queued follow-ups)
   | "commands"; // slash-catalog reload
 
 const TABLE: Record<string, UiAction[]> = {
@@ -75,10 +76,10 @@ const TABLE: Record<string, UiAction[]> = {
   "session.revert.committed": ["sessions", "messages", "vcs"],
 
   // inbox (queued follow-ups)
-  "session.inbox.delivered": ["messages"],
-  "session.inbox.enqueued": ["sessions"],
-  "session.inbox.cancelled": ["sessions"],
-  "session.inbox.delivery.changed": ["sessions"],
+  "session.inbox.delivered": ["messages", "inbox"],
+  "session.inbox.enqueued": ["sessions", "inbox"],
+  "session.inbox.cancelled": ["sessions", "inbox"],
+  "session.inbox.delivery.changed": ["sessions", "inbox"],
 
   // skills / shells
   "session.skill.activated": ["messages"],

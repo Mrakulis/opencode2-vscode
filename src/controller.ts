@@ -35,6 +35,13 @@ export function sameServiceUrl(a: string, b: string): boolean {
   }
 }
 
+/** Thrown when a connect attempt is abandoned because a newer one started. */
+class SupersededError extends Error {
+  constructor() {
+    super("connection superseded");
+  }
+}
+
 export type ConnectionState = "connected" | "connecting" | "error";
 export type CliResolver = () => Promise<ResolvedCli | undefined>;
 
@@ -66,7 +73,7 @@ export class OpenCodeController implements vscode.Disposable {
   // is time-boxed and retried with backoff while auto-start is enabled.
   private retryTimer?: ReturnType<typeof setTimeout>;
   private retryCount = 0;
-  private readonly connectTimeoutMs = 12_000;
+  private readonly connectTimeoutMs = 20_000;
   private readonly retryBaseMs = 4_000;
   private readonly maxRetries = 20;
 
@@ -118,7 +125,12 @@ export class OpenCodeController implements vscode.Disposable {
         this.establish(cli, generation),
         this.connectTimeoutMs,
       );
-      if (generation !== this.generation) return this.getClient(); // superseded
+      if (generation !== this.generation) {
+        // Superseded mid-flight: the attempt itself may have SUCCEEDED, so do
+        // not log/record a failure — a newer connect() owns the outcome.
+        this.log.debug("connect superseded by a newer attempt");
+        return client;
+      }
       this.client = client;
       this.lastError = undefined;
       this.retryCount = 0;
@@ -129,6 +141,11 @@ export class OpenCodeController implements vscode.Disposable {
       this.startEventPump(client, generation);
       return client;
     } catch (error) {
+      // Superseded attempts are not failures — a newer connect() owns the outcome.
+      if (error instanceof SupersededError) {
+        this.log.debug("connect superseded");
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.log.error("connection failed", error);
       if (generation === this.generation) {
@@ -157,11 +174,9 @@ export class OpenCodeController implements vscode.Disposable {
     health: Awaited<ReturnType<OpenCodeClient["health"]["get"]>>;
   }> {
     const client = await this.createClient(cli);
-    if (generation !== this.generation)
-      throw new Error("connection superseded");
+    if (generation !== this.generation) throw new SupersededError();
     const health = await client.health.get();
-    if (generation !== this.generation)
-      throw new Error("connection superseded");
+    if (generation !== this.generation) throw new SupersededError();
     return { client, health };
   }
 
@@ -286,16 +301,24 @@ export class OpenCodeController implements vscode.Disposable {
     try {
       const stream = client.event.subscribe()[Symbol.asyncIterator]();
       // Probe so a dead endpoint fails fast instead of hanging forever.
-      await Promise.race([
-        stream.next(),
-        new Promise<never>((_, reject) => {
-          const timer = setTimeout(
-            () => reject(new Error("subscribe probe timeout")),
-            10_000,
-          );
-          this.pendingTimers.add(timer);
-        }),
-      ]);
+      let probeTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          stream.next(),
+          new Promise<never>((_, reject) => {
+            probeTimer = setTimeout(
+              () => reject(new Error("subscribe probe timeout")),
+              10_000,
+            );
+            this.pendingTimers.add(probeTimer);
+          }),
+        ]);
+      } finally {
+        if (probeTimer) {
+          clearTimeout(probeTimer);
+          this.pendingTimers.delete(probeTimer);
+        }
+      }
       for await (const event of { [Symbol.asyncIterator]: () => stream }) {
         if (generation !== this.generation) return;
         this.eventEmitter.fire(event);
@@ -341,7 +364,22 @@ export class OpenCodeController implements vscode.Disposable {
       );
     }
 
-    // 3) "own" mode (default): spawn our own hidden background service.
+    // 3) "own" mode (default): reuse an existing healthy service before
+    //    spawning a new one — every window reload would otherwise blind-spawn
+    //    another detached service. Then honor server.autoStart.
+    const existing = await this.discoverService();
+    if (existing) {
+      this.log.debug(
+        `own mode found an already-registered service at ${existing.url}`,
+      );
+      return this.makeFor(existing);
+    }
+    const autoStart = config.get<boolean>("server.autoStart", true);
+    if (!autoStart) {
+      throw new Error(
+        "No running OpenCode service found and opencode2.server.autoStart is disabled.",
+      );
+    }
     let spawnCommand: string[];
     if (cli) {
       spawnCommand = spawnArgvHost(cli, "serve", "--service");
