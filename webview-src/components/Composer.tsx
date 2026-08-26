@@ -27,7 +27,7 @@ interface Props {
   onSend(
     text: string,
     files?: Array<{ uri: string; name?: string }>,
-    delivery?: "queue",
+    delivery?: "steer" | "queue",
   ): Promise<void> | void;
   onSendCommand(command: string, args: string): Promise<void> | void;
   onSendSkill(skill: string): Promise<void> | void;
@@ -345,7 +345,10 @@ export function Composer(props: Props) {
 
   const submit = useCallback(async () => {
     const value = text.trim();
-    if ((!value && attachments.length === 0) || props.busy) return;
+    // While the agent runs, sends are still allowed — they become steers by
+    // default, or queue when the "queued" chip is toggled. Blocking submits
+    // here made the steer/queue chip decorative (P1: could not send while busy).
+    if (!value && attachments.length === 0) return;
     const files = attachments
       .filter((a) => a.uri)
       .map((a) => ({ uri: a.uri, name: a.name }));
@@ -356,7 +359,11 @@ export function Composer(props: Props) {
     });
     setPreview(false);
     try {
-      await props.onSend(value, files.length ? files : undefined, delivery);
+      await props.onSend(
+        value,
+        files.length ? files : undefined,
+        props.busy ? (delivery ?? "steer") : delivery,
+      );
       setDelivery(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -742,7 +749,13 @@ export function Composer(props: Props) {
               props.disabled || (!text.trim() && attachments.length === 0)
             }
             onClick={() => void submit()}
-            title="Send"
+            title={
+              props.busy
+                ? delivery === "queue"
+                  ? "Send (queued — runs after the current turn)"
+                  : "Send (steers the agent now)"
+                : "Send"
+            }
           >
             ↑
           </button>
