@@ -50,6 +50,45 @@ interface PermissionCardData {
   requestID: string;
   action: string;
   resources: string[];
+  /** Proposed file changes shipped by the server for edit permissions. */
+  files?: WirePermissionFileDiff[];
+}
+
+interface WirePermissionFileDiff {
+  file: string;
+  patch: string;
+  additions?: number;
+  deletions?: number;
+  status?: string;
+}
+
+/** Pull proposed-change metadata out of a permission payload (defensive). */
+function extractPermissionFiles(
+  metadata: unknown,
+): WirePermissionFileDiff[] | undefined {
+  const files = (metadata as { files?: unknown } | undefined)?.files;
+  if (!Array.isArray(files)) return undefined;
+  const clean: WirePermissionFileDiff[] = [];
+  for (const f of files) {
+    if (
+      typeof f === "object" &&
+      f !== null &&
+      typeof (f as { file?: unknown }).file === "string" &&
+      typeof (f as { patch?: unknown }).patch === "string"
+    ) {
+      const rec = f as Record<string, unknown>;
+      clean.push({
+        file: rec.file as string,
+        patch: rec.patch as string,
+        additions:
+          typeof rec.additions === "number" ? rec.additions : undefined,
+        deletions:
+          typeof rec.deletions === "number" ? rec.deletions : undefined,
+        status: typeof rec.status === "string" ? rec.status : undefined,
+      });
+    }
+  }
+  return clean.length > 0 ? clean : undefined;
 }
 
 export function App() {
@@ -383,6 +422,7 @@ export function App() {
             sessionID: string;
             action: string;
             resources?: string[];
+            metadata?: unknown;
           };
         }>
       >("permissions.pending")) as unknown as {
@@ -391,6 +431,7 @@ export function App() {
           sessionID: string;
           action: string;
           resources?: string[];
+          metadata?: unknown;
         }>;
       };
       const rows = pending.data ?? [];
@@ -400,6 +441,7 @@ export function App() {
           requestID: r.id,
           action: r.action,
           resources: r.resources ?? [],
+          files: extractPermissionFiles(r.metadata),
         })),
       );
     } catch {
@@ -754,7 +796,18 @@ export function App() {
               setPermissions((list) =>
                 list.some((p) => p.requestID === requestID)
                   ? list
-                  : [...list, { ...data, requestID }],
+                  : [
+                      ...list,
+                      {
+                        sessionID: data.sessionID,
+                        requestID,
+                        action: data.action ?? "",
+                        resources: data.resources ?? [],
+                        files: extractPermissionFiles(
+                          (data as { metadata?: unknown }).metadata,
+                        ),
+                      },
+                    ],
               );
             }
           }
@@ -1754,6 +1807,59 @@ export function App() {
               <FormCard key={f.id} form={f} />
             ))}
 
+            {showPermissions && pending.some((p) => p.files?.length) && (
+              /* Review-Diffs summary strip (Module 1): every proposed file
+                 change across pending edit permissions with ± counts. */
+              <div className="dock-status" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <span
+                  className="micro"
+                  style={{ opacity: 0.75 }}
+                  title="Proposed changes waiting for approval — nothing is written to disk yet"
+                >
+                  ⇔ Proposed changes
+                </span>
+                {pending
+                  .flatMap((p) => (p.files ?? []).map((f) => ({ perm: p, f })))
+                  .map(({ perm, f }, i) => (
+                    <div
+                      key={`${perm.requestID}:${i}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <code style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {f.status === "added" ? "+" : f.status === "deleted" ? "−" : ""}
+                        {f.file}
+                      </code>
+                      <span className="micro">
+                        {typeof f.additions === "number" ? `+${f.additions}` : ""}{" "}
+                        {typeof f.deletions === "number" ? `−${f.deletions}` : ""}
+                      </span>
+                      <button
+                        type="button"
+                        className="chip"
+                        title="Open side-by-side diff of the proposed changes"
+                        onClick={() =>
+                          void rpc
+                            .call("diff.previewPreApply", {
+                              file: f.file,
+                              patch: f.patch,
+                              additions: f.additions,
+                              deletions: f.deletions,
+                              status: f.status,
+                            })
+                            .catch(() => undefined)
+                        }
+                      >
+                        ⇔ Review
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+
             {showPermissions && (
               <div
                 className="perm-scroll"
@@ -1781,6 +1887,23 @@ export function App() {
                     key={p.requestID}
                     perm={p}
                     onReply={(r) => void replyPermission(p.requestID, r)}
+                    onPreviewFile={(f) =>
+                      void rpc
+                        .call("diff.previewPreApply", {
+                          file: f.file,
+                          patch: f.patch,
+                          additions: f.additions,
+                          deletions: f.deletions,
+                          status: f.status,
+                        })
+                        .catch((e: unknown) =>
+                          setNotice(
+                            `Couldn't open diff — ${
+                              e instanceof Error ? e.message : String(e)
+                            }`,
+                          ),
+                        )
+                    }
                   />
                 ))}
               </div>
@@ -1960,9 +2083,11 @@ export function App() {
 function PermissionRow({
   perm,
   onReply,
+  onPreviewFile,
 }: {
   perm: PermissionCardData;
   onReply: (reply: "once" | "always" | "reject") => void;
+  onPreviewFile: (f: WirePermissionFileDiff) => void;
 }) {
   const kind = perm.action.toLowerCase().includes("shell")
     ? "shell"
@@ -1993,7 +2118,57 @@ function PermissionRow({
         <span className={`perm-badge ${kind}`}>{perm.action}</span>
         <span>Permission required</span>
       </div>
-      {perm.resources.length > 0 ? (
+      {perm.files && perm.files.length > 0 ? (
+        /* Proposed changes (server-provided FileDiff metadata): file list with
+           ±counts and a native side-by-side preview per file — nothing has
+           been written to disk yet. */
+        <div
+          className="perm-resources"
+          style={{ maxHeight: "220px", overflowY: "auto", paddingRight: "4px" }}
+        >
+          {perm.resources.length > 0 &&
+            !perm.files.some((f) => perm.resources.includes(f.file)) && (
+              <>
+                {perm.resources.map((r, i) => (
+                  <code key={`r${i}`} className="perm-res">
+                    {r}
+                  </code>
+                ))}
+              </>
+            )}
+          {perm.files.map((f, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                width: "100%",
+              }}
+            >
+              <code className="perm-res" style={{ flex: 1, minWidth: 0 }}>
+                {f.status === "added" ? "+" : f.status === "deleted" ? "−" : ""}
+                {f.file}
+              </code>
+              <span
+                className="micro"
+                title={`${f.additions ?? 0} additions, ${f.deletions ?? 0} deletions`}
+              >
+                {typeof f.additions === "number" ? `+${f.additions}` : ""}{" "}
+                {typeof f.deletions === "number" ? `−${f.deletions}` : ""}
+              </span>
+              <button
+                type="button"
+                className="chip"
+                title="Open side-by-side diff of the proposed changes (nothing is written yet)"
+                onClick={() => onPreviewFile(f)}
+              >
+                ⇔ Review
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : perm.resources.length > 0 ? (
         <div
           className="perm-resources"
           style={{ maxHeight: "160px", overflowY: "auto", paddingRight: "4px" }}

@@ -3,8 +3,8 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { createApi } from "./apiAdapter";
-import type { ResolvedCli } from "./cli";
-import type { OpenCodeController } from "./controller";
+import { DiffPreviewDocs, type WireFileDiff } from "./diffDocs";
+import type { ResolvedCli } from "./cli";import type { OpenCodeController } from "./controller";
 import {
   isSettingKey,
   validateSettingValue,
@@ -28,6 +28,7 @@ export function createRpcDispatcher(
   const api = createApi({
     getClient: () => controller.getClient(),
   });
+  const diffPreview = new DiffPreviewDocs();
 
   let activeSessionId: string | undefined;
   /** Which session the webview is currently viewing (for notification routing). */
@@ -425,8 +426,16 @@ export function createRpcDispatcher(
       }
       return true;
     },
-    "diff.open": async (p) => {
+    "diff.previewPreApply": (p) => {
+      // Native side-by-side preview of a proposed (not-yet-applied) change.
       const file = str(p, "file");
+      const patch = str(p, "patch");
+      const status = optStr(p, "status");
+      const additions = typeof p.additions === "number" ? p.additions : undefined;
+      const deletions = typeof p.deletions === "number" ? p.deletions : undefined;
+      return diffPreview.preview({ file, patch, additions, deletions, status } satisfies WireFileDiff);
+    },
+    "diff.open": async (p) => {      const file = str(p, "file");
       const diff = optStr(p, "diff") ?? "";
       if (diff) {
         const doc = await vscode.workspace.openTextDocument({
@@ -512,6 +521,8 @@ export function createRpcDispatcher(
     getActiveSessionId,
     /** Last session the user had open (persisted in workspaceState). */
     getLastSession: (): string | undefined => storage?.get<string>("lastSession"),
+    /** Disposable for the pre-apply diff document provider. */
+    previews: diffPreview,
   };
 }
 

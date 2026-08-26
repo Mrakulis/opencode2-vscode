@@ -69,6 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     autoCompact,
     notifications,
+    rpc.previews,
     vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, provider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),

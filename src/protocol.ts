@@ -237,6 +237,7 @@ export type RpcMethod =
   | "pick.folder"
   | "file.open"
   | "diff.open"
+  | "diff.previewPreApply"
   | "image.save";
 
 export function isInbound(value: unknown): value is InboundMessage {
