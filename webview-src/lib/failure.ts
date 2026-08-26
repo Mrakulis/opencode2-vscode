@@ -1,5 +1,9 @@
 import type { AnyMessage } from "./rpc";
 
+/** True when a failure looks provider/model-related (smart-retry material). */
+export const PROVIDERISH_RE =
+  /provider|invalid-request|invalid_request|invalid request|invalid parameters|upstream request failed|console go|policy|guardrail|no endpoints|model|finish_reason|stream ended/i;
+
 /**
  * Message-failure predicates — pure helpers kept out of `lib/rpc.ts` because
  * that module instantiates the webview RPC bridge at import time and cannot

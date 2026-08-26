@@ -29,6 +29,7 @@ import {
   autoReplyFor,
   RespondedTracker,
 } from "./lib/permissions";
+import { PROVIDERISH_RE } from "./lib/failure";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -121,6 +122,9 @@ export function App() {
   useEffect(() => {
     busySessionsRef.current = busySessions;
   }, [busySessions]);
+  /** Providerish auto-recovery: once per session, right after a compaction. */
+  const autoRecoveredRef = useRef(new Set<string>());
+  const compactionTsRef = useRef<Record<string, number>>({});
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
   const [models, setModels] = useState<
     Array<{
@@ -397,9 +401,7 @@ export function App() {
           ...(key ? { modelKey: key } : {}),
           message: msg,
           providerish:
-            /provider|invalid-request|policy|guardrail|no endpoints|model|finish_reason|stream ended/i.test(
-              msg,
-            ),
+            PROVIDERISH_RE.test(msg),
         };
       } else if (lastA && lastA.finish && lastA.finish !== "error") {
         lastFailureRef.current = undefined;
@@ -847,11 +849,21 @@ export function App() {
                     ? { modelKey: activeModelKeyRef.current }
                     : {}),
                   message: msg,
-                  providerish: /provider|invalid-request|policy|guardrail|no endpoints|finish_reason|stream ended/i.test(
+                  providerish: PROVIDERISH_RE.test(
                     msg,
                   ),
                 };
                 setNotice(`Run failed — ${msg}`);
+                const isProvR = PROVIDERISH_RE.test(msg);
+                if (isProvR && sid && !autoRecoveredRef.current.has(sid)) {
+                  autoRecoveredRef.current.add(sid);
+                  const recentC = compactionTsRef.current[sid];
+                  if (recentC && Date.now() - recentC < 30_000) {
+                    window.setTimeout(() => {
+                      if (activeIdRef.current === sid) void retryLast();
+                    }, 800);
+                  }
+                }
               } else {
                 setRetryPending(false);
               }
@@ -862,8 +874,10 @@ export function App() {
             if (
               evt.type === "session.compaction.ended" ||
               evt.type === "session.compaction.failed"
-            )
+            ) {
               setCompacting(false);
+              if (sid) compactionTsRef.current[sid] = Date.now();
+            }
           }
 
           if (evt.type === "permission.asked") {
