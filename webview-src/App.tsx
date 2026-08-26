@@ -1824,7 +1824,7 @@ export function App() {
                 void refreshMessages(activeId!);
               } catch (e) {
                 const fallback = batch.map((a, i) => `"Q${i + 1}"="${a[0] ?? "Unanswered"}"`).join(", ");
-                setNotice(`Question reply failed (${e instanceof Error ? e.message : String(e)}) — answers forwarded as a follow-up.`); void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
+                const qunavail = (e as { code?: string } | null)?.code === "QuestionHTTPUnavailable"; if (!qunavail) setNotice(`Question reply failed (${e instanceof Error ? e.message : String(e)}) — answers forwarded as a follow-up.`); void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
                   setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
                 );
               }

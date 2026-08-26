@@ -32,11 +32,13 @@ const TABLE: Record<string, UiAction[]> = {
 
   // streaming (deltas are handled by the accumulator, not refetches)
   "session.step.started": [],
+  "session.step.streamed": [], // beta-18314 granular step stream
   "session.step.ended": ["messages"],
   "session.step.failed": ["messages"],
   "session.text.started": ["messages"],
   "session.text.delta": [],
   "session.text.ended": ["messages"],
+  "session.message.content.updated": ["messages"], // beta-18314 content mutation
   "session.reasoning.started": ["messages"],
   "session.reasoning.delta": [],
   "session.reasoning.ended": ["messages"],

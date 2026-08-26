@@ -279,6 +279,15 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
+        // Verified live: the experimental question HTTP surface is ABSENT on
+        // current betas (all question* routes 404, absent from live
+        // openapi.json). Distinguish that from a bad request so the UI can
+        // fall back to a steered prompt instead of showing a scary error.
+        if (res.status === 404) {
+          const e = new Error(text || "Question reply failed: 404") as Error & { code?: string };
+          e.code = "QuestionHTTPUnavailable";
+          throw e;
+        }
         throw new Error(text || `Question reply failed: ${res.status}`);
       }
     },
