@@ -21,6 +21,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const notifications = new NotificationService(
     controller,
     rpc.getActiveSessionId,
+    (sid) => provider.focusSession(sid),
   );
 
   // Status bar mirrors the original UX: connected / connecting / error.

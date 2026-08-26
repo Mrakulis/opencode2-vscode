@@ -202,6 +202,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.post({ type: "resync" });
   }
 
+  /**
+   * Focus the sidebar and (optionally) select a session — used by the
+   * permission notification "Review" action so the asking session and its
+   * permission card actually surface.
+   */
+  focusSession(sessionID?: string): void {
+    void this.reveal();
+    if (sessionID) this.post({ type: "selectSession", id: sessionID });
+  }
+
   /** Create a session in the active workspace and tell the UI to select it. */
   async createAndSelectSession(): Promise<void> {
     try {

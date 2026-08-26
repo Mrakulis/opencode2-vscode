@@ -23,6 +23,11 @@ describe("autoReplyFor", () => {
     assert.equal(autoReplyFor("askFirst", "shell"), undefined);
     assert.equal(autoReplyFor("askFirst", "edit", true), "once");
   });
+  it("autoAllow still asks for external_directory unless session auto-accepting", () => {
+    assert.equal(autoReplyFor("autoAllow", "external_directory"), undefined);
+    assert.equal(autoReplyFor("autoAllow", "external_directory", true), "once");
+    assert.equal(autoReplyFor("autoAllow", "edit"), "once");
+  });
 });
 
 describe("RespondedTracker", () => {

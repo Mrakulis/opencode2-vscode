@@ -12,6 +12,7 @@ export class NotificationService implements vscode.Disposable {
   constructor(
     controller: OpenCodeController,
     private readonly getActiveSessionId: () => string | undefined,
+    private readonly onReview?: (sessionID?: string) => void,
   ) {
     this.subscription = controller.onEvent((event) => {
       const sid = (event.data as { sessionID?: string } | undefined)?.sessionID;
@@ -55,8 +56,7 @@ export class NotificationService implements vscode.Disposable {
             "Review",
           )
           .then((pick) => {
-            if (pick === "Review")
-              void vscode.commands.executeCommand("opencode2.focus");
+            if (pick === "Review") this.onReview?.(sid);
           });
       }
     });

@@ -24,6 +24,8 @@ interface Props {
   sendKey: "enter" | "ctrlEnter";
   catalogTick?: number;
   builtins?: SlashEntry[];
+  prefill?: string;
+  onPrefillConsumed?: () => void;
   onSend(
     text: string,
     files?: Array<{ uri: string; name?: string }>,
@@ -60,6 +62,15 @@ interface Props {
 
 export function Composer(props: Props) {
   const [text, setText] = useState("");
+  // Prefill from a message "edit" action: sets the draft, focuses, and clears.
+  useEffect(() => {
+    if (!props.prefill) return;
+    setText(props.prefill);
+    props.onPrefillConsumed?.();
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+    });
+  }, [props.prefill]); // eslint-disable-line react-hooks/exhaustive-deps
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [menu, setMenu] = useState<

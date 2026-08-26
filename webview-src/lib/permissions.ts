@@ -20,6 +20,11 @@ export function autoReplyFor(
   sessionAutoAccepting = false,
 ): "once" | "reject" | undefined {
   if (action.toLowerCase() === "question") return undefined;
+  // Anything outside the project folder must always surface, even in
+  // auto-allow mode (matches OpenCode's own external_directory policy).
+  // An explicit per-session auto-accept still bypasses the prompt.
+  if (action.toLowerCase() === "external_directory" && !sessionAutoAccepting)
+    return undefined;
   if (mode === "autoAllow") return "once";
   if (mode === "deny") return "reject";
   if (mode === "askFirst" && sessionAutoAccepting) return "once";

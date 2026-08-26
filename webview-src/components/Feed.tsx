@@ -37,6 +37,9 @@ export function Feed({
   onUnqueue,
   onAnswer,
   onQuestionReply,
+  onCopyMessage,
+  onRegenerate,
+  onEditMessage,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -68,6 +71,10 @@ export function Feed({
   /** Delivers a chosen question-option label into the conversation. */
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  /** Per-message actions. */
+  onCopyMessage?: (m: AnyMessage) => void;
+  onRegenerate?: () => void;
+  onEditMessage?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -237,6 +244,9 @@ export function Feed({
               retryNote={retryNote ?? null}
               onAnswer={onAnswer}
               onQuestionReply={onQuestionReply}
+              onCopyMessage={onCopyMessage}
+              onRegenerate={onRegenerate}
+              onEditMessage={onEditMessage}
             />
           ));
         })()}
@@ -334,6 +344,9 @@ function MessageGroup({
   retryNote,
   onAnswer,
   onQuestionReply,
+  onCopyMessage,
+  onRegenerate,
+  onEditMessage,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -348,6 +361,9 @@ function MessageGroup({
   retryNote?: string | null;
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  onCopyMessage?: (m: AnyMessage) => void;
+  onRegenerate?: () => void;
+  onEditMessage?: (text: string) => void;
 }) {
   if (isUser(message)) {
     return (
@@ -371,6 +387,20 @@ function MessageGroup({
           </div>
         )}
         <div className="bubble">{message.text}</div>
+        {(onCopyMessage || onEditMessage) && (
+          <div className="msg-actions">
+            {message.text && onCopyMessage && (
+              <button type="button" className="chip" onClick={() => onCopyMessage(message)} title="Copy this message">
+                📋 copy
+              </button>
+            )}
+            {onEditMessage && (
+              <button type="button" className="chip" onClick={() => onEditMessage(message.text)} title="Edit and resend">
+                ✎ edit
+              </button>
+            )}
+          </div>
+        )}
       </article>
     );
   }
@@ -459,6 +489,30 @@ function MessageGroup({
           onQuestionReply={onQuestionReply}
         />
       ))}
+      {(onCopyMessage || (isLast && onRegenerate)) && (
+        <div className="msg-actions">
+          {onCopyMessage && (
+            <button
+              type="button"
+              className="chip"
+              onClick={() => onCopyMessage(message)}
+              title="Copy this reply"
+            >
+              📋 copy
+            </button>
+          )}
+          {isLast && onRegenerate && (
+            <button
+              type="button"
+              className="chip"
+              onClick={() => onRegenerate()}
+              title="Regenerate — send your last prompt again"
+            >
+              ⟳ regenerate
+            </button>
+          )}
+        </div>
+      )}
       {messageStats &&
         (message.cost !== undefined || message.tokens !== undefined) && (
           <footer className="msg-foot">
@@ -869,6 +923,12 @@ function ToolCard({
       ),
     [part.name, expandShellTools, expandEditTools],
   );
+  // Compact completed tool cards to their one-line summary (keeps the feed
+  // from growing unbounded); click still expands for details.
+  const toolStatus = part.state.status;
+  useEffect(() => {
+    if (toolStatus === "completed") setExpanded(false);
+  }, [toolStatus]);
   const kind = toolKind(part.name);
 
   // CodeMode dispatcher: the server funnels MCP tools through one `execute`

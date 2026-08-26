@@ -117,6 +117,10 @@ export function App() {
   /** Full streamed text per `${messageId}|${kind}` — survives refetches. */
   const deltaAccRef = useRef(new Map<string, string>());
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
+  const busySessionsRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    busySessionsRef.current = busySessions;
+  }, [busySessions]);
   const [permissions, setPermissions] = useState<PermissionCardData[]>([]);
   const [models, setModels] = useState<
     Array<{
@@ -486,6 +490,10 @@ export function App() {
   const [queuedItems, setQueuedItems] = useState<
     Array<{ id: string; text?: string }>
   >([]);
+  /** Draft prefill from a message "edit" action (MessageGroup → Composer). */
+  const [composerPrefill, setComposerPrefill] = useState<string | undefined>(
+    undefined,
+  );
 
   const refreshQueued = useCallback(async () => {
     const sid = activeIdRef.current;
@@ -1404,16 +1412,18 @@ export function App() {
   const replyPermission = useCallback(
     async (
       requestID: string,
-      reply: "once" | "always" | "reject",
+      reply: "once" | "always" | "reject" | "session",
     ): Promise<boolean> => {
       const target = permissions.find((p) => p.requestID === requestID);
+      const finalReply: "once" | "always" | "reject" = reply === "session" ? "once" : reply;
+      if (reply === "session" && target) autoAcceptSessionsRef.current.add(target.sessionID);
       setPermissions((list) => list.filter((p) => p.requestID !== requestID));
       if (!target) return false;
       try {
         await rpc.call("permission.reply", {
           sessionID: target.sessionID,
           requestID,
-          reply,
+          reply: finalReply,
         });
         return true;
       } catch {
@@ -1824,11 +1834,37 @@ export function App() {
                 void refreshMessages(activeId!);
               } catch (e) {
                 const fallback = batch.map((a, i) => `"Q${i + 1}"="${a[0] ?? "Unanswered"}"`).join(", ");
+                const sidT = activeIdRef.current;
+                if (sidT) {
+                  window.setTimeout(() => {
+                    if (busySessionsRef.current[sidT]) {
+                      setBusySessions((b) => ({ ...b, [sidT]: false }));
+                      setNotice(
+                        "Question replies are experimental and unsupported by this server build — answer via the CLI/TUI, or paste your answer as a normal message.",
+                      );
+                    }
+                  }, 8000);
+                }
                 const qunavail = (e as { code?: string } | null)?.code === "QuestionHTTPUnavailable"; if (!qunavail) setNotice(`Question reply failed (${e instanceof Error ? e.message : String(e)}) — answers forwarded as a follow-up.`); void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
                   setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
                 );
               }
             }}
+            onCopyMessage={(m) => {
+              const t = (m as { text?: unknown }).text;
+              const parts = (m as { content?: Array<{ text?: string }> }).content;
+              const md =
+                typeof t === "string"
+                  ? t
+                  : Array.isArray(parts)
+                    ? parts.filter((p) => p?.text).map((p) => p.text).join("\n")
+                    : "";
+              void rpc
+                .call("transcript.copy", { markdown: md })
+                .catch(() => undefined);
+            }}
+            onRegenerate={() => void retryLast()}
+            onEditMessage={(text) => setComposerPrefill(text)}
             retryNote={
               busy && retryInfo && !retryInfo.action
                 ? `↻ retrying${
@@ -1933,8 +1969,7 @@ export function App() {
         const pending = permissions.filter(
           (p) => p.action.toLowerCase() !== "question",
         );
-        const showPermissions =
-          permissionMode === "askFirst" && pending.length > 0 && !!activeId;
+        const showPermissions = pending.length > 0;
         return (
           <div className="dock">
             {actionError && (
@@ -2095,6 +2130,8 @@ export function App() {
             ),
           );
         }}
+        prefill={composerPrefill}
+        onPrefillConsumed={() => setComposerPrefill(undefined)}
         onSendCommand={async (command, args) => {
           if (!activeId) return;
           setBusySessions((b) => ({ ...b, [activeId]: true }));
@@ -2268,7 +2305,7 @@ function PermissionRow({
   onPreviewFile,
 }: {
   perm: PermissionCardData;
-  onReply: (reply: "once" | "always" | "reject") => void;
+  onReply: (reply: "once" | "always" | "reject" | "session") => void;
   onPreviewFile: (f: WirePermissionFileDiff) => void;
 }) {
   const kind = perm.action.toLowerCase().includes("shell")
@@ -2386,6 +2423,13 @@ function PermissionRow({
           title="Always allow — saves pattern for this project"
         >
           Allow always
+        </button>
+        <button
+          type="button"
+          onClick={() => onReply("session")}
+          title="Allow for this session — future requests in this session auto-allow (like Ctrl+A in the CLI)"
+        >
+          ⊞ Allow for session
         </button>
         <button
           type="button"
