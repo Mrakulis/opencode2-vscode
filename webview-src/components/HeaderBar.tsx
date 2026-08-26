@@ -24,6 +24,7 @@ interface Props {
   onOpenSavedPermissions(): void;
   onOpenInstructions(): void;
   onOpenWorktrees(): void;
+  onOpenPlan(): void;
   onOpenManager(): void;
   onOpenProviders(): void;
   onOpenMcp(): void;
@@ -279,6 +280,17 @@ export function HeaderBar(props: Props) {
                 }}
               >
                 Worktrees…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenPlan();
+                }}
+                title="Interactive checklist for implementation_plan.md (bespoke, local file)"
+              >
+                Plan checklist…
               </button>
 
               <div className="menu-section">configure</div>

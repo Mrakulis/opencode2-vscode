@@ -223,6 +223,8 @@ export type RpcMethod =
   // misc
   | "files.find"
   | "service.restart"
+  | "plan.read"
+  | "plan.save"
   | "file.read"
   | "transcript.copy"
   | "ui.activeSession"

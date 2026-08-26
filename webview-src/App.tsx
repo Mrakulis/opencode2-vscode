@@ -43,6 +43,7 @@ import { InboxDrawer } from "./components/InboxDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 import { SubagentsDrawer } from "./components/SubagentsDrawer";
+import { PlansDrawer } from "./components/PlansDrawer";
 import { childrenOf, isSubagentActive } from "./lib/subagents";
 
 type Conn = "connected" | "connecting" | "error";
@@ -147,6 +148,7 @@ export function App() {
   const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
+  const [plansOpen, setPlansOpen] = useState(false);
   const [selectedSubagent, setSelectedSubagent] = useState<
     string | undefined
   >(undefined);
@@ -1468,6 +1470,7 @@ export function App() {
           if (activeId) setInstructionsOpen(true);
         }}
         onOpenWorktrees={() => setWorktreesOpen(true)}
+        onOpenPlan={() => setPlansOpen(true)}
         onOpenInbox={() => {
           if (activeId) setInboxOpen(true);
         }}
@@ -2097,6 +2100,22 @@ export function App() {
         }
         onOpenManager={() => setManagerOpen(true)}
       />
+
+      {plansOpen && (
+        <PlansDrawer
+          canRun={!!activeId && conn === "connected"}
+          onClose={() => setPlansOpen(false)}
+          onRunPrompt={(text) => {
+            // Route through the normal composer send path (steer while busy).
+            void sendMessage(text, undefined, busy ? "steer" : undefined).catch(
+              (e: unknown) =>
+                setNotice(
+                  `Send failed — ${e instanceof Error ? e.message : String(e)}`,
+                ),
+            );
+          }}
+        />
+      )}
 
       {subagentsOpen && (
         <SubagentsDrawer

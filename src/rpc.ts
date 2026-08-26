@@ -163,6 +163,29 @@ export function createRpcDispatcher(
       ),
     "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
     "service.restart": () => controller.restart(),
+    // Bespoke plan-checklist support (local file; no V2 server contract).
+    "plan.read": async () => {
+      const base = preferredDirectory() ?? process.cwd();
+      const candidates = [
+        path.join(base, "implementation_plan.md"),
+        path.join(base, ".opencode", "implementation_plan.md"),
+      ];
+      for (const p of candidates) {
+        try {
+          const content = await fs.promises.readFile(p, "utf8");
+          return { path: p, content };
+        } catch {
+          /* try the next candidate */
+        }
+      }
+      return { path: undefined, content: undefined };
+    },
+    "plan.save": async (p) => {
+      const filePath = str(p, "path");
+      const content = str(p, "content");
+      await fs.promises.writeFile(filePath, content, "utf8");
+      return true;
+    },
     "file.read": (p) => api.fileRead(str(p, "path")),
     "commands.list": () => api.commands(),
     "skills.list": () => api.skills(),
