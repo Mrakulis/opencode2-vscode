@@ -1847,21 +1847,51 @@ export function App() {
                 await rpc.call("question.reply", { sessionID: activeId!, requestID, answers: batch });
                 void refreshMessages(activeId!);
               } catch (e) {
-                const fallback = batch.map((a, i) => `"Q${i + 1}"="${a[0] ?? "Unanswered"}"`).join(", ");
-                const sidT = activeIdRef.current;
-                if (sidT) {
-                  window.setTimeout(() => {
-                    if (busySessionsRef.current[sidT]) {
-                      setBusySessions((b) => ({ ...b, [sidT]: false }));
-                      setNotice(
-                        "Question replies are experimental and unsupported by this server build — answer via the CLI/TUI, or paste your answer as a normal message.",
-                      );
-                    }
-                  }, 8000);
-                }
-                const qunavail = (e as { code?: string } | null)?.code === "QuestionHTTPUnavailable"; if (!qunavail) setNotice(`Question reply failed (${e instanceof Error ? e.message : String(e)}) — answers forwarded as a follow-up.`); void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
-                  setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
+                const code = (e as { code?: string } | null)?.code;
+                const unsupported =
+                  code === "QuestionHTTPUnavailable" ||
+                  (e instanceof Error && /no pending question/i.test(e.message));
+                // Re-mark the card so the UI explains why it can't complete,
+                // instead of leaving the user staring at a silent hang.
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    const m = msg as unknown as {
+                      content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }>;
+                    };
+                    if (!Array.isArray(m.content)) return msg;
+                    let changed = false;
+                    const nextContent = m.content.map((part) => {
+                      if (
+                        part.type === "tool" &&
+                        part.name === "question" &&
+                        part.state?.status === "completed"
+                      ) {
+                        changed = true;
+                        return {
+                          ...part,
+                          state: {
+                            ...part.state,
+                            status: "unsupported",
+                            error: {
+                              message:
+                                "Your OpenCode server build doesn't support question replies yet.",
+                            },
+                          },
+                        } as typeof part;
+                      }
+                      return part;
+                    });
+                    return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
+                  }),
                 );
+                setNotice(
+                  unsupported
+                    ? "⚠️ Your OpenCode server doesn't support interactive question replies yet — the agent won't receive this answer. Reply in the chat or via the CLI/TUI."
+                    : `Question reply failed (${e instanceof Error ? e.message : String(e)}) — the agent won't see this answer.`,
+                );
+                // No steered fallback: the agent is parked on the question
+                // tool's reply channel and a normal message can't satisfy it,
+                // so forwarding would only create a misleading duplicate.
               }
             }}
             onCopyMessage={(m) => {

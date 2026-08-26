@@ -1198,6 +1198,7 @@ function QuestionCard({
     ? state.input!.questions!
     : [];
   const active = state.status === "running" || state.status === "streaming";
+  const unsupported = state.status === "unsupported";
   const [expandedIdx, setExpandedIdx] = useState<number>(0);
   const [answers, setAnswers] = useState<(string | null)[]>(() => Array(qs.length).fill(null));
   useEffect(() => {
@@ -1235,7 +1236,7 @@ function QuestionCard({
           const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
           const opts = Array.isArray(q.options) ? q.options : [];
           const isExpanded = qi === expandedIdx && active && answers[qi] === null;
-          const isDone = answers[qi] !== null;
+          const isDone = !unsupported && answers[qi] !== null;
           return (
             <div key={qi} className={`q-item${isExpanded ? " expanded" : ""}${isDone ? " done" : ""}`}>
               <button
@@ -1243,10 +1244,10 @@ function QuestionCard({
                 className="q-title"
                 onClick={() => !isDone && active && setExpandedIdx(qi)}
                 disabled={isDone || !active}
-                title={isDone ? `Answered: ${answers[qi]}` : isExpanded ? "Expanded — choose an option below" : "Collapsed — click to expand"}
+                title={unsupported ? "Unsupported by your OpenCode server build" : isDone ? `Answered: ${answers[qi]}` : isExpanded ? "Expanded — choose an option below" : "Collapsed — click to expand"}
                 style={{ cursor: isDone || !active ? "default" : "pointer", fontWeight: isExpanded ? 600 : undefined }}
               >
-                {isDone ? "✓ " : isExpanded ? "▾ " : "▸ "}{qTitle}
+                {unsupported ? "⚠️ " : isDone ? "✓ " : isExpanded ? "▾ " : "▸ "}{qTitle}
               </button>
               {isExpanded && !isDone && (
                 <>
@@ -1268,7 +1269,7 @@ function QuestionCard({
                   <OtherRow onSubmit={(text) => answerOne(qi, `${qTitle}: ${text}`)} />
                 </>
               )}
-              {isDone && <div className="q-note">answered: {answers[qi]}</div>}
+              {isDone && !unsupported && <div className="q-note">answered: {answers[qi]}</div>}
             </div>
           );
         })}
@@ -1292,6 +1293,11 @@ function QuestionCard({
           <div className="q-note">
             question closed without an answer
             {state.error?.message ? ` (${state.error.message})` : ""}
+          </div>
+        )}
+        {!active && unsupported && (
+          <div className="q-note">
+            ⚠️ {state.error?.message ?? "Question replies aren't supported by this server build."} Reply in the chat or CLI/TUI.
           </div>
         )}
       </div>
