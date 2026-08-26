@@ -436,7 +436,17 @@ function MessageGroup({
       <header className="msg-head">
         {message.agent} · {message.model?.id ?? ""}
       </header>
-      {message.content?.map((part, i) => (
+      {message.content
+        ?.filter(
+          (p) =>
+            !(
+              typeof (p as { text?: unknown }).text === "string" &&
+              /<system-reminder>|You are (?:in|NO LONGER in)\b/i.test(
+                (p as { text: string }).text,
+              )
+            ),
+        )
+        .map((part, i) => (
         <Part
           key={i}
           part={part}

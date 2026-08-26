@@ -223,21 +223,39 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     questionList: async (
       sessionID: string,
     ): Promise<Array<Record<string, unknown>>> => {
+      // Pending questions are Location-owned in-memory state; the session-
+      // scoped list can come back EMPTY while `/api/question/request` holds
+      // the row (per the V2 schema changelog). Merge both and dedupe.
+      const { Service } = await import("@opencode-ai/client/service");
+      const endpoint = await Service.discover().catch(() => undefined);
+      if (!endpoint) return [];
+      const headers = Service.headers(endpoint) as unknown as Record<string, string>;
+      const fetchList = async (
+        url: string,
+      ): Promise<Array<Record<string, unknown>>> => {
+        try {
+          const res = await fetch(url, { headers });
+          if (!res.ok) return [];
+          const data = (await res.json()) as unknown;
+          const rows = Array.isArray(data)
+            ? data
+            : ((data as { data?: unknown[] }).data ?? []);
+          return (Array.isArray(rows) ? rows : []) as Array<Record<string, unknown>>;
+        } catch {
+          return [];
+        }
+      };
       try {
-        const { Service } = await import("@opencode-ai/client/service");
-        const endpoint = await Service.discover().catch(() => undefined);
-        if (!endpoint) return [];
-        const url = `${endpoint.url}/api/session/${sessionID}/question`;
-        const res = await fetch(url, {
-          headers: Service.headers(endpoint) as unknown as Record<string, string>,
-        });
-        if (!res.ok) return [];
-        const data = (await res.json()) as unknown;
-        return Array.isArray(data)
-          ? (data as Array<Record<string, unknown>>)
-          : (((data as { data?: unknown[] }).data ?? []) as Array<
-              Record<string, unknown>
-            >);
+        const [sessionRows, locationRows] = await Promise.all([
+          fetchList(`${endpoint.url}/api/session/${sessionID}/question`),
+          fetchList(`${endpoint.url}/api/question/request`),
+        ]);
+        const byId = new Map<string, Record<string, unknown>>();
+        for (const row of [...locationRows, ...sessionRows]) {
+          const id = typeof row.id === "string" ? row.id : "";
+          byId.set(id || `_x${byId.size}`, row);
+        }
+        return [...byId.values()];
       } catch {
         return [];
       }

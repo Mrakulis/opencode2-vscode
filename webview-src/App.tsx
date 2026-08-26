@@ -358,7 +358,14 @@ export function App() {
       const REMINDER_RE = /<system-reminder>|You are (?:in|NO LONGER in)\b/i;
       const filtered = merged.filter((m) => {
         const t = (m as { type?: unknown }).type;
-        if (t === "assistant") return true;
+        if (t === "assistant") {
+          // Strip reminder text/reasoning parts even inside assistant content.
+          const c = (m as { content?: Array<{ text?: string }> }).content;
+          if (!Array.isArray(c)) return true;
+          const kept = c.filter((p) => !(typeof p?.text === "string" && REMINDER_RE.test(p.text)));
+          (m as { content?: Array<{ text?: string }> }).content = kept;
+          return kept.length > 0;
+        }
         try {
           return !REMINDER_RE.test(JSON.stringify(m));
         } catch {
@@ -1809,15 +1816,15 @@ export function App() {
                 const pending = await rpc.call<Array<Record<string, unknown>>>("question.list", { sessionID: activeId! });
                 const match = pending.find((r) => {
                   const tool = (r.tool ?? (r as any).metadata?.tool ?? {}) as Record<string, unknown>;
-                  return tool.callID === toolCallId || (r as { id?: string }).id === toolCallId;
+                  return tool.callID === toolCallId || tool.messageID === toolCallId || (r as { id?: string }).id === toolCallId;
                 }) as Record<string, unknown> | undefined;
-                const requestID = (match?.id ?? (match as any)?.requestID ?? toolCallId ?? "") as string;
+                const requestID = ((match as Record<string, unknown> | undefined)?.id ?? (match as Record<string, unknown> | undefined)?.requestID ?? (pending[0] as Record<string, unknown> | undefined)?.id ?? (pending[0] as Record<string, unknown> | undefined)?.requestID ?? toolCallId ?? "") as string;
                 if (!requestID) throw new Error("No pending question found");
                 await rpc.call("question.reply", { sessionID: activeId!, requestID, answers: batch });
                 void refreshMessages(activeId!);
               } catch (e) {
                 const fallback = batch.map((a, i) => `"Q${i + 1}"="${a[0] ?? "Unanswered"}"`).join(", ");
-                void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
+                setNotice(`Question reply failed (${e instanceof Error ? e.message : String(e)}) — answers forwarded as a follow-up.`); void sendMessage(`User has answered your questions: ${fallback}.`, undefined, "steer").catch(() =>
                   setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
                 );
               }
