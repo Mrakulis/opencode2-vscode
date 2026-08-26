@@ -786,10 +786,18 @@ button:focus-visible {
 .msg-foot {
   display: flex;
   gap: var(--oc2-space-2);
+  justify-content: space-between;
+  align-items: baseline;
   margin-top: var(--oc2-space-1);
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
   color: var(--oc2-fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.msg-foot span:last-child {
+  margin-left: auto;
+  text-align: right;
 }
 
 /* markdown */
@@ -1461,10 +1469,15 @@ button:focus-visible {
   text-shadow: 0 0 0 transparent;
 }
 .sendbtn.busy {
+  opacity: 1;
   box-shadow:
-    0 0 14px color-mix(in srgb, var(--oc2-accent) 55%, transparent),
-    0 0 4px var(--oc2-accent);
+    0 0 22px color-mix(in srgb, var(--oc2-accent) 75%, transparent),
+    0 0 10px var(--oc2-accent),
+    0 0 2px var(--oc2-onAccent);
   animation: oc2-pulse 1.2s ease-in-out infinite;
+}
+.sendbtn.busy.disabled {
+  opacity: 1;
 }
 .sendbtn:hover {
   background: var(--oc2-accent);

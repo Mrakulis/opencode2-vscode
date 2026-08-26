@@ -1757,8 +1757,8 @@ export function App() {
                 )
             }
             onAnswer={(text) => {
-              // Question answers must steer the active turn, never queue — otherwise the question never clears.
-              // Optimistically collapse the card so UI feels instant; server will confirm via tool state.
+              // Question answers must always steer the active turn, never queue — otherwise the question never clears.
+              // Per V2 durable inbox spec, steer promotes at next safe provider-turn boundary; queue waits FIFO until idle.
               setMessages((prev) =>
                 prev.map((msg) => {
                   const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
@@ -1774,11 +1774,8 @@ export function App() {
                   return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
                 }),
               );
-              void sendMessage(text, undefined, busy ? "steer" : undefined).catch(
-                (e: unknown) =>
-                  setNotice(
-                    `Send failed — ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              void sendMessage(text, undefined, "steer").catch((e: unknown) =>
+                setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
               );
             }}
             retryNote={

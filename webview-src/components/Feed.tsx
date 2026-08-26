@@ -390,26 +390,34 @@ function MessageGroup({
     // Synthetic messages are token-less checkpoint markers (e.g. compaction
     // bookkeeping) — they carry no user-facing content, so render nothing.
     if (type === "synthetic") return null;
-    // Model switches are reflected in the header(StatusStrip) — no chat noise.
-    if (type === "model-switched" || type === "model-selected") return null;
-    // Plan-mode duplicate: the server may inject a "You are in Plan mode"
-    // system reminder. The whole UI already tints via [data-plan="true"],
-    // so the chat line is redundant and visually noisy — suppress it.
+    // Model/agent switches are reflected in the header/StatusStrip — no chat noise.
+    if (
+      ["model-switched", "model-selected", "agent-switched", "agent-selected"].includes(type)
+    )
+      return null;
+    // Agent/plan lifecycle reminders are already conveyed by the whole-UI tint
+    // ([data-plan] / agent chip) — suppress all chat duplicates regardless of agent.
     {
-      const txt =
+      const raw =
         typeof (message as unknown as { text?: unknown }).text === "string"
           ? (message as unknown as { text: string }).text
           : typeof (message as unknown as { content?: unknown }).content === "string"
             ? (message as unknown as { content: string }).content
             : "";
-      if (txt && /You are in Plan mode/i.test(txt)) return null;
+      const reminderRe = /<system-reminder>|You are (?:in|NO LONGER in)\b/i;
+      if (raw && reminderRe.test(raw)) return null;
+      if (reminderRe.test(type)) return null;
       // Also check content parts array for that phrase
       const parts = (message as unknown as { content?: Array<{ text?: string }> }).content;
       if (Array.isArray(parts)) {
         for (const p of parts) {
-          if (typeof p?.text === "string" && /You are in Plan mode/i.test(p.text)) return null;
+          if (typeof p?.text === "string" && reminderRe.test(p.text)) return null;
         }
       }
+      // Catch JSON-stringified message containing the tag
+      try {
+        if (reminderRe.test(JSON.stringify(message))) return null;
+      } catch {}
     }
     return (
       <article className="msg meta" title={type}>

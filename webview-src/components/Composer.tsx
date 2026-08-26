@@ -431,9 +431,11 @@ export function Composer(props: Props) {
       if (ids.includes(cand)) return cand;
     return ids[0];
   }, [activeModelVariants]);
-  const activeVariantLabel =
-    props.activeModel?.variant ??
-    (defaultVariantId ? `Default (${defaultVariantId})` : "Default");
+  const activeVariantLabel = (() => {
+    const raw = props.activeModel?.variant;
+    if (!raw) return defaultVariantId ? `Default (${defaultVariantId})` : "Default";
+    return raw.toLowerCase() === "default" ? "Default" : raw;
+  })();
   const permissionModeLabel =
     props.permissionMode === "autoAllow"
       ? "Auto allow"
