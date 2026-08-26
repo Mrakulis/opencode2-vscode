@@ -23,6 +23,12 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 - **Providers drawer** with in-app connect: API key or OAuth browser flow
 - **Cost, token and context telemetry** with an optional auto-compact threshold
 - **Queue or steer** follow-ups while the agent is working (composer chip)
+- **Pre-apply diff review** — proposed edits show as native side-by-side diffs (with +N/−N counts) *before* anything is written; aggregated "Proposed changes" strip while approvals are pending
+- **Smart model repair** — if a session's model keeps failing, Retry switches to a validated working model automatically and tells you why
+- **Subagent inspector** — child runs appear as clickable chips with a live tail, token/cost summary, and a Terminate control
+- **Code Mode visualizer** — sandboxed `execute` tool calls render as highlighted code blocks with a live tool-call timeline and a separate output pane; per-server Code Mode toggle in the MCP drawer
+- **Plan checklist** (`⋯` menu) — interactive `implementation_plan.md` checklist with a "Run Next Task" prompt button
+- **Resilient connection** — reconnects with backoff + full resync; a non-blocking banner offers Restart Background Service during drops; last-open session is restored after reloads
 - **Own theme system** — OpenCode Dark & Light plus Tokyo Night, Gruvbox, Nord and Catppuccin presets (cycle from the `⋯` menu or pick in settings); compact/comfortable density
 
 ## Requirements
@@ -34,7 +40,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 
 ### Version compatibility
 
-The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18050**. Because OpenCode itself moves fast on the beta channel:
+The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18230**. Because OpenCode itself moves fast on the beta channel:
 
 - Newer/older server betas generally work — all API access goes through a defensive adapter layer that normalizes known shape drift, and missing optional features degrade quietly.
 - Explicit server `deny` rules are always enforced by the server regardless of extension version.
@@ -81,7 +87,7 @@ The extension is developed and tested against a specific client pin (`@opencode-
 | `composer.sendKey` | `enter` | enter / ctrlEnter to send |
 | `models.hidden` | `[]` | Models hidden from the picker (`providerID/modelID`) |
 | `models.favorites` | `[]` | Starred models pinned to picker top |
-| `models.default` | `` | Default model for new sessions (`providerID/modelID`) |
+| `models.default` | `opencode/big-pickle` | Default model for new sessions (`providerID/modelID`). Validated against the catalog at creation; falls back to the first free OpenCode Zen model if it leaves the catalog. Empty = server default (not recommended — a broken server default silently kills new sessions) |
 | `notifications.permissions` | `true` | Permission-request notifications |
 | `notifications.agentEvents` | `true` | Agent finished notifications |
 | `notifications.errors` | `false` | Failed-run notifications |

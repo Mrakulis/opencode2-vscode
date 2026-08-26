@@ -38,12 +38,13 @@ Gate = typecheck + tests (+ `npm run audit` for UI/theme changes).
 - `/api/event` (SSE) is volatile and lossy by contract: every reconnect must re-sync state from REST endpoints before applying live events. Event routing lives in `webview-src/lib/events.ts`; delta accumulation in `webview-src/lib/deltas.ts`.
 - Retries are SERVER-side (`session.retry.scheduled`, `SessionStatus: retry`). Clients observe and offer manual retry only — no client-side backoff.
 - Permissions follow OpenCode semantics (`webview-src/lib/permissions.ts`): auto-accept replies `"once"` per session, questions stay interactive, dedupe via RespondedTracker; `"always"` is manual-only.
+- **New sessions MUST carry a validated model + canonical directory.** Defaults resolve via `pickNewSessionModel` (`lib/models.ts`; last-used → setting, built-in default `opencode/big-pickle`, catalog-validated with free-Zen fallback). ALL directories sent to the server pass through `canonicalizeDirectory()` (`src/directory.ts`) — a lowercase win32 drive letter crashes the server's instruction initializer and every prompt on that session silently persists nothing (both P0s reproduced live 2026-08-26).
 
 ## Layout
 
-- `src/` — extension-host code (`extension.ts`, `controller.ts`, `cli.ts`, `sidebarProvider.ts`, `protocol.ts`, `apiAdapter.ts`, `rpc.ts`, `log.ts`, `notifications.ts`, `autoCompact.ts`)
-- `webview-src/` — React chat UI (`components/`, `lib/` incl. events/deltas/difftext/slash/permissions helpers)
-- `scripts/` — live verification & audit tools (`smoke.mjs`, `verify-hidden-start.mjs`, `check-themes.mjs`, `audit-consistency.mjs`)
+- `src/` — extension-host code (`extension.ts`, `controller.ts`, `cli.ts`, `sidebarProvider.ts`, `protocol.ts`, `apiAdapter.ts`, `rpc.ts`, `log.ts`, `notifications.ts`, `autoCompact.ts`, `directory.ts`, `diffDocs.ts` + vscode-free `diffPatch.ts`)
+- `webview-src/` — React chat UI (`components/` incl. `SubagentsDrawer`, `PlansDrawer`; `lib/` incl. events/deltas/difftext/slash/permissions/subagents/plans/models helpers)
+- `scripts/` — live verification & audit tools (`smoke.mjs` incl. prompt canary, `verify-hidden-start.mjs`, `check-themes.mjs`, `audit-consistency.mjs`, `perm-probe.mjs`)
 - `test/` — unit tests (`node --import tsx --test`)
 - `media/webview/`, `dist/` — build outputs. **Never edit by hand.**
 - `resources/` — icons incl. marketplace assets
