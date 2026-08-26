@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { createApi } from "./apiAdapter";
+import { canonicalizeDirectory } from "./directory";
 import { DiffPreviewDocs, type WireFileDiff } from "./diffDocs";
 import type { ResolvedCli } from "./cli";import type { OpenCodeController } from "./controller";
 import {
@@ -61,10 +62,11 @@ export function createRpcDispatcher(
         typeof model?.id === "string" && typeof model?.providerID === "string"
           ? { id: model.id, providerID: model.providerID }
           : undefined;
+      const directory = optStr(p, "directory") ?? preferredDirectory();
       return api.sessionCreate({
         title: optStr(p, "title"),
         agent: optStr(p, "agent"),
-        directory: optStr(p, "directory") ?? preferredDirectory(),
+        ...(directory ? { directory: canonicalizeDirectory(directory) } : {}),
         ...(parsed ? { model: parsed } : {}),
       });
     },
@@ -231,7 +233,10 @@ export function createRpcDispatcher(
       return api.importSession(p.payload);
     },
     "session.move": (p) =>
-      api.moveSession(str(p, "sessionID"), str(p, "directory")),
+      api.moveSession(
+        str(p, "sessionID"),
+        canonicalizeDirectory(str(p, "directory")),
+      ),
     "session.revert.stage": (p) => {
       const files = p.files as unknown;
       return api.revertStage(
@@ -577,17 +582,30 @@ export function createRpcDispatcher(
   };
 }
 
+/**
+ * Win32 drive-letter canonicalization. VERIFIED LIVE 2026-08-26: the V2
+ * server's instruction initializer crashes ("Maximum call stack size
+ * exceeded" → Instructions.InitializationBlocked) when a session's location
+ * carries a lowercase drive letter — every prompt then silently fails to
+ * persist. Uppercasing the drive avoids the poisoned state entirely.
+ */
+export { canonicalizeDirectory } from "./directory";
+
 /** Multi-root: prefer the workspace folder of the focused editor, else first. */
 export function preferredDirectory(): string | undefined {
   const editor = vscode.window.activeTextEditor;
+  let candidate: string | undefined;
   if (editor) {
-    const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-    if (folder) return folder.uri.fsPath;
+    candidate = vscode.workspace.getWorkspaceFolder(editor.document.uri)
+      ?.uri.fsPath;
   }
-  const fallback =
-    vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file") ??
-    vscode.workspace.workspaceFolders?.[0];
-  return fallback?.uri.fsPath;
+  if (!candidate) {
+    const fallback =
+      vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file") ??
+      vscode.workspace.workspaceFolders?.[0];
+    candidate = fallback?.uri.fsPath;
+  }
+  return candidate ? canonicalizeDirectory(candidate) : undefined;
 }
 
 export type RpcDispatcher = ReturnType<typeof createRpcDispatcher>;
