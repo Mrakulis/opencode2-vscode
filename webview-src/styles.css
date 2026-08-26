@@ -1006,6 +1006,59 @@ button:focus-visible {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ---- CodeMode (execute tool) visualizer -------------------------------- */
+.codemode-code {
+  color: var(--oc2-fg);
+  max-height: calc(14 * 1.45em);
+  overflow-y: auto;
+}
+.cm-kw {
+  color: var(--oc2-accent, #7aa2f7);
+}
+.cm-str {
+  color: #9ece6a;
+}
+.cm-num {
+  color: #ff9e64;
+}
+.cm-com {
+  color: var(--oc2-border);
+  font-style: italic;
+}
+.codemode-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: var(--oc2-space-2);
+}
+.codemode-call {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.call-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--oc2-border);
+  flex-shrink: 0;
+}
+.call-dot.running {
+  background: var(--oc2-accent, #e0af68);
+  animation: oc2-pulse 1.2s ease-in-out infinite;
+}
+.call-dot.completed {
+  background: #9ece6a;
+}
+.call-dot.error {
+  background: #f7768e;
+}
+@keyframes oc2-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
 .md a {
   color: var(--oc2-link);
   cursor: pointer;

@@ -566,6 +566,152 @@ function initiallyExpanded(
 
 type ToolPart = MessagePartTool;
 
+/** One nested MCP tool call inside a CodeMode `execute` run. */
+interface CodeModeCall {
+  tool?: string;
+  status?: string;
+  input?: unknown;
+}
+
+function extractCodeModeState(
+  part: ToolPart,
+): { code?: string; calls: CodeModeCall[] } {
+  const st = part.state as {
+    status: string;
+    input?: Record<string, unknown> | string;
+    metadata?: { [k: string]: unknown };
+  };
+  let raw = st.input;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      raw = { code: raw };
+    }
+  }
+  const code =
+    typeof (raw as { code?: unknown })?.code === "string"
+      ? ((raw as { code: string }).code)
+      : undefined;
+  const callsRaw = st.metadata?.toolCalls;
+  const calls = Array.isArray(callsRaw) ? (callsRaw as CodeModeCall[]) : [];
+  return { code, calls };
+}
+
+/**
+ * Minimal JS tokenizer for display purposes — keywords, strings, numbers,
+ * comments, and tool namespace calls get distinct colors. Purely cosmetic.
+ */
+function renderHighlightedCode(code: string): React.ReactNode[] {
+  const tokens: Array<{ cls?: string; text: string }> = [];
+  const re =
+    /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|return|await|async|for|of|in|if|else|while|try|catch|throw|new|typeof|null|undefined|true|false)\b|\b(\d+(?:\.\d+)?)\b/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(code))) {
+    if (m.index > last) tokens.push({ text: code.slice(last, m.index) });
+    if (m[1]) tokens.push({ cls: "cm-com", text: m[0] });
+    else if (m[2]) tokens.push({ cls: "cm-str", text: m[0] });
+    else if (m[3]) tokens.push({ cls: "cm-kw", text: m[0] });
+    else tokens.push({ cls: "cm-num", text: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < code.length) tokens.push({ text: code.slice(last) });
+  return tokens.map((t, i) =>
+    t.cls ? (
+      <span key={i} className={t.cls}>
+        {t.text}
+      </span>
+    ) : (
+      <span key={i}>{t.text}</span>
+    ),
+  );
+}
+
+/** Split an execute result into its value part and the trailing Logs block. */
+function splitLogs(output: string): { value: string; logs?: string } {
+  const idx = output.indexOf("\n\nLogs:\n");
+  if (idx === -1) return { value: output };
+  return { value: output.slice(0, idx), logs: output.slice(idx + 8) };
+}
+
+function CodeModeCard({ part }: { part: ToolPart }) {
+  const [expanded, setExpanded] = useState(true);
+  const { code, calls } = extractCodeModeState(part);
+  const status = part.state.status;
+
+  // Result / live output panes.
+  let value = "";
+  let logs: string | undefined;
+  let error: string | undefined;
+  if (status === "completed") {
+    const texts = (part.state as { content?: Array<{ type: string; text?: string }> })
+      .content?.filter((c) => c.type === "text")
+      .map((c) => c.text ?? "")
+      .join("\n");
+    const split = splitLogs(texts ?? "");
+    value = split.value;
+    logs = split.logs;
+  } else if (status === "error") {
+    error =
+      (part.state as { error?: { message?: string } }).error?.message ??
+      "execution failed";
+  }
+
+  return (
+    <div className={`tool-card kind-other st-${status} codemode`}>
+      <button
+        type="button"
+        className="tool-head"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className={`chev${expanded ? " open" : ""}`}>▸</span> ⚡ Code
+        Mode{" "}
+        <span className="micro" style={{ opacity: 0.7 }}>
+          {calls.length > 0 ? `· ${calls.length} tool call${calls.length === 1 ? "" : "s"}` : ""}
+        </span>
+      </button>
+      {expanded && (
+        <div className="tool-body">
+          {code !== undefined && (
+            <pre className="tool-cmd codemode-code">
+              <code>{renderHighlightedCode(code)}</code>
+            </pre>
+          )}
+          {calls.length > 0 && (
+            <div className="codemode-calls">
+              {calls.map((c, i) => (
+                <div key={i} className="codemode-call">
+                  <span className={`call-dot ${c.status ?? "pending"}`} />
+                  <code>{c.tool}</code>
+                </div>
+              ))}
+            </div>
+          )}
+          {(value || error) && (
+            <pre className={`tool-out terminal${error ? " tool-error" : ""}`}>
+              {error ?? truncate(value, 4000)}
+            </pre>
+          )}
+          {logs && (
+            <>
+              <div className="micro" style={{ opacity: 0.7, marginTop: 4 }}>
+                Sandbox output
+              </div>
+              <pre className="tool-out terminal">{truncate(logs, 4000)}</pre>
+            </>
+          )}
+          {status === "running" && !calls.length && (
+            <div className="micro" style={{ opacity: 0.7 }}>
+              …executing sandboxed program
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ToolCard({
   part,
   expandShellTools,
@@ -591,6 +737,12 @@ function ToolCard({
     [part.name, expandShellTools, expandEditTools],
   );
   const kind = toolKind(part.name);
+
+  // CodeMode dispatcher: the server funnels MCP tools through one `execute`
+  // tool whose input is {code} and metadata streams nested {toolCalls}.
+  if (part.name === "execute") {
+    return <CodeModeCard part={part} />;
+  }
 
   // Reads aren't worth expanding — just announce the file being read.
   if (kind === "read") {    const st = part.state as {

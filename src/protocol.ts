@@ -219,6 +219,7 @@ export type RpcMethod =
   | "mcp.connect"
   | "mcp.disconnect"
   | "mcp.resources"
+  | "mcp.codemode"
   // misc
   | "files.find"
   | "service.restart"

@@ -352,6 +352,34 @@ export function createRpcDispatcher(
     "mcp.resources": () => api.mcpResources(),
     "mcp.connect": (p) => api.mcpConnect(str(p, "name")),
     "mcp.disconnect": (p) => api.mcpDisconnect(str(p, "name")),
+    "mcp.codemode": async (p) => {
+      // Read the server's effective mcp config and re-add it with a toggled
+      // codemode flag (V2 has no partial-update endpoint; mcp.add replaces
+      // the named server's runtime config). Default is true per V2 docs.
+      const name = str(p, "name");
+      const cfg = await api.configGet();
+      const servers =
+        ((cfg.mcp as { servers?: Record<string, unknown> } | undefined)
+          ?.servers as Record<string, unknown> | undefined) ?? {};
+      if (p.get === true) {
+        // Read-only mode: report current codemode for every server.
+        const out: Record<string, boolean> = {};
+        for (const [key, value] of Object.entries(servers)) {
+          const cm = (value as { codemode?: unknown }).codemode;
+          out[key] = cm === false ? false : true;
+        }
+        return out;
+      }
+      const existing = servers[name];
+      if (typeof existing !== "object" || existing === null) {
+        throw new Error(`Unknown MCP server: ${name}`);
+      }
+      await api.mcpAdd(name, {
+        ...(existing as Record<string, unknown>),
+        codemode: p.enabled !== false,
+      });
+      return true;
+    },
     "providers.authCli": async (p) => {
       // Use the actually-resolved binary (opencode2 on this machine, opencode
       // for npm-only installs) instead of a hard-coded name.

@@ -277,6 +277,16 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       return res.data;
     },
     mcpList: () => getClient().mcp.list(),
+    /** Effective service config (merged layers) — exposes per-server mcp settings. */
+    configGet: async (): Promise<Record<string, unknown>> => {
+      const res = (await getClient().config.get()) as unknown as {
+        data?: unknown;
+      };
+      const data = res?.data ?? res;
+      return typeof data === "object" && data !== null
+        ? (data as Record<string, unknown>)
+        : {};
+    },
     mcpResources: async (): Promise<Array<Record<string, unknown>>> => {
       // McpResourceCatalogOutput = {location, resources, templates} — the
       // drawer consumes the resources rows.

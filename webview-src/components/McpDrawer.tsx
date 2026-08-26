@@ -14,6 +14,9 @@ interface McpServerRow {
   integrationID?: string;
 }
 
+/** Per-server Code Mode routing (server default: true). */
+type CodemodeMap = Record<string, boolean>;
+
 interface Props {
   onClose(): void;
   refreshTick?: number;
@@ -25,6 +28,7 @@ interface Props {
  */
 export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
   const [servers, setServers] = useState<McpServerRow[]>([]);
+  const [codemode, setCodemode] = useState<CodemodeMap>({});
   const [error, setError] = useState<string | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
@@ -44,6 +48,12 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+    try {
+      const map = await rpc.call<CodemodeMap>("mcp.codemode", { get: true });
+      setCodemode(map ?? {});
+    } catch {
+      /* config read failed — leave toggles at server default (on) */
     }
   }, []);
 
@@ -171,6 +181,18 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
         { integrationID: s.integrationID },
       );
       if (attempt.url) window.open(attempt.url, "_blank");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  /** Toggle Code Mode routing for one server (runtime-scoped re-add). */
+  const toggleCodemode = async (s: McpServerRow): Promise<void> => {
+    const next = !(codemode[s.name] ?? true);
+    try {
+      await rpc.call("mcp.codemode", { name: s.name, enabled: next });
+      setCodemode((m) => ({ ...m, [s.name]: next }));
+      await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -327,6 +349,29 @@ export function McpDrawer({ onClose, refreshTick = 0 }: Props) {
                   ✕
                 </button>
               </div>
+              {isOpen && (
+                <div
+                  className="oc2-mcp-auth"
+                  style={{ alignItems: "center", gap: "6px" }}
+                >
+                  <span
+                    className="micro"
+                    style={{ opacity: 0.8 }}
+                    title="Route this server's tools through the sandboxed Code Mode 'execute' tool instead of exposing them directly to the model (server default: on)"
+                  >
+                    ⚡ code mode
+                  </span>
+                  <span className="spacer" />
+                  <button
+                    type="button"
+                    className={`chip${codemode[s.name] ?? true ? " on" : ""}`}
+                    title="Toggle Code Mode routing for this server"
+                    onClick={() => void toggleCodemode(s)}
+                  >
+                    {codemode[s.name] ?? true ? "on" : "off"}
+                  </button>
+                </div>
+              )}
               {isOpen &&
                 s.status.status === "needs_auth" &&
                 s.integrationID && (
