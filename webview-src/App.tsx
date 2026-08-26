@@ -462,6 +462,37 @@ export function App() {
     }
   }, []);
 
+  /** Queued follow-ups (session inbox) for the active session — rendered as
+   *  ghost bubbles at the feed tail. */
+  const [queuedItems, setQueuedItems] = useState<
+    Array<{ id: string; text?: string }>
+  >([]);
+
+  const refreshQueued = useCallback(async () => {
+    const sid = activeIdRef.current;
+    if (!sid) {
+      setQueuedItems([]);
+      return;
+    }
+    try {
+      const rows = await rpc.call<Array<Record<string, unknown>>>(
+        "inbox.list",
+        { sessionID: sid },
+      );
+      setQueuedItems(
+        (rows ?? []).map((r) => {
+          const payload = (r.payload ?? {}) as Record<string, unknown>;
+          return {
+            id: typeof r.id === "string" ? r.id : "",
+            text: typeof payload.text === "string" ? payload.text : undefined,
+          };
+        }),
+      );
+    } catch {
+      /* transient — keep previous state */
+    }
+  }, []);
+
   const selectSession = useCallback(
     (id: string | undefined) => {
       setActiveId(id);
@@ -471,9 +502,13 @@ export function App() {
       // stale streams can never overlay the next session's transcript.
       deltaAccRef.current.clear();
       setForms((list) => (id ? list.filter((f) => f.sessionID === id) : []));
-      if (id) void refreshMessages(id);
+      setQueuedItems([]); // refetched for the new session below
+      if (id) {
+        void refreshMessages(id);
+        void refreshQueued();
+      }
     },
-    [refreshMessages],
+    [refreshMessages, refreshQueued],
   );
 
   /** Re-fetch pending agent form requests (all sessions; UI filters by visibility). */
@@ -564,6 +599,7 @@ export function App() {
               await refreshPickers();
               void refreshPendingPermissions();
               void refreshForms();
+              void refreshQueued();
               setActiveId((current) => {
                 if (!current) {
                   // Restore the last-open session when it still exists; else
@@ -591,6 +627,7 @@ export function App() {
             await refreshPickers();
             void refreshPendingPermissions();
             void refreshForms();
+            void refreshQueued();
             setActiveId((current) => {
               if (current) {
                 void refreshMessages(current);
@@ -658,7 +695,10 @@ export function App() {
                 if (a === "vcs") void refreshVcs();
                 if (a === "worktrees") setWorktreeTick((t) => t + 1);
                 if (a === "instructions") setInstructionsTick((t) => t + 1);
-                if (a === "inbox") setInboxTick((t) => t + 1);
+                if (a === "inbox") {
+                  setInboxTick((t) => t + 1);
+                  void refreshQueued();
+                }
                 if (a === "commands") void reloadSlash();
               }
             }, 150);
@@ -852,6 +892,7 @@ export function App() {
      refreshPickers,
      refreshPendingPermissions,
      refreshForms,
+     refreshQueued,
      selectSession,
    ]);
 
@@ -942,6 +983,8 @@ export function App() {
         // server's persistence of the user message — re-sync shortly after.
         if (activeId) {
           window.setTimeout(() => void refreshMessages(activeId), 400);
+          // Queued sends land in the inbox, not the transcript — show them.
+          if (delivery === "queue") void refreshQueued();
         }
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
@@ -953,7 +996,7 @@ export function App() {
         throw error;
       }
     },
-    [activeId, refreshMessages],
+    [activeId, refreshMessages, refreshQueued],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -1652,6 +1695,22 @@ export function App() {
             messageStats={cfg?.ui.messageStats ?? true}
             onRetry={() => void retryLast()}
             retryPendingLast={retryPending}
+            retryInfo={retryInfo}
+            compacting={compacting}
+            queued={queuedItems}
+            onQueuedOpen={() => setInboxOpen(true)}
+            onUnqueue={(id) =>
+              void rpc
+                .call("inbox.cancel", { sessionID: activeId, inboxID: id })
+                .then(() => refreshQueued())
+                .catch((e: unknown) =>
+                  setNotice(
+                    `Couldn't remove queued message — ${
+                      e instanceof Error ? e.message : String(e)
+                    }`,
+                  ),
+                )
+            }
             onAnswer={(text) => {
               // Surface transport/API send failures instead of swallowing them
               // (P0: silent failures made new sessions look dead).
@@ -1774,49 +1833,7 @@ export function App() {
               <div className="composer-error dock-error">{actionError}</div>
             )}
 
-            {retryInfo?.action && (
-              <div
-                className="perm-card"
-                data-action="retry-action"
-                style={{ borderLeftColor: "var(--oc2-question)" }}
-              >
-                <div className="perm-header">
-                  <span
-                    className="perm-badge"
-                    style={{
-                      color: "var(--oc2-question)",
-                      borderColor: "var(--oc2-tool-shell-dim)",
-                    }}
-                  >
-                    provider
-                  </span>
-                  <span>
-                    {retryInfo.action.title ?? "Provider action required"}
-                  </span>
-                </div>
-                {retryInfo.action.message && (
-                  <div className="perm-res" style={{ whiteSpace: "pre-wrap" }}>
-                    {retryInfo.action.message}
-                  </div>
-                )}
-                {retryInfo.action.link && (
-                  <div className="perm-actions">
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() =>
-                        void rpc
-                          .call("url.open", { url: retryInfo.action!.link })
-                          .catch(() => undefined)
-                      }
-                    >
-                      {retryInfo.action.label ?? "Open"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
+            
             {forms.map((f) => (
               <FormCard key={f.id} form={f} />
             ))}
@@ -1923,16 +1940,6 @@ export function App() {
               </div>
             )}
 
-            {compacting && (
-              <div className="dock-status">
-                <span
-                  className="retry-pill"
-                  title="The server is compacting this session's context"
-                >
-                  ↻ compacting…
-                </span>
-              </div>
-            )}
           </div>
         );
       })()}

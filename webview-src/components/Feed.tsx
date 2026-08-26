@@ -30,6 +30,11 @@ export function Feed({
   onRetry,
   retryPendingLast,
   retryNote,
+  retryInfo,
+  compacting,
+  queued,
+  onQueuedOpen,
+  onUnqueue,
   onAnswer,
 }: {
   messages: AnyMessage[];
@@ -45,6 +50,20 @@ export function Feed({
   retryPendingLast?: boolean;
   /** Server auto-retry status shown under the newest assistant message. */
   retryNote?: string | null;
+  /** Server auto-retry card state (attempt/message/action) — in-feed row. */
+  retryInfo?: {
+    attempt?: number;
+    message?: string;
+    action?: { title?: string; message?: string; label?: string; link?: string };
+  };
+  /** True while the server is compacting this session's context. */
+  compacting?: boolean;
+  /** Queued follow-ups (session inbox) rendered as pending ghost bubbles. */
+  queued?: Array<{ id: string; text?: string }>;
+  /** Opens the Inbox drawer (bubble click). */
+  onQueuedOpen?: () => void;
+  /** Removes one queued item. */
+  onUnqueue?: (id: string) => void;
   /** Delivers a chosen question-option label into the conversation. */
   onAnswer?: (text: string) => void;
 }) {
@@ -219,6 +238,64 @@ export function Feed({
           ));
         })()}
         {busy && <div className="streaming-caret" aria-label="working" />}
+
+        {/* Transient run-state rows — in the transcript so they scroll with
+            history and resolve away naturally (no dock pills). */}
+        {busy && retryInfo && (
+          <div className="sys-row" role="status">
+            <span className="retry-pill">
+              ↻ retrying{retryInfo.attempt ? ` (attempt ${retryInfo.attempt})` : ""}
+              {retryInfo.message ? ` — ${truncate(retryInfo.message, 120)}` : ""}
+            </span>
+            {retryInfo.action?.link && (
+              <a
+                onClick={(e) => {
+                  e.preventDefault();
+                  void rpc
+                    .call("url.open", { url: retryInfo.action!.link })
+                    .catch(() => undefined);
+                }}
+                style={{ color: "var(--oc2-link)", cursor: "pointer" }}
+              >
+                {retryInfo.action.label ?? "Open"}
+              </a>
+            )}
+          </div>
+        )}
+        {compacting && (
+          <div className="sys-row" role="status">
+            <span className="retry-pill">↻ compacting context…</span>
+          </div>
+        )}
+
+        {/* Queued follow-ups: pending ghosts of the user messages they will
+            become when the server delivers them at end of run. */}
+        {(queued ?? []).map((q) => (
+          <div key={q.id} className="msg-user queued">
+            <div className="queued-body">
+              <span className="queued-badge" title="Queued — waits for the current run to end">
+                ⏳
+              </span>
+              <span
+                className="queued-text"
+                title={onQueuedOpen ? "Open inbox" : undefined}
+                onClick={() => onQueuedOpen?.()}
+              >
+                {truncate(q.text ?? "(attachment)", 140)}
+              </span>
+              {onUnqueue && (
+                <button
+                  type="button"
+                  className="queued-x"
+                  title="Remove from queue"
+                  onClick={() => onUnqueue(q.id)}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
 
         {showJump && (
           <button

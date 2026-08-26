@@ -1059,6 +1059,49 @@ button:focus-visible {
     opacity: 0.35;
   }
 }
+
+/* ---- in-chat transient status rows + queued ghost bubbles -------------- */
+.sys-row {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  margin: var(--oc2-space-1) 0;
+  font-size: calc(var(--oc2-font-size) - 1px);
+  opacity: 0.85;
+}
+.msg-user.queued {
+  opacity: 0.65;
+}
+.msg-user.queued .queued-body {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  border: 1px dashed var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  padding: var(--oc2-space-1) var(--oc2-space-2);
+}
+.queued-badge {
+  flex-shrink: 0;
+}
+.queued-text {
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queued-x {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--oc2-fg-dim, inherit);
+  cursor: pointer;
+  padding: 0 var(--oc2-space-1);
+  opacity: 0.6;
+}
+.queued-x:hover {
+  opacity: 1;
+}
 .md a {
   color: var(--oc2-link);
   cursor: pointer;
