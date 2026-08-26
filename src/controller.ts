@@ -366,13 +366,19 @@ export class OpenCodeController implements vscode.Disposable {
 
     // 3) "own" mode (default): reuse an existing healthy service before
     //    spawning a new one — every window reload would otherwise blind-spawn
-    //    another detached service. Then honor server.autoStart.
+    //    another detached service. A stale registration (dead pid, crashed
+    //    service) falls through to a fresh spawn instead of wedging the
+    //    connection on retries against a corpse.
     const existing = await this.discoverService();
-    if (existing) {
+    if (existing && (await this.isHealthy(existing))) {
       this.log.debug(
         `own mode found an already-registered service at ${existing.url}`,
       );
       return this.makeFor(existing);
+    } else if (existing) {
+      this.log.warn(
+        `discovered service at ${existing.url} failed its health probe — falling through to spawn`,
+      );
     }
     const autoStart = config.get<boolean>("server.autoStart", true);
     if (!autoStart) {
@@ -454,6 +460,29 @@ export class OpenCodeController implements vscode.Disposable {
     throw new Error(
       "OpenCode service failed to register within 15s of starting it.",
     );
+  }
+
+  /** Probe a discovered endpoint's health (bounded) before reusing it. */
+  private async isHealthy(endpoint: Endpoint): Promise<boolean> {
+    try {
+      const probe = OpenCode.make({
+        baseUrl: endpoint.url,
+        headers: Service.headers(endpoint),
+      });
+      const health = await Promise.race([
+        probe.health.get(),
+        sleep(3_000).then(() => {
+          throw new Error("health probe timed out");
+        }),
+      ]);
+      return health?.healthy === true;
+    } catch (error) {
+      this.log.debug(
+        `health probe ${endpoint.url} failed`,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return false;
+    }
   }
 
   private makeFor(endpoint: Endpoint): OpenCodeClient {

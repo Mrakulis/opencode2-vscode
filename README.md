@@ -96,6 +96,8 @@ Open a folder, and every **new** session is anchored to it — the agent reads/e
 
 All server I/O lives in the extension host (`src/controller.ts`; every client call isolated in `src/apiAdapter.ts`). The React webview communicates over a typed postMessage RPC bridge (`src/protocol.ts`). Incoming V2 events route through an explicit table (`webview-src/lib/events.ts`); text/reasoning deltas stream incrementally (`webview-src/lib/deltas.ts`) with REST re-sync as the volatile-stream safety net.
 
+**Shared background service.** OpenCode V2's service is deliberately shared: sessions, config, plugins and permissions live in the service, not in a window. All extension windows (and the TUI) therefore connect to *one* discovered, authenticated service per machine — the extension reuses any healthy registration before spawning its own hidden one. There is intentionally **no workspace-scoped port locking**: lockfiles would strand sessions owned by other windows. A stale registration fails its health probe and the extension spawns fresh instead.
+
 ## Contributing & releasing
 
 ```sh
