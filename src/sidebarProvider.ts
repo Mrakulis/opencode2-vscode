@@ -87,19 +87,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "media")],
     };
 
-    const pushState = (): void => {
-      this.post({
-        type: "ready",
-        config: this.getConfig(),
-      });
-      // Always include live connection state — it may have changed while the
-      // webview was still loading.
-      this.post({
-        type: "connection",
-        state: this.controller.state,
-        lastSession: this.rpc.getLastSession(),
-      } satisfies InboundMessage);
-    };
+    const pushState = (): void => this.pushState();
 
     // Immediate push + delayed safety net — the webview JS may not have
     // registered its message listener yet when resolveWebviewView runs,
@@ -168,6 +156,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
     this.controller.onResync(
       () => this.post({ type: "resync" }),
+      null,
+      this.disposables,
+    );
+
+    // Re-push resolved config whenever question-route support is (re)detected,
+    // so the UI flips between the interactive card and plain-text fallback.
+    this.controller.onCapabilitiesChanged(
+      () => pushState(),
       null,
       this.disposables,
     );
@@ -250,6 +246,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
+  /** Push the resolved config (ready) plus live connection state to the UI. */
+  private pushState(): void {
+    this.post({
+      type: "ready",
+      config: this.getConfig(),
+    });
+    // Always include live connection state — it may have changed while the
+    // webview was still loading.
+    this.post({
+      type: "connection",
+      state: this.controller.state,
+      lastSession: this.rpc.getLastSession(),
+    } satisfies InboundMessage);
+  }
+
   private getConfig(): import("./protocol").ResolvedConfig {
     const cfg = vscode.workspace.getConfiguration("opencode2");
     return {
@@ -268,6 +279,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
         fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
         messageStats: cfg.get<boolean>("ui.messageStats", true),
+        questionsSupported: this.controller.questionsSupported,
         sendKey: cfg.get<"enter" | "ctrlEnter">("composer.sendKey", "enter"),
       },
       models: {

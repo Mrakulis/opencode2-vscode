@@ -37,6 +37,7 @@ export function Feed({
   onUnqueue,
   onAnswer,
   onQuestionReply,
+  questionsDisabled,
   onCopyMessage,
   onRegenerate,
   onEditMessage,
@@ -71,6 +72,7 @@ export function Feed({
   /** Delivers a chosen question-option label into the conversation. */
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  questionsDisabled?: boolean;
   /** Per-message actions. */
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
@@ -244,6 +246,7 @@ export function Feed({
               retryNote={retryNote ?? null}
               onAnswer={onAnswer}
               onQuestionReply={onQuestionReply}
+              questionsDisabled={questionsDisabled}
               onCopyMessage={onCopyMessage}
               onRegenerate={onRegenerate}
               onEditMessage={onEditMessage}
@@ -344,6 +347,7 @@ function MessageGroup({
   retryNote,
   onAnswer,
   onQuestionReply,
+  questionsDisabled,
   onCopyMessage,
   onRegenerate,
   onEditMessage,
@@ -361,6 +365,7 @@ function MessageGroup({
   retryNote?: string | null;
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  questionsDisabled?: boolean;
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
@@ -487,6 +492,7 @@ function MessageGroup({
           fullShellOutput={fullShellOutput}
           onAnswer={onAnswer}
           onQuestionReply={onQuestionReply}
+          questionsDisabled={questionsDisabled}
         />
       ))}
       {(onCopyMessage || (isLast && onRegenerate)) && (
@@ -617,8 +623,9 @@ function Part(props: {
   fullShellOutput: boolean;
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  questionsDisabled?: boolean;
 }) {
-  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, onAnswer, onQuestionReply } =
+  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, onAnswer, onQuestionReply, questionsDisabled } =
     props as {
       part: MessagePartText | MessagePartReasoning | MessagePartTool;
       busy: boolean;
@@ -628,6 +635,7 @@ function Part(props: {
       fullShellOutput: boolean;
       onAnswer?: (text: string) => void;
       onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+      questionsDisabled?: boolean;
     };
   if (part.type === "text") {
     return (
@@ -657,6 +665,7 @@ function Part(props: {
         fullShellOutput={fullShellOutput}
         onAnswer={onAnswer}
         onQuestionReply={onQuestionReply}
+        questionsDisabled={questionsDisabled}
       />
     );
   }
@@ -904,6 +913,7 @@ function ToolCard({
   fullShellOutput,
   onAnswer,
   onQuestionReply,
+  questionsDisabled,
 }: {
   part: ToolPart;
   expandShellTools: boolean;
@@ -912,6 +922,7 @@ function ToolCard({
   /** Delivers the chosen option label back into the conversation. */
   onAnswer?: (text: string) => void;
   onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
+  questionsDisabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -973,6 +984,12 @@ function ToolCard({
   // We render all questions visible, one expanded at a time, and submit the
   // batch via that endpoint so the tool actually resumes.
   if (part.name === "question") {
+    // When the user has temporarily disabled interactive questions (until the
+    // server ships question-reply routes), render them as plain markdown text
+    // so the user can simply answer in the chat.
+    if (questionsDisabled) {
+      return <QuestionAsText state={part.state as QuestionToolState} />;
+    }
     return (
       <QuestionCard
         state={part.state as QuestionToolState}
@@ -1179,6 +1196,42 @@ interface QuestionToolState {
   status: string;
   input?: { questions?: QuestionItem[] };
   error?: { message?: string };
+}
+
+/** Plain-text fallback for agent questions when the server doesn't expose the
+ *  question-reply routes (`!ui.questionsSupported`). Renders each question +
+ *  its options as readable markdown so the user can simply answer in the chat
+ *  — no interactive card, no dependency on the (currently missing) server
+ *  question-reply routes. */
+function QuestionAsText({ state }: { state: QuestionToolState }) {
+  const qs = Array.isArray(state.input?.questions) ? state.input!.questions! : [];
+  const md =
+    qs.length === 0
+      ? "_(no question data)_"
+      : qs
+          .map((q, i) => {
+            const title = q.header ?? q.question ?? `Question ${i + 1}`;
+            const lines = [`**${title}**`];
+            if (q.question && q.header) lines.push(q.question);
+            const opts = Array.isArray(q.options) ? q.options : [];
+            for (const o of opts) {
+              lines.push(
+                `- ${o.label ?? "(unnamed option)"}${o.description ? ` — ${o.description}` : ""}`,
+              );
+            }
+            return lines.join("\n");
+          })
+          .join("\n\n");
+  return (
+    <div className={`tool-card kind-question st-${state.status} static`}>
+      <div className="tool-head">
+        ❓ question {qs.length > 1 ? `(${qs.length})` : ""} · plain text
+      </div>
+      <div className="tool-body">
+        <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(md) }} />
+      </div>
+    </div>
+  );
 }
 
 /** Card for agent-asked questions (`question` tool parts). While the turn is

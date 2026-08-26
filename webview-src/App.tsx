@@ -172,6 +172,7 @@ export function App() {
     { id: string; providerID: string; name?: string } | undefined
   >(undefined);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
+  const questionsDisabled = !(cfg?.ui.questionsSupported ?? false);
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -1781,6 +1782,7 @@ export function App() {
             expandEditTools={cfg?.ui.expandEditTools ?? false}
             fullShellOutput={cfg?.ui.fullShellOutput ?? false}
             messageStats={cfg?.ui.messageStats ?? true}
+            questionsDisabled={questionsDisabled}
             onRetry={() => void retryLast()}
             retryPendingLast={retryPending}
             retryInfo={retryInfo}

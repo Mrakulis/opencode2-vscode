@@ -43,6 +43,7 @@ export interface UiPrefs {
   expandEditTools: boolean;
   fullShellOutput: boolean;
   messageStats: boolean;
+  questionsSupported: boolean;
   sendKey: SendKey;
 }
 

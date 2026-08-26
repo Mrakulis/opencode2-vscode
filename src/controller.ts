@@ -64,8 +64,14 @@ export class OpenCodeController implements vscode.Disposable {
   private readonly pendingTimers = new Set<ReturnType<typeof setTimeout>>();
   private client?: OpenCodeClient;
   private activeBaseUrl?: string;
+  private activeHeaders?: Record<string, string>;
   private generation = 0;
   private pumpToken = 0;
+  /** Whether the connected server exposes the experimental question-reply
+   *  routes (probed via /openapi.json). Defaults to false so the GUI degrades
+   *  to plain-text questions until proven supported. */
+  private questionSupport = false;
+  private readonly capabilityEmitter = new vscode.EventEmitter<boolean>();
 
   // Connection self-healing: discovery/ensure or the health probe can hang on
   // first open (e.g. the background service is still starting). Without a bound
@@ -93,12 +99,20 @@ export class OpenCodeController implements vscode.Disposable {
    */
   readonly onResync = this.resyncEmitter.event;
 
+  /** Fired when question-route support is detected (or disproven) post-connect. */
+  readonly onCapabilitiesChanged = this.capabilityEmitter.event;
+
   get state(): ConnectionState {
     return this.client ? "connected" : this.lastError ? "error" : "connecting";
   }
 
   get baseUrl(): string | undefined {
     return this.activeBaseUrl;
+  }
+
+  /** True once the server is confirmed to expose the question-reply routes. */
+  get questionsSupported(): boolean {
+    return this.questionSupport;
   }
 
   /** Human-readable failure from the most recent connect attempt. */
@@ -139,6 +153,7 @@ export class OpenCodeController implements vscode.Disposable {
         `connected to ${this.activeBaseUrl} (service v${health.version}, pid ${health.pid})`,
       );
       this.startEventPump(client, generation);
+      void this.detectQuestionSupport();
       return client;
     } catch (error) {
       // Superseded attempts are not failures — a newer connect() owns the outcome.
@@ -344,6 +359,7 @@ export class OpenCodeController implements vscode.Disposable {
     if (explicitUrl) {
       this.log.debug(`using explicit server url: ${explicitUrl}`);
       const headers = await this.headersForExplicit(explicitUrl);
+      this.activeHeaders = headers ?? undefined;
       return this.track(
         headers
           ? OpenCode.make({ baseUrl: explicitUrl, headers })
@@ -486,6 +502,7 @@ export class OpenCodeController implements vscode.Disposable {
   }
 
   private makeFor(endpoint: Endpoint): OpenCodeClient {
+    this.activeHeaders = Service.headers(endpoint) as unknown as Record<string, string>;
     return this.track(
       OpenCode.make({
         baseUrl: endpoint.url,
@@ -550,9 +567,39 @@ export class OpenCodeController implements vscode.Disposable {
     return client;
   }
 
+  /**
+   * Probe whether the connected server exposes the experimental question-reply
+   * routes. We scan `/openapi.json` (verified: unsupported betas list 0
+   * "question" paths) rather than attempting a live reply. Any failure
+   * (missing spec, non-200, parse error, missing auth) resolves to `false` so
+   * the GUI degrades to plain-text questions instead of hanging on a missing
+   * endpoint.
+   */
+  private async detectQuestionSupport(): Promise<void> {
+    const url = this.activeBaseUrl;
+    if (!url) return;
+    try {
+      const res = await fetch(`${url.replace(/\/$/, "")}/openapi.json`, {
+        headers: this.activeHeaders ?? {},
+      });
+      if (!res.ok) {
+        this.questionSupport = false;
+      } else {
+        const spec = (await res.json()) as { paths?: Record<string, unknown> };
+        this.questionSupport = Object.keys(spec.paths ?? {}).some((p) =>
+          p.toLowerCase().includes("question"),
+        );
+      }
+    } catch {
+      this.questionSupport = false;
+    }
+    this.capabilityEmitter.fire(this.questionSupport);
+  }
+
   private setConnecting(): void {
     this.client = undefined;
     this.lastError = undefined;
+    this.questionSupport = false;
     this.emitter.fire("connecting");
   }
 
@@ -564,5 +611,6 @@ export class OpenCodeController implements vscode.Disposable {
     this.emitter.dispose();
     this.eventEmitter.dispose();
     this.resyncEmitter.dispose();
+    this.capabilityEmitter.dispose();
   }
 }
