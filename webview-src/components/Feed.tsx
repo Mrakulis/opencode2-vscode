@@ -1110,44 +1110,87 @@ function QuestionCard({
     ? state.input!.questions!
     : [];
   const active = state.status === "running" || state.status === "streaming";
-  const answer = (text: string): void => onAnswer?.(text);
+  const [expandedIdx, setExpandedIdx] = useState<number>(0);
+  const [answers, setAnswers] = useState<(string | null)[]>(() => Array(qs.length).fill(null));
+  useEffect(() => {
+    setExpandedIdx(0);
+    setAnswers(Array(qs.length).fill(null));
+  }, [qs.length]);
+  const submitBatch = (current: (string | null)[]) => {
+    const formatted = qs
+      .map((q, i) => `"${q.header ?? q.question ?? `Question ${i + 1}`}"="${current[i] ?? "Unanswered"}"`)
+      .join(", ");
+    onAnswer?.(`User has answered your questions: ${formatted}. You can now continue with the user's answers in mind.`);
+  };
+  const answerOne = (qi: number, text: string): void => {
+    if (!active) return;
+    setAnswers((prev) => {
+      const next = [...prev];
+      next[qi] = text;
+      const nextIdx = next.findIndex((v) => v === null);
+      setExpandedIdx(nextIdx === -1 ? qs.length : nextIdx);
+      if (nextIdx === -1) setTimeout(() => submitBatch(next), 0);
+      return next;
+    });
+  };
+  const answeredCount = answers.filter((v) => v !== null).length;
+  const hasIncomplete = answeredCount > 0 && answeredCount < qs.length;
   return (
     <div className={`tool-card kind-question st-${state.status} static`}>
-      <div className="tool-head">❓ question</div>
+      <div className="tool-head">❓ question {qs.length > 1 ? `(${answeredCount}/${qs.length})` : ""}</div>
       <div className="tool-body">
         {qs.map((q, qi) => {
           const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
           const opts = Array.isArray(q.options) ? q.options : [];
+          const isExpanded = qi === expandedIdx && active && answers[qi] === null;
+          const isDone = answers[qi] !== null;
           return (
-            <div key={qi} className="q-item">
-              <div className="q-title">{qTitle}</div>
-              {opts.map((o, oi) => {
-                const label = o.label ?? `Option ${oi + 1}`;
-                return active && onAnswer ? (
-                  <button
-                    key={oi}
-                    type="button"
-                    className="q-opt"
-                    title={o.description}
-                    onClick={() => answer(label)}
-                  >
-                    <span className="q-label">{label}</span>
-                    {o.description && (
-                      <span className="q-desc">{o.description}</span>
-                    )}
-                  </button>
-                ) : (
-                  <div key={oi} className={`q-opt${active ? "" : " done"}`}>
-                    <span className="q-label">{label}</span>
-                  </div>
-                );
-              })}
-              {active && onAnswer && (
-                <OtherRow onSubmit={(text) => answer(`${qTitle}: ${text}`)} />
+            <div key={qi} className={`q-item${isExpanded ? " expanded" : ""}${isDone ? " done" : ""}`}>
+              <button
+                type="button"
+                className="q-title"
+                onClick={() => !isDone && active && setExpandedIdx(qi)}
+                disabled={isDone || !active}
+                title={isDone ? `Answered: ${answers[qi]}` : isExpanded ? "Expanded — choose an option below" : "Collapsed — click to expand"}
+                style={{ cursor: isDone || !active ? "default" : "pointer", fontWeight: isExpanded ? 600 : undefined }}
+              >
+                {isDone ? "✓ " : isExpanded ? "▾ " : "▸ "}{qTitle}
+              </button>
+              {isExpanded && !isDone && (
+                <>
+                  {opts.map((o, oi) => {
+                    const label = o.label ?? `Option ${oi + 1}`;
+                    return (
+                      <button
+                        key={oi}
+                        type="button"
+                        className="q-opt"
+                        title={o.description}
+                        onClick={() => answerOne(qi, label)}
+                      >
+                        <span className="q-label">{label}</span>
+                        {o.description && <span className="q-desc">{o.description}</span>}
+                      </button>
+                    );
+                  })}
+                  <OtherRow onSubmit={(text) => answerOne(qi, `${qTitle}: ${text}`)} />
+                </>
               )}
+              {isDone && <div className="q-note">answered: {answers[qi]}</div>}
             </div>
           );
         })}
+        {hasIncomplete && active && (
+          <button
+            type="button"
+            className="chip primary"
+            style={{ marginTop: "var(--oc2-space-2)" }}
+            onClick={() => submitBatch(answers)}
+            title="Continue with current answers; remaining will be sent as Unanswered"
+          >
+            Continue ({answeredCount}/{qs.length} answered) — Unanswered will be sent as “Unanswered”
+          </button>
+        )}
         {qs.length === 0 && (
           <pre className="tool-error">
             {state.error?.message ?? "no question data"}

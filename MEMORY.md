@@ -4,6 +4,7 @@
 
 ## Status
 
+- **v0.6.13 (2026-08-26)** — question accordion: all questions visible, one expanded at a time in order (first expanded, others collapsed headers); answering collapses to `✓` and auto-expands next. Batch continuation: `Continue (X/Y)` fills remaining as `Unanswered` and submits via `User has answered…`, so incomplete batches no longer stall. Ingestion filter now strips system-reminders before `setMessages` (all agents, all shapes).
 - **v0.6.12 (2026-08-26)** — agent-mode reminders fully suppressed (all `<system-reminder>` / `You are (in|NO LONGER in)` variants across text/content/type), send-button busy glow intensified (`22px` + `10px` with `onAccent`, forced opaque even when disabled).
 - **v0.6.11 (2026-08-26)** — broadened plan-reminder filter to cover exit variant + tag + `content[]` shapes, bumped to avoid file collision.
 - **v0.6.10 (2026-08-26)** — follow-up: system-reminder now suppressed for both enter/exit + `<system-reminder>` tag and `content[]` shapes (whole-UI tint remains sole indicator), agent/model switch noise fully removed, reasoning variant `default` → `Default` capitalization, stats footer `↑799 ↓96 ✻190 $0.0011` tabular alignment (`space-between` + `tabular-nums`), and question answers now always `steer` (never queue) so multi-question batches don’t stall.

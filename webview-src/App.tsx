@@ -353,7 +353,19 @@ export function App() {
           content,
         } as unknown as AnyMessage;
       });
-      setMessages(merged);
+      // Suppress system-reminder lifecycle messages (all agents) that are already
+      // conveyed by the whole-UI tint — filter at ingestion so they never reach Feed.
+      const REMINDER_RE = /<system-reminder>|You are (?:in|NO LONGER in)\b/i;
+      const filtered = merged.filter((m) => {
+        const t = (m as { type?: unknown }).type;
+        if (t === "assistant") return true;
+        try {
+          return !REMINDER_RE.test(JSON.stringify(m));
+        } catch {
+          return true;
+        }
+      });
+      setMessages(filtered);
       // Record the newest assistant-step failure (if any) so smart-retry can
       // repair the model binding and new-session defaults can warn about it.
       const assistants = list.filter(
