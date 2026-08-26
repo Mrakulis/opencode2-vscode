@@ -42,6 +42,8 @@ import { WorktreesDrawer } from "./components/WorktreesDrawer";
 import { InboxDrawer } from "./components/InboxDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
+import { SubagentsDrawer } from "./components/SubagentsDrawer";
+import { childrenOf, isSubagentActive } from "./lib/subagents";
 
 type Conn = "connected" | "connecting" | "error";
 
@@ -144,6 +146,15 @@ export function App() {
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [subagentsOpen, setSubagentsOpen] = useState(false);
+  const [selectedSubagent, setSelectedSubagent] = useState<
+    string | undefined
+  >(undefined);
+  /** Subagent runs (child sessions) of the active session. */
+  const childSubs = useMemo(
+    () => childrenOf(sessions, activeId),
+    [sessions, activeId],
+  );
   const [inboxTick, setInboxTick] = useState(0);
   const [compacting, setCompacting] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
@@ -1923,10 +1934,39 @@ export function App() {
         );
       })()}
 
+      {childSubs.length > 0 && (
+        /* Subagent status chips (Module 6): clickable per child session. */
+        <div className="strip" style={{ padding: "2px 8px" }}>
+          {childSubs.slice(0, 5).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`chip${isSubagentActive(s) ? " on" : ""}`}
+              title={`${s.title || s.agent || "subagent"} — ${isSubagentActive(s) ? "running" : "finished"} · click to inspect`}
+              onClick={() => {
+                setSelectedSubagent(s.id);
+                setSubagentsOpen(true);
+              }}
+            >
+              🤖 {s.agent ?? "subagent"}
+              {isSubagentActive(s) ? " ●" : ""}
+            </button>
+          ))}
+          <span className="spacer" />
+          <button
+            type="button"
+            className="chip"
+            title="Open the subagent inspector"
+            onClick={() => setSubagentsOpen(true)}
+          >
+            inspector
+          </button>
+        </div>
+      )}
+
       <Composer
         disabled={!activeId || conn !== "connected"}
-        busy={busy}
-        sendKey={cfg?.ui.sendKey ?? "enter"}
+        busy={busy}        sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
         builtins={slashBuiltins}
         onSend={(t, files, delivery) => {
@@ -2057,6 +2097,14 @@ export function App() {
         }
         onOpenManager={() => setManagerOpen(true)}
       />
+
+      {subagentsOpen && (
+        <SubagentsDrawer
+          subagents={childSubs}
+          initialId={selectedSubagent}
+          onClose={() => setSubagentsOpen(false)}
+        />
+      )}
 
       <StatusStrip
         connected={conn === "connected"}

@@ -104,6 +104,8 @@ export interface AgentOption {
 export interface SessionSummary {
   id: string;
   title?: string;
+  /** Present when this session is a subagent run of a parent session. */
+  parentID?: string;
   agent?: string;
   model?: { id: string; providerID: string; variant?: string };
   cost: number;
