@@ -223,6 +223,7 @@ export type RpcMethod =
   // misc
   | "files.find"
   | "service.restart"
+  | "cli.start"
   | "plan.read"
   | "plan.save"
   | "file.read"

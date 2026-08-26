@@ -22,6 +22,7 @@
   --oc2-fg-subtle: #b0b0c2;
   /* brand + state */
   --oc2-accent: #7c5cff;
+  --oc2-onAccent: #ffffff;
   --oc2-link: #9d7cff;
   --oc2-error: #ff6b6b;
   --oc2-success: #4ade80;
@@ -68,6 +69,7 @@
   --oc2-fg-muted: #6b6b7d;
   --oc2-fg-subtle: #55556a;
   --oc2-accent: #6d47f0;
+  --oc2-onAccent: #ffffff;
   --oc2-link: #5b3df0;
   --oc2-error: #dc2626;
   --oc2-success: #16a34a;
@@ -97,10 +99,6 @@
   --oc2-radius: 8px;
 }
 
-:root[data-plan="true"] {
-  --oc2-accent: #f59e0b;
-}
-
 /* ---------- OpenCode-flavored theme presets ----------
  * Palettes follow the canonical published values of the themes OpenCode
  * ships, mapped onto our --oc2-* tokens. */
@@ -120,6 +118,7 @@
   --oc2-fg-muted: #565f89;
   --oc2-fg-subtle: #a9b1d6;
   --oc2-accent: #7aa2f7;
+  --oc2-onAccent: #0f1220;
   --oc2-link: #7dcfff;
   --oc2-error: #f7768e;
   --oc2-success: #9ece6a;
@@ -155,6 +154,7 @@
   --oc2-fg-muted: #928374;
   --oc2-fg-subtle: #bdae93;
   --oc2-accent: #fabd2f;
+  --oc2-onAccent: #282828;
   --oc2-link: #83a598;
   --oc2-error: #fb4934;
   --oc2-success: #b8bb26;
@@ -190,6 +190,7 @@
   --oc2-fg-muted: #7b88a1;
   --oc2-fg-subtle: #a7b1c2;
   --oc2-accent: #88c0d0;
+  --oc2-onAccent: #2e3440;
   --oc2-link: #81a1c1;
   --oc2-error: #bf616a;
   --oc2-success: #a3be8c;
@@ -225,6 +226,7 @@
   --oc2-fg-muted: #7f849c;
   --oc2-fg-subtle: #bac2de;
   --oc2-accent: #89b4fa;
+  --oc2-onAccent: #11111b;
   --oc2-link: #89dceb;
   --oc2-error: #f38ba8;
   --oc2-success: #a6e3a1;
@@ -243,6 +245,15 @@
   --oc2-diff-del-fg: #f38ba8;
   --oc2-question: #cba6f7;
   --oc2-skill: #94e2d5;
+}
+
+:root[data-plan="true"] {
+  --oc2-accent: #f59e0b;
+  --oc2-onAccent: #1a0f00;
+}
+:root[data-plan="true"][data-theme="light"] {
+  --oc2-accent: #d97706;
+  --oc2-onAccent: #ffffff;
 }
 
 * {
@@ -323,30 +334,7 @@ button:focus-visible {
 }
 
 .busy-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  pointer-events: none;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 150ms;
-}
-.busy-bar[data-busy="true"] {
-  opacity: 1;
-}
-.busy-bar[data-busy="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--oc2-accent),
-    transparent
-  );
-  animation: busy-shimmer 1.2s infinite;
+  display: none;
 }
 @keyframes busy-shimmer {
   0% {
@@ -1142,15 +1130,9 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
-/* Streaming caret — a breathing violet bar that signals active work */
+/* Streaming caret — removed; busy glow now on send button */
 .streaming-caret {
-  width: 10px;
-  height: 24px;
-  border-radius: 3px;
-  background: var(--oc2-accent);
-  margin: var(--oc2-space-2) auto 0;
-  transform-origin: center bottom;
-  animation: caret-breathe 1.15s ease-in-out infinite;
+  display: none;
 }
 @keyframes caret-breathe {
   0%,
@@ -1471,10 +1453,18 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   background: var(--oc2-accent);
-  color: #ffffff;
+  color: var(--oc2-onAccent);
   font-size: var(--oc2-font-size);
+  font-weight: 700;
   padding: 0;
   line-height: 1;
+  text-shadow: 0 0 0 transparent;
+}
+.sendbtn.busy {
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--oc2-accent) 55%, transparent),
+    0 0 4px var(--oc2-accent);
+  animation: oc2-pulse 1.2s ease-in-out infinite;
 }
 .sendbtn:hover {
   background: var(--oc2-accent);

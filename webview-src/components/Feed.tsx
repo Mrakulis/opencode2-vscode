@@ -380,9 +380,7 @@ function MessageGroup({
       shell: "shell command",
       // real payload types (SDK + live): *-switched; older betas used *-selected
       "agent-switched": "agent switched",
-      "model-switched": "model switched",
       "agent-selected": "agent switched",
-      "model-selected": "model switched",
     };
     const type =
       typeof (message as { type?: string }).type === "string"
@@ -392,6 +390,27 @@ function MessageGroup({
     // Synthetic messages are token-less checkpoint markers (e.g. compaction
     // bookkeeping) — they carry no user-facing content, so render nothing.
     if (type === "synthetic") return null;
+    // Model switches are reflected in the header(StatusStrip) — no chat noise.
+    if (type === "model-switched" || type === "model-selected") return null;
+    // Plan-mode duplicate: the server may inject a "You are in Plan mode"
+    // system reminder. The whole UI already tints via [data-plan="true"],
+    // so the chat line is redundant and visually noisy — suppress it.
+    {
+      const txt =
+        typeof (message as unknown as { text?: unknown }).text === "string"
+          ? (message as unknown as { text: string }).text
+          : typeof (message as unknown as { content?: unknown }).content === "string"
+            ? (message as unknown as { content: string }).content
+            : "";
+      if (txt && /You are in Plan mode/i.test(txt)) return null;
+      // Also check content parts array for that phrase
+      const parts = (message as unknown as { content?: Array<{ text?: string }> }).content;
+      if (Array.isArray(parts)) {
+        for (const p of parts) {
+          if (typeof p?.text === "string" && /You are in Plan mode/i.test(p.text)) return null;
+        }
+      }
+    }
     return (
       <article className="msg meta" title={type}>
         <span className="meta-label">{label[type] ?? type}</span>
@@ -435,15 +454,21 @@ function MessageGroup({
             )}
           </footer>
         )}
-      {message.error != null && (
+      {message.error != null && !isTransientNetworkError(message.error) && (
         <pre className="tool-error">{stringifyError(message.error)}</pre>
+      )}
+      {isTransientNetworkError(message.error) && (
+        <pre className="tool-error" style={{ opacity: 0.7 }}>
+          Connection briefly dropped — retrying automatically. {stripVerboseHint(String((message.error as { message?: string })?.message ?? ""))}
+        </pre>
       )}
       {(() => {
         // In-chat retry affordance attached to THIS message: shows only while
         // it is the newest one, then scrolls away as history grows.
-        const failed = assistantFailed(message);
+        // Transient network errors (ECONNRESET) are non-retryable via manual chip — server auto-retry handles them.
+        const failed = assistantFailed(message) && !isTransientNetworkError(message.error);
         const showButton =
-          !busy && isLast && (failed || (!!retryPendingLast && !!onRetry));
+          !busy && isLast && (failed || (!!retryPendingLast && !!onRetry && !isTransientNetworkError(message.error)));
         const showNote = busy && isLast && !!retryNote;
         if ((!showButton || !onRetry) && !showNote) return null;
         return (
@@ -1021,13 +1046,30 @@ function ToolCard({
   );
 }
 
+function isTransientNetworkError(error: unknown): boolean {
+  const msg =
+    typeof error === "string"
+      ? error
+      : typeof (error as { message?: unknown })?.message === "string"
+        ? (error as { message: string }).message
+        : "";
+  return /ECONNRESET|socket.*closed/i.test(msg);
+}
+
+function stripVerboseHint(text: string): string {
+  return text.replace(/\s*For more information, pass `verbose:\s*true`.*$/s, "").trim();
+}
+
 function stringifyError(error: unknown): string {
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error, null, 1);
-  } catch {
-    return String(error);
-  }
+  let raw: string;
+  if (typeof error === "string") raw = error;
+  else
+    try {
+      raw = JSON.stringify(error, null, 1);
+    } catch {
+      raw = String(error);
+    }
+  return stripVerboseHint(raw);
 }
 
 interface QuestionOption {

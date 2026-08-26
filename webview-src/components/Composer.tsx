@@ -744,7 +744,7 @@ export function Composer(props: Props) {
           </button>
           <button
             type="button"
-            className={`sendbtn${(!text.trim() && attachments.length === 0) || props.disabled ? " disabled" : ""}`}
+            className={`sendbtn${(!text.trim() && attachments.length === 0) || props.disabled ? " disabled" : ""}${props.busy ? " busy" : ""}`}
             disabled={
               props.disabled || (!text.trim() && attachments.length === 0)
             }

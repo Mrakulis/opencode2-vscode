@@ -940,6 +940,67 @@ export function App() {
     }
   }, [messages, busy, activeId]);
 
+  const newSession = useCallback(async (): Promise<string | undefined> => {
+    try {
+      // Defaults: last-used model wins; then the configured default (built-in:
+      // OpenCode Zen's free big-pickle); then the server default. Every
+      // candidate is validated against the catalog with a free-Zen safety net.
+      const def = pickNewSessionModel(
+        lastUsedModel,
+        cfg?.models.default ?? "",
+        serverDefault,
+        models,
+      );
+      if (def) {
+        const key = `${def.providerID}/${def.id}`;
+        const failure = lastFailureRef.current;
+        if (failure?.modelKey === key && failure.message) {
+          setNotice(
+            `Heads up: ${key} failed recently (${failure.message}). Consider picking a different model.`,
+          );
+        }
+      }
+      const session = await rpc.call<SessionSummary>("session.create", {
+        agent: "build",
+        ...(def ? { model: def } : {}),
+      });
+      if (!session?.id) throw new Error("server returned no session id");
+      await refreshSessions();
+      // Optimistic insert in case the directory filter would exclude it.
+      setSessions((prev) =>
+        prev.some((s) => s.id === session.id)
+          ? prev
+          : [session as SessionSummary, ...prev],
+      );
+      selectSession(session.id);
+      setDrawerOpen(false);
+      setNotice(null);
+      return session.id;
+    } catch (error) {
+      console.warn("[oc2] session.create failed", error);
+      setNotice(
+        `Couldn't create session — ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return undefined;
+    }
+  }, [cfg, serverDefault, lastUsedModel, models, refreshSessions, selectSession]);
+
+  const ensureSessionForSend = useCallback(async (): Promise<string | undefined> => {
+    if (activeIdRef.current) return activeIdRef.current;
+    // Only auto-create when the project genuinely has no sessions (not just no selection).
+    if (sessions.length > 0) {
+      const recent = sessions[0]?.id;
+      if (recent) {
+        selectSession(recent);
+        return recent;
+      }
+      return undefined;
+    }
+    return newSession();
+  }, [sessions, newSession, selectSession]);
+
   // ---- actions -------------------------------------------------------------
   const sendMessage = useCallback(
     async (
@@ -947,7 +1008,18 @@ export function App() {
       files?: Array<{ uri: string; name?: string }>,
       delivery?: "steer" | "queue",
     ) => {
-      if (!activeId || (!text.trim() && (!files || files.length === 0))) return;
+      // Lazy creation: if no session is active but the project has none, create one on first send.
+      let targetId = activeIdRef.current;
+      if (!targetId) {
+        if (sessions.length === 0) {
+          const created = await newSession();
+          if (!created) return;
+          targetId = created;
+        } else {
+          return;
+        }
+      }
+      if (!text.trim() && (!files || files.length === 0)) return;
       const optimistic: Extract<AnyMessage, { type: "user" }> = {
         type: "user",
         id: `pending-${Date.now()}`,
@@ -959,11 +1031,11 @@ export function App() {
         time: { created: Date.now() },
       };
       setMessages((m) => [...m, optimistic]);
-      setBusySessions((b) => ({ ...b, [activeId]: true }));
+      setBusySessions((b) => ({ ...b, [targetId!]: true }));
       setRetryInfo(undefined); // a fresh run must not inherit stale retry state
       try {
         const params: Record<string, unknown> = {
-          sessionID: activeId,
+          sessionID: targetId,
           text: text || "",
         };
         if (files && files.length)
@@ -981,14 +1053,12 @@ export function App() {
         }
         // The optimistic bubble must not hang if the first refetch raced the
         // server's persistence of the user message — re-sync shortly after.
-        if (activeId) {
-          window.setTimeout(() => void refreshMessages(activeId), 400);
-          // Queued sends land in the inbox, not the transcript — show them.
-          if (delivery === "queue") void refreshQueued();
-        }
+        window.setTimeout(() => void refreshMessages(targetId!), 400);
+        // Queued sends land in the inbox, not the transcript — show them.
+        if (delivery === "queue") void refreshQueued();
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
-        setBusySessions((b) => ({ ...b, [activeId]: false }));
+        setBusySessions((b) => ({ ...b, [targetId!]: false }));
         // Surface a Retry affordance for transport/API failures — and keep the
         // exact payload so Retry resends THIS prompt, not an older one.
         lastFailedPromptRef.current = { text: text || "", files };
@@ -996,7 +1066,7 @@ export function App() {
         throw error;
       }
     },
-    [activeId, refreshMessages, refreshQueued],
+    [activeId, sessions.length, newSession, refreshMessages, refreshQueued],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -1101,49 +1171,7 @@ export function App() {
     [],
   );
 
-  const newSession = useCallback(async () => {
-    try {
-      // Defaults: last-used model wins; then the configured default (built-in:
-      // OpenCode Zen's free big-pickle); then the server default. Every
-      // candidate is validated against the catalog with a free-Zen safety net.
-      const def = pickNewSessionModel(
-        lastUsedModel,
-        cfg?.models.default ?? "",
-        serverDefault,
-        models,
-      );
-      if (def) {
-        const key = `${def.providerID}/${def.id}`;
-        const failure = lastFailureRef.current;
-        if (failure?.modelKey === key && failure.message) {
-          setNotice(
-            `Heads up: ${key} failed recently (${failure.message}). Consider picking a different model.`,
-          );
-        }
-      }
-      const session = await rpc.call<SessionSummary>("session.create", {
-        agent: "build",
-        ...(def ? { model: def } : {}),
-      });
-      if (!session?.id) throw new Error("server returned no session id");
-      await refreshSessions();
-      // Optimistic insert in case the directory filter would exclude it.
-      setSessions((prev) =>
-        prev.some((s) => s.id === session.id)
-          ? prev
-          : [session as SessionSummary, ...prev],
-      );
-      selectSession(session.id);
-      setDrawerOpen(false);
-      setNotice(null);    } catch (error) {
-      console.warn("[oc2] session.create failed", error);
-      setNotice(
-        `Couldn't create session — ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  }, [cfg, serverDefault, lastUsedModel, models, refreshSessions, selectSession]);
+
 
   /** Export the session in V2 transfer format (JSON, re-importable). */
   const exportSession = useCallback(async () => {
@@ -1654,6 +1682,23 @@ export function App() {
                 {connDetail && <code className="err-detail">{connDetail}</code>}
                 <button
                   type="button"
+                  className="primary"
+                  style={{ marginTop: "var(--oc2-space-2)" }}
+                  onClick={() =>
+                    void rpc
+                      .call("cli.start")
+                      .then(() => setNotice(null))
+                      .catch((e: unknown) =>
+                        setNotice(
+                          `Couldn't start opencode2 — ${e instanceof Error ? e.message : String(e)}`,
+                        ),
+                      )
+                  }
+                >
+                  Start opencode2
+                </button>
+                <button
+                  type="button"
                   className="chip"
                   onClick={() => void restartService()}
                 >
@@ -1712,8 +1757,23 @@ export function App() {
                 )
             }
             onAnswer={(text) => {
-              // Surface transport/API send failures instead of swallowing them
-              // (P0: silent failures made new sessions look dead).
+              // Question answers must steer the active turn, never queue — otherwise the question never clears.
+              // Optimistically collapse the card so UI feels instant; server will confirm via tool state.
+              setMessages((prev) =>
+                prev.map((msg) => {
+                  const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
+                  if (!Array.isArray(m.content)) return msg;
+                  let changed = false;
+                  const nextContent = m.content.map((part) => {
+                    if (part.type === "tool" && part.name === "question" && (part.state?.status === "running" || part.state?.status === "streaming")) {
+                      changed = true;
+                      return { ...part, state: { ...part.state, status: "completed" } } as typeof part;
+                    }
+                    return part;
+                  });
+                  return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
+                }),
+              );
               void sendMessage(text, undefined, busy ? "steer" : undefined).catch(
                 (e: unknown) =>
                   setNotice(
@@ -1975,7 +2035,7 @@ export function App() {
       )}
 
       <Composer
-        disabled={!activeId || conn !== "connected"}
+        disabled={((!activeId && sessions.length > 0) || conn !== "connected")}
         busy={busy}        sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
         builtins={slashBuiltins}

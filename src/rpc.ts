@@ -5,7 +5,9 @@ import * as os from "node:os";
 import { createApi } from "./apiAdapter";
 import { canonicalizeDirectory } from "./directory";
 import { DiffPreviewDocs, type WireFileDiff } from "./diffDocs";
-import type { ResolvedCli } from "./cli";import type { OpenCodeController } from "./controller";
+import { resolveCli as resolveCliImpl } from "./cli";
+import type { ResolvedCli } from "./cli";
+import type { OpenCodeController } from "./controller";
 import {
   isSettingKey,
   validateSettingValue,
@@ -165,6 +167,17 @@ export function createRpcDispatcher(
       ),
     "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
     "service.restart": () => controller.restart(),
+    "cli.start": async () => {
+      // Strictly opencode2 — never fall back to legacy `opencode` (v1).
+      const log = new Log();
+      const cli = await resolveCliImpl(log);
+      if (!cli) throw new Error("OpenCode CLI (opencode2) not found — install via `npm i -g opencode-ai@beta` or set opencode2.cliPath");
+      if (!cli.display.includes("opencode2") && !cli.program.includes("opencode2")) {
+        throw new Error(`Resolved CLI is not opencode2: ${cli.display} — please install opencode2`);
+      }
+      await controller.connect();
+      return true;
+    },
     // Bespoke plan-checklist support (local file; no V2 server contract).
     "plan.read": async () => {
       const base = preferredDirectory() ?? process.cwd();
