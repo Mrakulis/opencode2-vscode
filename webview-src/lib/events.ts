@@ -60,6 +60,10 @@ const TABLE: Record<string, UiAction[]> = {
 
   // usage & context
   "session.usage.updated": ["sessions"],
+  // NOTE: "session.usage.recorded" exists on newer SERVERS (payload:
+  // {sessionID, source:"title"|"compaction", cost, tokens}) but is NOT in the
+  // pinned client's V2Event union yet — add it here when the pin is bumped
+  // past beta-18050 (drift-guard enforces this).
 
   // server-driven auto-retry (SessionRetry) — keep the UI aware
   "session.retry.scheduled": ["messages"],

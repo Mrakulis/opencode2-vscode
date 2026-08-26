@@ -97,6 +97,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.post({
         type: "connection",
         state: this.controller.state,
+        lastSession: this.rpc.getLastSession(),
       } satisfies InboundMessage);
     };
 
@@ -147,6 +148,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           state,
           detail:
             state === "error" ? this.controller.lastErrorDetail : undefined,
+          lastSession: this.rpc.getLastSession(),
         } satisfies InboundMessage),
       null,
       this.disposables,
@@ -261,13 +263,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       models: {
         hidden: cfg.get<string[]>("models.hidden", []),
         favorites: cfg.get<string[]>("models.favorites", []),
-        default: cfg.get<string>("models.default", ""),
+        default: cfg.get<string>("models.default", "opencode/big-pickle"),
       },
       permissions: {
         mode: cfg.get<"askFirst" | "autoAllow" | "deny">(
           "permissions.mode",
           "askFirst",
         ),
+      },
+      agent: {
+        autoCompactThreshold: cfg.get<number>("agent.autoCompactThreshold", 0),
       },
     };
   }

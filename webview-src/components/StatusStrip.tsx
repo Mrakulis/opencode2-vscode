@@ -14,6 +14,10 @@ interface Props {
   tokens?: TokenUsage;
   ctxPct: number | null;
   ctxLimit?: number;
+  /** Active session model as `providerID/id` (tooltip on the token block). */
+  model?: string;
+  /** Context % at which the meter turns "hot" (auto-compact threshold or 85). */
+  alertPct?: number;
 }
 
 /** Full token counter: input / output / reasoning / cache, plus cost + context. */
@@ -24,6 +28,8 @@ export function StatusStrip({
   tokens,
   ctxPct,
   ctxLimit,
+  model,
+  alertPct = 85,
 }: Props) {
   const total =
     tokens &&
@@ -48,7 +54,11 @@ export function StatusStrip({
       )}
       {tokens && (
         <>
-          <span className="micro stat" title="prompt (input) tokens">
+          <span
+            className="micro stat"
+            title={model ? `model: ${model}` : undefined}
+            style={model ? { cursor: "default" } : undefined}
+          >
             ↑{formatTokens(tokens.input)}
           </span>
           <span className="micro stat" title="completion (output) tokens">
@@ -88,7 +98,7 @@ export function StatusStrip({
             }
           >
             <span
-              className={`fill${(ctxPct ?? 0) >= 80 ? " hot" : ""}`}
+              className={`fill${(ctxPct ?? 0) >= alertPct ? " hot" : ""}`}
               style={{ width: `${Math.max(ctxPct, 3)}%` }}
             />
           </span>

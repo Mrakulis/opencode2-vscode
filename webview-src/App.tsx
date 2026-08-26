@@ -511,9 +511,18 @@ export function App() {
               void refreshForms();
               setActiveId((current) => {
                 if (!current) {
-                  const recent = mostRecentSession(list);
-                  if (recent) void refreshMessages(recent.id);
-                  return recent?.id;
+                  // Restore the last-open session when it still exists; else
+                  // fall back to the most recent one.
+                  const restore =
+                    msg.lastSession &&
+                    list.some((s) => s.id === msg.lastSession)
+                      ? msg.lastSession
+                      : undefined;
+                  const target = restore
+                    ? restore
+                    : (mostRecentSession(list)?.id ?? undefined);
+                  if (target) void refreshMessages(target);
+                  return target;
                 }
                 return current;
               });
@@ -779,6 +788,17 @@ export function App() {
      refreshForms,
      selectSession,
    ]);
+
+  const restartService = useCallback(async () => {
+    try {
+      await rpc.call("service.restart");
+      setNotice(null);
+    } catch (e) {
+      setNotice(
+        `Restart failed — ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, []);
 
   // Report the visible session so host notifications skip it.
   useEffect(() => {
@@ -1483,7 +1503,25 @@ export function App() {
       )}
 
       <main className="feed">
-        {conn !== "connected" ? (
+        {conn !== "connected" && activeId && (
+          /* Non-blocking reconnect banner (M5): keep the cached transcript
+             visible instead of wiping the feed on transient drops. */
+          <div className="notice-bar" role="alert">
+            <span className="notice-text">
+              {conn === "connecting"
+                ? "Connection lost — reconnecting…"
+                : `Service unreachable${connDetail ? `: ${connDetail}` : ""}`}
+            </span>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => void restartService()}
+            >
+              ↻ Restart Background Service
+            </button>
+          </div>
+        )}
+        {conn !== "connected" && !activeId ? (
           <div className="empty">
             {conn === "connecting" ? (
               <>
@@ -1504,10 +1542,13 @@ export function App() {
               <>
                 <h2>Service unreachable</h2>
                 {connDetail && <code className="err-detail">{connDetail}</code>}
-                <p>
-                  Run “OpenCode 2: Restart Background Service” from the command
-                  palette.
-                </p>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => void restartService()}
+                >
+                  ↻ Restart Background Service
+                </button>
               </>
             )}
           </div>
@@ -1901,6 +1942,16 @@ export function App() {
         tokens={active?.tokens}
         ctxPct={ctxPct}
         ctxLimit={ctxLimit}
+        model={
+          effectiveModel
+            ? `${effectiveModel.providerID}/${effectiveModel.id}`
+            : undefined
+        }
+        alertPct={
+          cfg?.agent.autoCompactThreshold && cfg.agent.autoCompactThreshold > 0
+            ? cfg.agent.autoCompactThreshold
+            : 85
+        }
       />
     </div>
   );

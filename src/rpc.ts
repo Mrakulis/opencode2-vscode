@@ -78,6 +78,8 @@ export function createRpcDispatcher(
     "ui.activeSession": (p) => {
       const id = optStr(p, "id");
       activeSessionId = id;
+      // Persist for restore-after-reload (webview reconnects to the same session).
+      if (id) void storage?.update("lastSession", id);
       log.debug(`active session reported: ${id ?? "(none)"}`);
       return Promise.resolve();
     },
@@ -159,6 +161,7 @@ export function createRpcDispatcher(
         p.reply === "always" || p.reply === "reject" ? p.reply : "once",
       ),
     "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
+    "service.restart": () => controller.restart(),
     "file.read": (p) => api.fileRead(str(p, "path")),
     "commands.list": () => api.commands(),
     "skills.list": () => api.skills(),
@@ -507,6 +510,8 @@ export function createRpcDispatcher(
   return {
     handle,
     getActiveSessionId,
+    /** Last session the user had open (persisted in workspaceState). */
+    getLastSession: (): string | undefined => storage?.get<string>("lastSession"),
   };
 }
 

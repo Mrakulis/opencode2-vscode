@@ -50,6 +50,8 @@ export interface ResolvedConfig {
   ui: UiPrefs;
   models: ModelPrefs;
   permissions: { mode: PermissionMode };
+  /** Auto-compact threshold percent (0 = disabled) — drives the context-meter alert. */
+  agent: { autoCompactThreshold: number };
 }
 
 /** Settings keys the webview may mutate through `settings.update`. */
@@ -81,6 +83,8 @@ export type InboundMessage =
       type: "connection";
       state: "connected" | "connecting" | "error";
       detail?: string;
+      /** Last session the user had open — restored on reconnect. */
+      lastSession?: string;
     }
   | { type: "resync" }
   | { type: "event"; event: unknown }
@@ -217,6 +221,7 @@ export type RpcMethod =
   | "mcp.resources"
   // misc
   | "files.find"
+  | "service.restart"
   | "file.read"
   | "transcript.copy"
   | "ui.activeSession"
