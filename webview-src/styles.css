@@ -43,6 +43,8 @@
   --oc2-diff-del-fg: #ff9b9b;
   --oc2-question: #c084fc;
   --oc2-skill: #67e8f9;
+  --oc2-user-build: #7c5cff;
+  --oc2-user-plan: #f59e0b;
 
   /* density tokens — swapped via [data-density] */
   --oc2-font-size: 13px;
@@ -89,6 +91,8 @@
   --oc2-diff-del-fg: #b91c1c;
   --oc2-question: #9333ea;
   --oc2-skill: #0e7490;
+  --oc2-user-build: #6d47f0;
+  --oc2-user-plan: #d97706;
 }
 
 :root[data-density="comfortable"] {
@@ -137,6 +141,8 @@
   --oc2-diff-del-fg: #f7768e;
   --oc2-question: #bb9af7;
   --oc2-skill: #73daca;
+  --oc2-user-build: #7aa2f7;
+  --oc2-user-plan: #f59e0b;
 }
 
 /* Gruvbox Dark */
@@ -173,6 +179,8 @@
   --oc2-diff-del-fg: #fb4934;
   --oc2-question: #d3869b;
   --oc2-skill: #8ec07c;
+  --oc2-user-build: #fabd2f;
+  --oc2-user-plan: #f59e0b;
 }
 
 /* Nord */
@@ -209,6 +217,8 @@
   --oc2-diff-del-fg: #bf616a;
   --oc2-question: #b48ead;
   --oc2-skill: #8fbcbb;
+  --oc2-user-build: #88c0d0;
+  --oc2-user-plan: #f59e0b;
 }
 
 /* Catppuccin Mocha */
@@ -245,6 +255,8 @@
   --oc2-diff-del-fg: #f38ba8;
   --oc2-question: #cba6f7;
   --oc2-skill: #94e2d5;
+  --oc2-user-build: #89b4fa;
+  --oc2-user-plan: #f59e0b;
 }
 
 :root[data-plan="true"] {
@@ -777,6 +789,15 @@ button:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* User bubble sticky accent border — right-edge accent, muted full border (subtle, not distracting) */
+.bubble[data-plan="true"] {
+  border-color: color-mix(in srgb, var(--oc2-user-plan) 55%, var(--oc2-border));
+  border-right: 2px solid var(--oc2-user-plan);
+}
+.bubble[data-plan="false"] {
+  border-color: color-mix(in srgb, var(--oc2-user-build) 45%, var(--oc2-border));
+  border-right: 2px solid var(--oc2-user-build);
+}
 .msg.user .msg-actions {
   justify-content: flex-end;
   width: 100%;
@@ -1130,9 +1151,12 @@ button:focus-visible {
   text-decoration: underline;
 }
 .md code {
+  cursor: text;
+}
+.md code.file-link {
   cursor: pointer;
 }
-.md code:hover {
+.md code.file-link:hover {
   background: var(--oc2-bg-hover);
 }
 .diff .line.add {
@@ -1506,9 +1530,9 @@ button:focus-visible {
   justify-content: center;
   background: var(--oc2-accent);
   color: var(--oc2-onAccent);
-  font-size: var(--oc2-font-size);
-  font-weight: 700;
-  padding: 0;
+  font-size: 18px;
+  font-weight: 800;
+  padding: 0 0 1px 0;
   line-height: 1;
   text-shadow: 0 0 0 transparent;
 }

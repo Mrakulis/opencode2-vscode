@@ -165,7 +165,10 @@ export function createRpcDispatcher(
         str(p, "requestID"),
         p.reply === "always" || p.reply === "reject" ? p.reply : "once",
       ),
-    "files.find": (p) => api.findFiles(str(p, "query"), optStr(p, "directory")),
+    "files.find": (p) => {
+      const dir = optStr(p, "directory");
+      return api.findFiles(str(p, "query"), dir ? canonicalizeDirectory(dir) : undefined);
+    },
     "service.restart": () => controller.restart(),
     "cli.start": async () => {
       // Strictly opencode2 — never fall back to legacy `opencode` (v1).

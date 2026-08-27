@@ -58,6 +58,8 @@ interface Props {
   onOpenManager(): void;
   permissionMode?: PermissionMode;
   onPickPermissionMode?(mode: PermissionMode): void;
+  /** Active session / workspace directory — scopes `@` file search to the working folder. */
+  directory?: string;
 }
 
 export function Composer(props: Props) {
@@ -167,12 +169,16 @@ export function Composer(props: Props) {
   }, []);
 
   // Fuzzy file lookup for `@` mentions via the V2 fs.find endpoint.
+  // Scoped to the active session / workspace directory so `@` targets the
+  // folder the user is working in (not the server's global cwd).
   useEffect(() => {
     if (!atOpen) return;
     let cancelled = false;
     const t = setTimeout(() => {
+      const params: Record<string, unknown> = { query: atQuery };
+      if (props.directory) params.directory = props.directory;
       void rpc
-        .call<Array<Record<string, unknown>>>("files.find", { query: atQuery })
+        .call<Array<Record<string, unknown>>>("files.find", params)
         .then((rows) => {
           if (cancelled) return;
           setAtHits(
@@ -190,7 +196,7 @@ export function Composer(props: Props) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [atOpen, atQuery]);
+  }, [atOpen, atQuery, props.directory]);
 
   // File-content preview of the highlighted mention (debounced), via file.read.
   useEffect(() => {
@@ -245,12 +251,30 @@ export function Composer(props: Props) {
     [text, props],
   );
 
-  const applyMention = useCallback((hit: FileHit) => {
-    const p = hit.path ?? hit.name ?? "";
-    if (!p) return;
-    setText((prev) => prev.replace(/@([^\s@]*)$/, `@${p} `));
-    setAtOpen(false);
-  }, []);
+  const applyMention = useCallback(
+    (hit: FileHit) => {
+      const raw = hit.path ?? hit.name ?? "";
+      if (!raw) return;
+      // Prefer session-relative paths when the file sits inside the active
+      // directory — cleaner prompt and avoids external_directory noise.
+      let p = raw;
+      const dir = props.directory;
+      if (dir && raw.length > dir.length) {
+        const normDir = dir.replace(/[\\/]+$/, "");
+        const prefix = raw.slice(0, normDir.length);
+        const sep = raw[normDir.length];
+        if (
+          prefix.toLowerCase() === normDir.toLowerCase() &&
+          (sep === "/" || sep === "\\")
+        ) {
+          p = raw.slice(normDir.length + 1);
+        }
+      }
+      setText((prev) => prev.replace(/@([^\s@]*)$/, `@${p} `));
+      setAtOpen(false);
+    },
+    [props.directory],
+  );
 
   // auto-grow up to ~40vh — no inner scrollbar until capped
   useEffect(() => {

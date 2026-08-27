@@ -162,3 +162,13 @@ export function toolTitle(
 export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
+
+/** True when inline `code` text looks like a file path that can be opened. */
+export function isFileLikeCode(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return (
+    /^[\w\-./\\]+:\d+/.test(t) ||
+    /^[\w\-./\\]+\.(ts|tsx|js|jsx|json|md|css|scss|html|rs|py|go|java|rb|php|yaml|yml|toml|sh|ps1|sql|vue|svelte)\b/i.test(t)
+  );
+}

@@ -13,6 +13,7 @@ import {
   diffLines,
   formatCost,
   formatTokens,
+  isFileLikeCode,
   toolTitle,
   truncate,
 } from "../lib/format";
@@ -38,6 +39,7 @@ export function Feed({
   onCopyMessage,
   onRegenerate,
   onEditMessage,
+  isPlan,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -71,6 +73,8 @@ export function Feed({
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
+  /** Current live plan state — used to tag pending user bubbles and as fallback for history */
+  isPlan?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -88,6 +92,26 @@ export function Feed({
     if (ta === 0 && tb === 0) return 0;
     return ta - tb;
   });
+
+  // Sticky plan flag per user message — lookup next assistant's agent (or live fallback).
+  // Walk backwards so each user inherits the next assistant's plan, preserving border after switch.
+  const userPlanById = (() => {
+    const map = new Map<string, boolean>();
+    let nextIsPlan = isPlan ?? false;
+    for (let i = sortedMessages.length - 1; i >= 0; i--) {
+      const m = sortedMessages[i]!;
+      if (isAssistant(m)) {
+        const ag = (m as { agent?: string }).agent ?? "";
+        nextIsPlan = ag.toLowerCase().includes("plan");
+      } else if (isUser(m)) {
+        const planField = (m as unknown as { planAtSend?: boolean }).planAtSend;
+        const v = typeof planField === "boolean" ? planField : nextIsPlan;
+        const id = (m as { id?: string }).id;
+        if (id) map.set(id, v);
+      }
+    }
+    return map;
+  })();
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -243,6 +267,7 @@ export function Feed({
               onCopyMessage={onCopyMessage}
               onRegenerate={onRegenerate}
               onEditMessage={onEditMessage}
+              userPlan={isUser(m) ? userPlanById.get((m as { id: string }).id) : undefined}
             />
           ));
         })()}
@@ -341,6 +366,7 @@ function MessageGroup({
   onCopyMessage,
   onRegenerate,
   onEditMessage,
+  userPlan,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -356,6 +382,7 @@ function MessageGroup({
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
+  userPlan?: boolean;
 }) {
   if (isUser(message)) {
     return (
@@ -378,7 +405,9 @@ function MessageGroup({
             )}
           </div>
         )}
-        <div className="bubble">{message.text}</div>
+        <div className="bubble" data-plan={userPlan ? "true" : "false"}>
+          {message.text}
+        </div>
         {(onCopyMessage || onEditMessage) && (
           <div className="msg-actions">
             {message.text && onCopyMessage && (
@@ -571,25 +600,27 @@ function handleFileClick(e: React.MouseEvent) {
   // 1) markdown links <a href="...">
   const anchor = target.closest("a") as HTMLAnchorElement | null;
   if (anchor) {
-    const href = anchor.getAttribute("href");
-    if (href && !/^(https?:|mailto:|vscode:)/.test(href)) {
+    const raw = (anchor.getAttribute("href") ?? "").trim();
+    if (!raw) return;
+    if (/^https?:\/\//i.test(raw) || /^mailto:/i.test(raw) || /^vscode:/i.test(raw)) {
       e.preventDefault();
-      let p = href.replace(/^file:\/\//, "");
-      try {
-        p = decodeURIComponent(p);
-      } catch {}
-      void rpc.call("file.open", { path: p }).catch(() => undefined);
+      void rpc.call("url.open", { url: raw }).catch(() => undefined);
       return;
     }
+    // everything else is a file-like href (relative path, file://)
+    e.preventDefault();
+    let p = raw.replace(/^file:\/\//, "");
+    try {
+      p = decodeURIComponent(p);
+    } catch {}
+    if (p) void rpc.call("file.open", { path: p }).catch(() => undefined);
+    return;
   }
-  // 2) inline <code> file paths like `src/foo.ts:12`
+  // 2) inline <code> file paths like `src/foo.ts:12` — only file-like code is clickable
   const code = target.closest("code");
   if (code) {
     const txt = (code.textContent ?? "").trim();
-    if (
-      /^[\w\-./\\]+:\d+/.test(txt) ||
-      /^[\w\-./\\]+\.(ts|tsx|js|json|md|css|rs|py|go)\b/.test(txt)
-    ) {
+    if (isFileLikeCode(txt)) {
       e.preventDefault();
       const m = txt.match(/^(.+?)(?::\d+.*)?$/);
       const p = m ? m[1] : txt;

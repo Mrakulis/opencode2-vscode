@@ -174,6 +174,17 @@ export function App() {
     { id: string; providerID: string; name?: string } | undefined
   >(undefined);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
+  /** Workspace folder — fallback for `@` when no session is active. */
+  const [workspaceDir, setWorkspaceDir] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (conn !== "connected") return;
+    void rpc
+      .call<string | undefined>("workspace.directory")
+      .then((d) => {
+        if (typeof d === "string" && d.length > 0) setWorkspaceDir(d);
+      })
+      .catch(() => undefined);
+  }, [conn]);
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -194,6 +205,14 @@ export function App() {
     [sessions, activeId],
   );
   const busy = activeId ? busySessions[activeId] === true : false;
+  /** Directory that scopes `@` file search — active session first, workspace fallback. */
+  const composerDirectory = active?.location?.directory ?? workspaceDir;
+  const isPlan = useMemo(() => {
+    const id = active?.agent?.toLowerCase() ?? "";
+    if (id.includes("plan")) return true;
+    const ag = agents.find((a) => a.id === active?.agent);
+    return ag?.name?.toLowerCase().includes("plan") ?? false;
+  }, [active?.agent, agents]);
 
   /** Server-driven auto-retry state (SessionRetry) for visibility. */
   const [retryInfo, setRetryInfo] = useState<
@@ -1076,7 +1095,7 @@ export function App() {
         }
       }
       if (!text.trim() && (!files || files.length === 0)) return;
-      const optimistic: Extract<AnyMessage, { type: "user" }> = {
+      const optimistic: Extract<AnyMessage, { type: "user" }> & { planAtSend?: boolean } = {
         type: "user",
         id: `pending-${Date.now()}`,
         text:
@@ -1085,6 +1104,7 @@ export function App() {
             ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}`
             : ""),
         time: { created: Date.now() },
+        planAtSend: isPlan,
       };
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [targetId!]: true }));
@@ -1122,7 +1142,7 @@ export function App() {
         throw error;
       }
     },
-    [activeId, sessions.length, newSession, refreshMessages, refreshQueued],
+    [activeId, sessions.length, newSession, refreshMessages, refreshQueued, isPlan],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -1558,13 +1578,6 @@ export function App() {
       : undefined;
   }, [effectiveModel]);
 
-  const isPlan = useMemo(() => {
-    const id = active?.agent?.toLowerCase() ?? "";
-    if (id.includes("plan")) return true;
-    const ag = agents.find((a) => a.id === active?.agent);
-    return ag?.name?.toLowerCase().includes("plan") ?? false;
-  }, [active?.agent, agents]);
-
   useEffect(() => {
     // CSS owns the plan accent via [data-plan="true"]; JS only manages accentTint.
     document.documentElement.dataset.plan = isPlan ? "true" : "false";
@@ -1804,6 +1817,7 @@ export function App() {
           <Feed
             messages={messages}
             busy={busy}
+            isPlan={isPlan}
             showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
             expandShellTools={cfg?.ui.expandShellTools ?? false}
             expandEditTools={cfg?.ui.expandEditTools ?? false}
@@ -2136,7 +2150,9 @@ export function App() {
 
       <Composer
         disabled={((!activeId && sessions.length > 0) || conn !== "connected")}
-        busy={busy}        sendKey={cfg?.ui.sendKey ?? "enter"}
+        busy={busy}
+        directory={composerDirectory}
+        sendKey={cfg?.ui.sendKey ?? "enter"}
         catalogTick={slashTick}
         builtins={slashBuiltins}
         onSend={(t, files, delivery) => {
