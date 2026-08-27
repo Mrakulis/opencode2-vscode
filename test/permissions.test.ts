@@ -4,6 +4,7 @@ import {
   autoReplyFor,
   RespondedTracker,
   PERMISSION_RESPONDED_TTL_MS,
+  sameSessionPending,
 } from "../webview-src/lib/permissions";
 
 describe("autoReplyFor", () => {
@@ -47,20 +48,42 @@ describe("RespondedTracker", () => {
     t.mark("a");
     assert.deepEqual(t.order(), ["b", "a"]);
   });
-  it("prunes by TTL", () => {
+  it("prunes entries past the TTL via the injected clock", () => {
     const t = new RespondedTracker();
-    t.mark("old");
-    // simulate 61 minutes having passed: remove the entry via a fresh
-    // tracker constructed with a shifted clock is not supported, so verify
-    // TTL by checking the constant path: mark then verify had() flips false
-    // after we delete the id (clear semantics) and that a pruned-size cap
-    // holds with many ids.
-    t.clear("old");
-    assert.equal(t.had("old"), false);
+    t.mark("a", 0);
+    t.mark("b", 1000);
+    const past = PERMISSION_RESPONDED_TTL_MS + 2000;
+    assert.equal(t.had("a", past), false);
+    assert.equal(t.had("b", past), false);
+    // a freshly marked entry at `past` is still present
+    t.mark("c", past);
+    assert.equal(t.had("c", past), true);
+  });
+  it("keeps entries within the TTL", () => {
+    const t = new RespondedTracker();
+    t.mark("a", 0);
+    assert.equal(t.had("a", PERMISSION_RESPONDED_TTL_MS - 1), true);
   });
   it("caps the map at PERMISSION_RESPONDED_MAX", () => {
     const t = new RespondedTracker();
     for (let i = 0; i < 1100; i++) t.mark(`id-${i}`);
     assert.ok(t.order().length <= 1000);
+  });
+});
+
+describe("sameSessionPending", () => {
+  const list = [
+    { sessionID: "s1", requestID: "r1" },
+    { sessionID: "s1", requestID: "r2" },
+    { sessionID: "s2", requestID: "r3" },
+  ];
+  it("returns only same-session IDs, excluding the rejected one", () => {
+    assert.deepEqual(sameSessionPending(list, "s1", "r1"), ["r2"]);
+  });
+  it("returns [] when no other requests share the session", () => {
+    assert.deepEqual(sameSessionPending(list, "s2", "r3"), []);
+  });
+  it("excludes other sessions entirely", () => {
+    assert.deepEqual(sameSessionPending(list, "s1", "x"), ["r1", "r2"]);
   });
 });

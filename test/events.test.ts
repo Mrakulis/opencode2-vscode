@@ -70,6 +70,22 @@ describe("applyDelta", () => {
     data: { messageID: "m1", ...over },
   });
 
+  const withTool = (
+    toolName: string,
+    state: Record<string, unknown>,
+  ): AnyMessage[] => [
+    {
+      type: "assistant",
+      id: "m1",
+      agent: "build",
+      time: { created: 2 },
+      content: [
+        { type: "text", text: "Hel" },
+        { type: "tool", id: "t1", name: toolName, state },
+      ],
+    } as unknown as AnyMessage,
+  ];
+
   it("appends to an existing text part", () => {
     const out = applyDelta(base, evt({ text: "lo" }));
     assert.ok(out);
@@ -121,6 +137,38 @@ describe("applyDelta", () => {
     );    assert.equal(
       applyDelta(base, { type: "session.tool.progress", data: {} }),
       null,
+    );
+  });
+
+  it("appends tool output streamed via metadata.delta", () => {
+    const out = applyDelta(
+      withTool("bash", { content: [] }),
+      evt({ id: "t1", metadata: { delta: "hello" } }, "session.tool.progress"),
+    );
+    assert.ok(out);
+    const m = out![0] as Extract<AnyMessage, { type: "assistant" }>;
+    const tool = m.content[1] as {
+      state?: { content?: Array<{ type: string; text: string }> };
+    };
+    assert.deepEqual(tool.state?.content, [{ type: "text", text: "hello" }]);
+  });
+
+  it("streams write-tool input content live across deltas", () => {
+    const msgs = withTool("write", { input: JSON.stringify({ content: "" }) });
+    const out1 = applyDelta(
+      msgs,
+      evt({ id: "t1", delta: "line1" }, "session.tool.input.delta"),
+    );
+    const out2 = applyDelta(
+      out1!,
+      evt({ id: "t1", delta: "\nline2" }, "session.tool.input.delta"),
+    );
+    assert.ok(out2);
+    const m = out2![0] as Extract<AnyMessage, { type: "assistant" }>;
+    const tool = m.content[1] as { state?: { input?: { content: string } } };
+    assert.equal(
+      (tool.state?.input as { content: string }).content,
+      "line1\nline2",
     );
   });
 

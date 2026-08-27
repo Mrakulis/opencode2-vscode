@@ -45,15 +45,14 @@ export class RespondedTracker {
     }
   }
 
-  had(requestID: string): boolean {
+  had(requestID: string, now: number = Date.now()): boolean {
     // Prune here too: on an idle webview no mark() fires, so expired entries
     // would otherwise survive forever and block auto-reply for retried asks.
-    this.prune(Date.now());
+    this.prune(now);
     return this.map.has(requestID);
   }
 
-  mark(requestID: string): void {
-    const now = Date.now();
+  mark(requestID: string, now: number = Date.now()): void {
     this.prune(now);
     this.map.delete(requestID);
     this.map.set(requestID, now);
@@ -71,4 +70,19 @@ export class RespondedTracker {
   order(): string[] {
     return [...this.map.keys()];
   }
+}
+
+/**
+ * Request IDs (excluding `excludeRequestID`) that are still pending in the same
+ * session. Used to honour OpenCode's "rejecting one request rejects all pending
+ * in the session" contract when the user rejects a permission.
+ */
+export function sameSessionPending(
+  list: { sessionID: string; requestID: string }[],
+  sessionID: string,
+  excludeRequestID: string,
+): string[] {
+  return list
+    .filter((p) => p.sessionID === sessionID && p.requestID !== excludeRequestID)
+    .map((p) => p.requestID);
 }

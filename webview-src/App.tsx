@@ -28,6 +28,7 @@ import { applyDelta, type DeltaEvent } from "./lib/deltas";
 import {
   autoReplyFor,
   RespondedTracker,
+  sameSessionPending,
 } from "./lib/permissions";
 import { PROVIDERISH_RE } from "./lib/failure";
 import { HeaderBar } from "./components/HeaderBar";
@@ -1432,14 +1433,27 @@ export function App() {
       const target = permissions.find((p) => p.requestID === requestID);
       const finalReply: "once" | "always" | "reject" = reply === "session" ? "once" : reply;
       if (reply === "session" && target) autoAcceptSessionsRef.current.add(target.sessionID);
-      setPermissions((list) => list.filter((p) => p.requestID !== requestID));
       if (!target) return false;
+
+      // OpenCode cancels every pending permission request in the session when
+      // one is rejected; reject them together so the user isn't left dismissing
+      // each one by hand.
+      const toReject =
+        finalReply === "reject"
+          ? [requestID, ...sameSessionPending(permissions, target.sessionID, requestID)]
+          : [requestID];
+
+      setPermissions((list) => list.filter((p) => !toReject.includes(p.requestID)));
       try {
-        await rpc.call("permission.reply", {
-          sessionID: target.sessionID,
-          requestID,
-          reply: finalReply,
-        });
+        await Promise.all(
+          toReject.map((id) =>
+            rpc.call("permission.reply", {
+              sessionID: target.sessionID,
+              requestID: id,
+              reply: finalReply,
+            }),
+          ),
+        );
         return true;
       } catch {
         // Restore the card immediately (the agent is still blocked on it) and
