@@ -67,9 +67,7 @@ class RpcClient {
   }
 }
 
-function isRpcResult(
-  value: unknown,
-): value is {
+function isRpcResult(value: unknown): value is {
   type: "rpcResult";
   id: number;
   ok: boolean;
@@ -115,7 +113,13 @@ export interface SessionSummary {
     reasoning: number;
     cache: { read: number; write: number };
   };
-  time: { created: number; updated: number; idle?: number; archived?: number };
+  time: {
+    created: number;
+    updated: number;
+    idle?: number;
+    viewed?: number;
+    archived?: number;
+  };
   location: { directory: string };
 }
 

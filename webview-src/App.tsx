@@ -114,6 +114,10 @@ export function App() {
   const revertTargetRef = useRef<string | undefined>(undefined);
   const [connDetail, setConnDetail] = useState<string | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  /** IDs of sessions currently running in another window (from `sessions.active`). */
+  const [activeRunning, setActiveRunning] = useState<ReadonlySet<string>>(
+    new Set<string>(),
+  );
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<AnyMessage[]>([]);
   const [retryPending, setRetryPending] = useState(false);
@@ -159,9 +163,9 @@ export function App() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [plansOpen, setPlansOpen] = useState(false);
-  const [selectedSubagent, setSelectedSubagent] = useState<
-    string | undefined
-  >(undefined);
+  const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>(
+    undefined,
+  );
   /** Subagent runs (child sessions) of the active session. */
   const childSubs = useMemo(
     () => childrenOf(sessions, activeId),
@@ -175,7 +179,9 @@ export function App() {
   >(undefined);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
   /** Workspace folder — fallback for `@` when no session is active. */
-  const [workspaceDir, setWorkspaceDir] = useState<string | undefined>(undefined);
+  const [workspaceDir, setWorkspaceDir] = useState<string | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (conn !== "connected") return;
     void rpc
@@ -218,7 +224,8 @@ export function App() {
     const id = active?.agent?.toLowerCase() ?? "";
     if (id.includes("plan")) return "plan";
     if (id.includes("build")) return "build";
-    const name = agents.find((a) => a.id === active?.agent)?.name?.toLowerCase() ?? "";
+    const name =
+      agents.find((a) => a.id === active?.agent)?.name?.toLowerCase() ?? "";
     if (name.includes("plan")) return "plan";
     if (name.includes("build")) return "build";
     return "other";
@@ -226,7 +233,16 @@ export function App() {
 
   /** Server-driven auto-retry state (SessionRetry) for visibility. */
   const [retryInfo, setRetryInfo] = useState<
-    | { attempt?: number; message?: string; action?: { title?: string; message?: string; label?: string; link?: string } }
+    | {
+        attempt?: number;
+        message?: string;
+        action?: {
+          title?: string;
+          message?: string;
+          label?: string;
+          link?: string;
+        };
+      }
     | undefined
   >(undefined);
 
@@ -244,7 +260,7 @@ export function App() {
   const autoAcceptSessionsRef = useRef(new Set<string>());
   const respondedRef = useRef(new RespondedTracker());
 
-   // Keep a ref of activeId so push handlers never go stale.
+  // Keep a ref of activeId so push handlers never go stale.
   const activeIdRef = useRef(activeId);
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -253,9 +269,7 @@ export function App() {
   /** `"providerID/id"` of the active session's bound model (failure tracking). */
   const activeModelKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    const m = active?.model as
-      | { id?: string; providerID?: string }
-      | undefined;
+    const m = active?.model as { id?: string; providerID?: string } | undefined;
     activeModelKeyRef.current =
       m?.providerID && m?.id ? `${m.providerID}/${m.id}` : undefined;
   }, [active]);
@@ -289,6 +303,39 @@ export function App() {
     [allProjects],
   );
 
+  /** Refetch the set of sessions running in ANY client (cross-window indicator). */
+  const refreshActiveSessions = useCallback(async () => {
+    try {
+      const running = await rpc.call<string[]>("sessions.active");
+      setActiveRunning(new Set(running));
+    } catch {
+      /* not connected — keep last known set */
+    }
+  }, []);
+
+  // Mark the active session "viewed" server-side whenever it is selected (and
+  // cleared its unread dot). Server-authoritative: unread = idle > viewed. We
+  // optimistically reflect the viewed marker locally so repeated refresh cycles
+  // don't keep re-firing the same view call.
+  useEffect(() => {
+    if (!activeId) return;
+    const s = sessions.find((x) => x.id === activeId);
+    if (!s) return;
+    const idle = s.time.idle ?? 0;
+    const viewed = s.time.viewed ?? 0;
+    if (idle <= viewed) return;
+    void rpc
+      .call("session.view", { sessionID: activeId, idle })
+      .catch(() => undefined);
+    setSessions((list) =>
+      list.map((x) =>
+        x.id === activeId && (x.time.idle ?? 0) > (x.time.viewed ?? 0)
+          ? { ...x, time: { ...x.time, viewed: idle } }
+          : x,
+      ),
+    );
+  }, [activeId, sessions]);
+
   const refreshMessages = useCallback(async (sessionId: string) => {
     try {
       const list = await rpc.call<AnyMessage[]>("messages.list", {
@@ -313,7 +360,8 @@ export function App() {
         const lm = localById.get((m as { id?: string }).id ?? "") as unknown as
           | { type?: string; content?: Array<Record<string, unknown>> }
           | undefined;
-        if (!lm || lm.type !== "assistant" || !Array.isArray(lm.content)) return m;
+        if (!lm || lm.type !== "assistant" || !Array.isArray(lm.content))
+          return m;
         // Overlay rules (stream-lag protection):
         //  - text/reasoning: only the LAST local part of each kind may
         //    overlay, and only when it EXTENDS the server snapshot
@@ -401,7 +449,9 @@ export function App() {
           // Strip reminder text/reasoning parts even inside assistant content.
           const c = (m as { content?: Array<{ text?: string }> }).content;
           if (!Array.isArray(c)) return true;
-          const kept = c.filter((p) => !(typeof p?.text === "string" && REMINDER_RE.test(p.text)));
+          const kept = c.filter(
+            (p) => !(typeof p?.text === "string" && REMINDER_RE.test(p.text)),
+          );
           (m as { content?: Array<{ text?: string }> }).content = kept;
           return kept.length > 0;
         }
@@ -423,7 +473,9 @@ export function App() {
       }>;
       const lastA = assistants[assistants.length - 1];
       if (lastA?.finish === "error" && lastA.error) {
-        const msg = String(lastA.error.message ?? lastA.error.type ?? "unknown error");
+        const msg = String(
+          lastA.error.message ?? lastA.error.type ?? "unknown error",
+        );
         const key =
           lastA.model?.providerID && lastA.model?.id
             ? `${lastA.model.providerID}/${lastA.model.id}`
@@ -431,8 +483,7 @@ export function App() {
         lastFailureRef.current = {
           ...(key ? { modelKey: key } : {}),
           message: msg,
-          providerish:
-            PROVIDERISH_RE.test(msg),
+          providerish: PROVIDERISH_RE.test(msg),
         };
       } else if (lastA && lastA.finish && lastA.finish !== "error") {
         lastFailureRef.current = undefined;
@@ -673,6 +724,7 @@ export function App() {
               void refreshPendingPermissions(true);
               void refreshForms();
               void refreshQueued();
+              void refreshActiveSessions();
               setActiveId((current) => {
                 if (!current) {
                   // Restore the last-open session when it still exists; else
@@ -701,6 +753,7 @@ export function App() {
             void refreshPendingPermissions(true);
             void refreshForms();
             void refreshQueued();
+            void refreshActiveSessions();
             setActiveId((current) => {
               if (current) {
                 void refreshMessages(current);
@@ -759,7 +812,10 @@ export function App() {
               const batch = [...pendingActions];
               pendingActions.clear();
               for (const a of batch) {
-                if (a === "sessions") void refreshSessions();
+                if (a === "sessions") {
+                  void refreshSessions();
+                  void refreshActiveSessions();
+                }
                 if (a === "pickers") void refreshPickers();
                 if (a === "permissions") void refreshPendingPermissions();
                 if (a === "forms") void refreshForms();
@@ -796,9 +852,13 @@ export function App() {
                     ? d.text
                     : undefined;
               if (id && chunk) {
-                const kind = evt.type === "session.reasoning.delta" ? "reasoning" : "text";
+                const kind =
+                  evt.type === "session.reasoning.delta" ? "reasoning" : "text";
                 const key = `${id}|${kind}`;
-                deltaAccRef.current.set(key, (deltaAccRef.current.get(key) ?? "") + chunk);
+                deltaAccRef.current.set(
+                  key,
+                  (deltaAccRef.current.get(key) ?? "") + chunk,
+                );
               }
             }
 
@@ -835,28 +895,31 @@ export function App() {
             // Server-driven auto-retry (SessionRetry) visibility.
             if (evt.type === "session.retry.scheduled") {
               const d = evt.data as
-                | { attempt?: number; error?: { message?: string } }
-                | undefined;
+                { attempt?: number; error?: { message?: string } } | undefined;
               setBusySessions((b) => ({ ...b, [sid]: true }));
-              setRetryInfo({ attempt: d?.attempt ?? 1, message: d?.error?.message });
+              setRetryInfo({
+                attempt: d?.attempt ?? 1,
+                message: d?.error?.message,
+              });
               setRetryPending(false);
             }
             if (evt.type === "session.status") {
               const st = (
-                evt.data as {
-                  status?: {
-                    type?: string;
-                    attempt?: number;
-                    message?: string;
-                    action?: {
-                      title?: string;
-                      message?: string;
-                      label?: string;
-                      link?: string;
-                    };
-                  };
-                }
-              | undefined
+                evt.data as
+                  | {
+                      status?: {
+                        type?: string;
+                        attempt?: number;
+                        message?: string;
+                        action?: {
+                          title?: string;
+                          message?: string;
+                          label?: string;
+                          link?: string;
+                        };
+                      };
+                    }
+                  | undefined
               )?.status;
               if (st?.type === "retry") {
                 setBusySessions((b) => ({ ...b, [sid]: true }));
@@ -884,8 +947,7 @@ export function App() {
                 // Surface the server-side reason immediately.
                 const err = (
                   evt.data as
-                    | { error?: { message?: string; type?: string } }
-                    | undefined
+                    { error?: { message?: string; type?: string } } | undefined
                 )?.error;
                 const msg = err?.message || err?.type || "execution failed";
                 lastFailureRef.current = {
@@ -893,9 +955,7 @@ export function App() {
                     ? { modelKey: activeModelKeyRef.current }
                     : {}),
                   message: msg,
-                  providerish: PROVIDERISH_RE.test(
-                    msg,
-                  ),
+                  providerish: PROVIDERISH_RE.test(msg),
                 };
                 setNotice(`Run failed — ${msg}`);
                 const isProvR = PROVIDERISH_RE.test(msg);
@@ -913,8 +973,7 @@ export function App() {
               }
             }
             // Compaction progress pill.
-            if (evt.type === "session.compaction.started")
-              setCompacting(true);
+            if (evt.type === "session.compaction.started") setCompacting(true);
             if (
               evt.type === "session.compaction.ended" ||
               evt.type === "session.compaction.failed"
@@ -926,8 +985,7 @@ export function App() {
 
           if (evt.type === "permission.asked") {
             const data = evt.data as unknown as
-              | (PermissionCardData & { id?: string })
-              | undefined;
+              (PermissionCardData & { id?: string }) | undefined;
             // SDK field is `id`; tolerate `requestID` for older betas.
             const requestID = data?.id ?? data?.requestID;
             if (data?.sessionID && requestID) {
@@ -971,15 +1029,15 @@ export function App() {
       clearTimeout(sessionTimer);
       clearTimeout(messageTimer);
     };
-   }, [
-     refreshSessions,
-     refreshMessages,
-     refreshPickers,
-     refreshPendingPermissions,
-     refreshForms,
-     refreshQueued,
-     selectSession,
-   ]);
+  }, [
+    refreshSessions,
+    refreshMessages,
+    refreshPickers,
+    refreshPendingPermissions,
+    refreshForms,
+    refreshQueued,
+    selectSession,
+  ]);
 
   const restartService = useCallback(async () => {
     try {
@@ -1070,9 +1128,18 @@ export function App() {
       );
       return undefined;
     }
-  }, [cfg, serverDefault, lastUsedModel, models, refreshSessions, selectSession]);
+  }, [
+    cfg,
+    serverDefault,
+    lastUsedModel,
+    models,
+    refreshSessions,
+    selectSession,
+  ]);
 
-  const ensureSessionForSend = useCallback(async (): Promise<string | undefined> => {
+  const ensureSessionForSend = useCallback(async (): Promise<
+    string | undefined
+  > => {
     if (activeIdRef.current) return activeIdRef.current;
     // Only auto-create when the project genuinely has no sessions (not just no selection).
     if (sessions.length > 0) {
@@ -1105,7 +1172,9 @@ export function App() {
         }
       }
       if (!text.trim() && (!files || files.length === 0)) return;
-      const optimistic: Extract<AnyMessage, { type: "user" }> & { planAtSend?: "plan" | "build" } = {
+      const optimistic: Extract<AnyMessage, { type: "user" }> & {
+        planAtSend?: "plan" | "build";
+      } = {
         type: "user",
         id: `pending-${Date.now()}`,
         text:
@@ -1134,7 +1203,10 @@ export function App() {
         if (used) {
           setLastUsedModel(used);
           void rpc
-            .call("ui.lastModel.set", { id: used.id, providerID: used.providerID })
+            .call("ui.lastModel.set", {
+              id: used.id,
+              providerID: used.providerID,
+            })
             .catch(() => undefined);
         }
         // The optimistic bubble must not hang if the first refetch raced the
@@ -1152,7 +1224,14 @@ export function App() {
         throw error;
       }
     },
-    [activeId, sessions.length, newSession, refreshMessages, refreshQueued, isPlan],
+    [
+      activeId,
+      sessions.length,
+      newSession,
+      refreshMessages,
+      refreshQueued,
+      isPlan,
+    ],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -1174,7 +1253,9 @@ export function App() {
         undefined,
         cfg?.models.default ?? "",
         serverDefault,
-        models,
+        // Never pick the very model that just failed — otherwise the repair
+        // "switches" to the same broken default and re-runs it.
+        models.filter((m) => `${m.providerID}/${m.id}` !== failure.modelKey),
       );
       const candidateKey = candidate
         ? `${candidate.providerID}/${candidate.id}`
@@ -1209,7 +1290,9 @@ export function App() {
       try {
         await sendMessage(
           retained.text,
-          retained.files && retained.files.length > 0 ? retained.files : undefined,
+          retained.files && retained.files.length > 0
+            ? retained.files
+            : undefined,
         );
       } catch {
         /* failure state already surfaced */
@@ -1224,13 +1307,19 @@ export function App() {
       const clean: Array<{ uri: string; name?: string }> = [];
       for (const f of raw as Array<Record<string, unknown>>) {
         if (typeof f?.uri === "string") {
-          clean.push({ uri: f.uri, name: typeof f.name === "string" ? f.name : undefined });
+          clean.push({
+            uri: f.uri,
+            name: typeof f.name === "string" ? f.name : undefined,
+          });
         }
       }
       return clean.length > 0 ? clean : undefined;
     })();
     try {
-      await sendMessage(last.text, files && files.length > 0 ? files : undefined);
+      await sendMessage(
+        last.text,
+        files && files.length > 0 ? files : undefined,
+      );
     } catch {
       /* composer/props surface the error; retryPending stays set */
     }
@@ -1256,8 +1345,6 @@ export function App() {
     },
     [],
   );
-
-
 
   /** Export the session in V2 transfer format (JSON, re-importable). */
   const exportSession = useCallback(async () => {
@@ -1474,8 +1561,10 @@ export function App() {
       reply: "once" | "always" | "reject" | "session",
     ): Promise<boolean> => {
       const target = permissions.find((p) => p.requestID === requestID);
-      const finalReply: "once" | "always" | "reject" = reply === "session" ? "once" : reply;
-      if (reply === "session" && target) autoAcceptSessionsRef.current.add(target.sessionID);
+      const finalReply: "once" | "always" | "reject" =
+        reply === "session" ? "once" : reply;
+      if (reply === "session" && target)
+        autoAcceptSessionsRef.current.add(target.sessionID);
       if (!target) return false;
 
       // OpenCode cancels every pending permission request in the session when
@@ -1483,10 +1572,15 @@ export function App() {
       // each one by hand.
       const toReject =
         finalReply === "reject"
-          ? [requestID, ...sameSessionPending(permissions, target.sessionID, requestID)]
+          ? [
+              requestID,
+              ...sameSessionPending(permissions, target.sessionID, requestID),
+            ]
           : [requestID];
 
-      setPermissions((list) => list.filter((p) => !toReject.includes(p.requestID)));
+      setPermissions((list) =>
+        list.filter((p) => !toReject.includes(p.requestID)),
+      );
       try {
         await Promise.all(
           toReject.map((id) =>
@@ -1502,7 +1596,9 @@ export function App() {
         // Restore the card immediately (the agent is still blocked on it) and
         // schedule a fresh sync in case our copy is stale.
         setPermissions((list) =>
-          list.some((p) => p.requestID === requestID) ? list : [...list, target],
+          list.some((p) => p.requestID === requestID)
+            ? list
+            : [...list, target],
         );
         respondedRef.current.clear(requestID);
         void refreshPendingPermissions();
@@ -1516,7 +1612,8 @@ export function App() {
   // mirroring upstream's session/directory auto-accept map).
   useEffect(() => {
     if (!activeId) return;
-    if (permissionMode === "autoAllow") autoAcceptSessionsRef.current.add(activeId);
+    if (permissionMode === "autoAllow")
+      autoAcceptSessionsRef.current.add(activeId);
     else autoAcceptSessionsRef.current.delete(activeId);
   }, [activeId, permissionMode]);
 
@@ -1767,7 +1864,7 @@ export function App() {
                     void rpc.call("settings.open").catch(() => undefined)
                   }
                 >
-                                    Open Settings
+                  Open Settings
                 </button>
               </>
             ) : (
@@ -1853,12 +1950,16 @@ export function App() {
             }
             onCopyMessage={(m) => {
               const t = (m as { text?: unknown }).text;
-              const parts = (m as { content?: Array<{ text?: string }> }).content;
+              const parts = (m as { content?: Array<{ text?: string }> })
+                .content;
               const md =
                 typeof t === "string"
                   ? t
                   : Array.isArray(parts)
-                    ? parts.filter((p) => p?.text).map((p) => p.text).join("\n")
+                    ? parts
+                        .filter((p) => p?.text)
+                        .map((p) => p.text)
+                        .join("\n")
                     : "";
               void rpc
                 .call("transcript.copy", { markdown: md })
@@ -1880,6 +1981,7 @@ export function App() {
           <SessionsDrawer
             sessions={sessions}
             activeId={activeId}
+            runningIds={activeRunning}
             allProjects={allProjects}
             onToggleAll={() => {
               const next = !allProjects;
@@ -1893,12 +1995,10 @@ export function App() {
             onNew={() => void newSession()}
             onDelete={async (id) => {
               let removed = true;
-              await rpc
-                .call("session.remove", { sessionID: id })
-                .catch(() => {
-                  removed = false;
-                  setNotice(`Couldn't delete session ${id}`);
-                });
+              await rpc.call("session.remove", { sessionID: id }).catch(() => {
+                removed = false;
+                setNotice(`Couldn't delete session ${id}`);
+              });
               // Only deselect when the removal actually succeeded — otherwise
               // the feed flips to the empty state while the session still exists.
               if (removed && id === activeId) selectSession(undefined);
@@ -1990,63 +2090,83 @@ export function App() {
               <div className="composer-error dock-error">{actionError}</div>
             )}
 
-            
             {forms.map((f) => (
               <FormCard key={f.id} form={f} />
             ))}
 
-            {showPermissions && interactivePerms.some((p) => p.files?.length) && (
-              /* Review-Diffs summary strip (Module 1): every proposed file
+            {showPermissions &&
+              interactivePerms.some((p) => p.files?.length) && (
+                /* Review-Diffs summary strip (Module 1): every proposed file
                  change across pending interactive edit permissions with ± counts. */
-              <div className="dock-status" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                <span
-                  className="micro"
-                  style={{ opacity: 0.75 }}
-                  title="Proposed changes waiting for approval — nothing is written to disk yet"
+                <div
+                  className="dock-status"
+                  style={{ flexDirection: "column", alignItems: "stretch" }}
                 >
-                  ⇔ Proposed changes
-                </span>
-                {interactivePerms
-                  .flatMap((p) => (p.files ?? []).map((f) => ({ perm: p, f })))
-                  .map(({ perm, f }, i) => (
-                    <div
-                      key={`${perm.requestID}:${i}`}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <code style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {f.status === "added" ? "+" : f.status === "deleted" ? "−" : ""}
-                        {f.file}
-                      </code>
-                      <span className="micro">
-                        {typeof f.additions === "number" ? `+${f.additions}` : ""}{" "}
-                        {typeof f.deletions === "number" ? `−${f.deletions}` : ""}
-                      </span>
-                      <button
-                        type="button"
-                        className="chip"
-                        title="Open side-by-side diff of the proposed changes"
-                        onClick={() =>
-                          void rpc
-                            .call("diff.previewPreApply", {
-                              file: f.file,
-                              patch: f.patch,
-                              additions: f.additions,
-                              deletions: f.deletions,
-                              status: f.status,
-                            })
-                            .catch(() => undefined)
-                        }
+                  <span
+                    className="micro"
+                    style={{ opacity: 0.75 }}
+                    title="Proposed changes waiting for approval — nothing is written to disk yet"
+                  >
+                    ⇔ Proposed changes
+                  </span>
+                  {interactivePerms
+                    .flatMap((p) =>
+                      (p.files ?? []).map((f) => ({ perm: p, f })),
+                    )
+                    .map(({ perm, f }, i) => (
+                      <div
+                        key={`${perm.requestID}:${i}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
                       >
-                        ⇔ Review
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            )}
+                        <code
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {f.status === "added"
+                            ? "+"
+                            : f.status === "deleted"
+                              ? "−"
+                              : ""}
+                          {f.file}
+                        </code>
+                        <span className="micro">
+                          {typeof f.additions === "number"
+                            ? `+${f.additions}`
+                            : ""}{" "}
+                          {typeof f.deletions === "number"
+                            ? `−${f.deletions}`
+                            : ""}
+                        </span>
+                        <button
+                          type="button"
+                          className="chip"
+                          title="Open side-by-side diff of the proposed changes"
+                          onClick={() =>
+                            void rpc
+                              .call("diff.previewPreApply", {
+                                file: f.file,
+                                patch: f.patch,
+                                additions: f.additions,
+                                deletions: f.deletions,
+                                status: f.status,
+                              })
+                              .catch(() => undefined)
+                          }
+                        >
+                          ⇔ Review
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
 
             {autoPerms.length > 0 && (
               /* Auto-acknowledged permissions: plain, non-blocking text — the
@@ -2088,7 +2208,11 @@ export function App() {
                   if (e.key === "a" || e.key === "A") {
                     e.preventDefault();
                     void replyPermission(first.requestID, "always");
-                  } else if (e.key === "d" || e.key === "D" || e.key === "Escape") {
+                  } else if (
+                    e.key === "d" ||
+                    e.key === "D" ||
+                    e.key === "Escape"
+                  ) {
                     e.preventDefault();
                     void replyPermission(first.requestID, "reject");
                   } else if (e.key === "Enter") {
@@ -2123,7 +2247,6 @@ export function App() {
                 ))}
               </div>
             )}
-
           </div>
         );
       })()}
@@ -2159,7 +2282,7 @@ export function App() {
       )}
 
       <Composer
-        disabled={((!activeId && sessions.length > 0) || conn !== "connected")}
+        disabled={(!activeId && sessions.length > 0) || conn !== "connected"}
         busy={busy}
         directory={composerDirectory}
         sendKey={cfg?.ui.sendKey ?? "enter"}
@@ -2254,7 +2377,10 @@ export function App() {
           if (am) {
             setLastUsedModel({ id: am.id, providerID: am.providerID });
             void rpc
-              .call("ui.lastModel.set", { id: am.id, providerID: am.providerID })
+              .call("ui.lastModel.set", {
+                id: am.id,
+                providerID: am.providerID,
+              })
               .catch(() => undefined);
           }
           if (activeId && am) {

@@ -164,6 +164,52 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     inboxQueue: (sessionID: string, inboxID: string): Promise<void> =>
       getClient().session.inbox.queue({ sessionID, inboxID }),
 
+    // -- ambient state (active sessions / unread / auto-title) ------------------
+    /** IDs of sessions currently running in the foreground of ANY client. */
+    sessionActive: async (): Promise<string[]> => {
+      const res = (await getClient().session.active()) as unknown;
+      // This beta returns a bare object map `{ [sessionID]: { type: "running" } }`.
+      // Guard both shapes — an array wrapper or wrapped `{ data }` object.
+      if (Array.isArray(res)) {
+        return (res as Array<{ id?: unknown }>)
+          .map((r) => (typeof r.id === "string" ? r.id : ""))
+          .filter(Boolean);
+      }
+      const rec = (res ?? {}) as Record<string, unknown>;
+      const inner = (rec.data ?? rec) as Record<string, unknown>;
+      return Object.entries(inner)
+        .filter(
+          ([, v]) =>
+            v === "running" ||
+            (typeof v === "object" &&
+              v !== null &&
+              (v as { type?: unknown }).type === "running"),
+        )
+        .map(([k]) => k);
+    },
+    /** Mark a session's idle transition as viewed (clears its unread dot). */
+    sessionView: (sessionID: string, idle: number): Promise<void> =>
+      getClient().session.view({ sessionID, idle }),
+    /** Transient title text generated from session context (no history mutation). */
+    sessionGenerate: async (
+      sessionID: string,
+      prompt: string,
+    ): Promise<string | undefined> => {
+      const res = (await getClient().session.generate({
+        sessionID,
+        prompt,
+      })) as unknown;
+      const d = (res ?? {}) as { data?: unknown };
+      const text = (
+        d.data && typeof d.data === "object"
+          ? (d.data as Record<string, unknown>).text
+          : typeof res === "object" && res !== null
+            ? (d as { text?: unknown }).text
+            : undefined
+      ) as unknown;
+      return typeof text === "string" && text.length > 0 ? text : undefined;
+    },
+
     // -- pickers -------------------------------------------------------------
     models: async (): Promise<Array<ModelInfo & { context: number }>> => {
       const rows = asRows<ModelRow>(await getClient().model.list());
@@ -229,7 +275,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       const { Service } = await import("@opencode-ai/client/service");
       const endpoint = await Service.discover().catch(() => undefined);
       if (!endpoint) return [];
-      const headers = Service.headers(endpoint) as unknown as Record<string, string>;
+      const headers = Service.headers(endpoint) as unknown as Record<
+        string,
+        string
+      >;
       const fetchList = async (
         url: string,
       ): Promise<Array<Record<string, unknown>>> => {
@@ -240,7 +289,9 @@ export function createApi({ getClient }: ApiAdapterDeps) {
           const rows = Array.isArray(data)
             ? data
             : ((data as { data?: unknown[] }).data ?? []);
-          return (Array.isArray(rows) ? rows : []) as Array<Record<string, unknown>>;
+          return (Array.isArray(rows) ? rows : []) as Array<
+            Record<string, unknown>
+          >;
         } catch {
           return [];
         }
@@ -267,7 +318,8 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     ): Promise<void> => {
       const { Service } = await import("@opencode-ai/client/service");
       const endpoint = await Service.discover().catch(() => undefined);
-      if (!endpoint) throw new Error("No service discovered for question reply");
+      if (!endpoint)
+        throw new Error("No service discovered for question reply");
       const url = `${endpoint.url}/api/session/${sessionID}/question/${requestID}/reply`;
       const res = await fetch(url, {
         method: "POST",
@@ -284,7 +336,9 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         // openapi.json). Distinguish that from a bad request so the UI can
         // fall back to a steered prompt instead of showing a scary error.
         if (res.status === 404) {
-          const e = new Error(text || "Question reply failed: 404") as Error & { code?: string };
+          const e = new Error(text || "Question reply failed: 404") as Error & {
+            code?: string;
+          };
           e.code = "QuestionHTTPUnavailable";
           throw e;
         }
@@ -463,7 +517,10 @@ export function createApi({ getClient }: ApiAdapterDeps) {
           const found: string[] = [];
           const walk = (v: unknown): void => {
             if (!v || typeof v !== "object") return;
-            if (Array.isArray(v)) { v.forEach(walk); return; }
+            if (Array.isArray(v)) {
+              v.forEach(walk);
+              return;
+            }
             const rec = v as Record<string, unknown>;
             if (rec.type === "oauth" && typeof rec.id === "string")
               found.push(rec.id);
@@ -549,7 +606,7 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         return out
           .map((r) =>
             typeof (r as { patch?: unknown }).patch === "string"
-              ? ((r as { patch: string }).patch)
+              ? (r as { patch: string }).patch
               : "",
           )
           .filter(Boolean)

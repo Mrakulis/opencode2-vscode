@@ -34,6 +34,8 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 - **Code Mode visualizer** — sandboxed `execute` tool calls render as highlighted code blocks with a live tool-call timeline and a separate output pane; per-server Code Mode toggle in the MCP drawer
 - **Plan checklist** (`⋯` menu) — interactive `implementation_plan.md` checklist with a "Run Next Task" prompt button
 - **Resilient connection** — reconnects with backoff + full resync; a non-blocking banner offers Restart Background Service during drops; last-open session is restored after reloads
+- **Session awareness** — unread dots on sessions that finished while you weren't looking (server-tracked `idle`/`viewed`, clears on open and syncs to other windows/TUI), plus a pulsing indicator for sessions running in another client window (`session.active`)
+- **Auto-title (opt-in)** — after a session's first completed turn, a short title is generated (`session.generate`) and applied — unless you named it yourself
 - **Own theme system** — OpenCode Dark & Light plus Tokyo Night, Gruvbox, Nord and Catppuccin presets (cycle from the `⋯` menu or pick in settings); compact/comfortable density
 
 ## Requirements
@@ -98,6 +100,7 @@ The extension is developed and tested against a specific client pin (`@opencode-
 | `notifications.errors` | `false` | Failed-run notifications |
 | `permissions.mode` | `askFirst` | Ask first / Auto allow / Deny |
 | `agent.autoCompactThreshold` | `0` | Percent of context that triggers auto-compact |
+| `sessions.autoTitle` | `false` | Auto-generate a title after a session's first completed turn (spends provider tokens; manual renames are never overridden) |
 
 ## Workspaces
 

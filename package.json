@@ -282,6 +282,11 @@
           "maximum": 95,
           "markdownDescription": "Auto-compact a session when context usage reaches this percent. `0` disables."
         },
+        "opencode2.sessions.autoTitle": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Auto-generate a short, descriptive title for a session after its first completed turn (`session.generate`, then rename). Off by default because it spends provider tokens. A manual rename is never overridden."
+        },
         "opencode2.notifications.permissions": {
           "type": "boolean",
           "default": true,

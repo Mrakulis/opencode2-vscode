@@ -50,6 +50,13 @@ export function createRpcDispatcher(
     const v = params[key];
     return typeof v === "string" && v.length > 0 ? v : undefined;
   };
+  const num = (params: Record<string, unknown>, key: string): number => {
+    const v = params[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v)))
+      return Number(v);
+    throw new Error(`rpc: missing numeric '${key}'`);
+  };
 
   /** Handlers may register incrementally; unknown methods are reported, not thrown. */
   const handlers: Partial<Record<RpcMethod, Handler>> = {
@@ -76,6 +83,8 @@ export function createRpcDispatcher(
     "session.rename": (p) =>
       api.sessionRename(str(p, "sessionID"), str(p, "title")),
     "session.fork": (p) => api.fork(str(p, "sessionID")),
+    "sessions.active": () => api.sessionActive(),
+    "session.view": (p) => api.sessionView(str(p, "sessionID"), num(p, "idle")),
     "transcript.copy": (p) => {
       const text = str(p, "markdown");
       return Promise.resolve(vscode.env.clipboard.writeText(text));
@@ -167,16 +176,27 @@ export function createRpcDispatcher(
       ),
     "files.find": (p) => {
       const dir = optStr(p, "directory");
-      return api.findFiles(str(p, "query"), dir ? canonicalizeDirectory(dir) : undefined);
+      return api.findFiles(
+        str(p, "query"),
+        dir ? canonicalizeDirectory(dir) : undefined,
+      );
     },
     "service.restart": () => controller.restart(),
     "cli.start": async () => {
       // Strictly opencode2 — never fall back to legacy `opencode` (v1).
       const log = new Log();
       const cli = await resolveCliImpl(log);
-      if (!cli) throw new Error("OpenCode CLI (opencode2) not found — install via `npm i -g opencode-ai@beta` or set opencode2.cliPath");
-      if (!cli.display.includes("opencode2") && !cli.program.includes("opencode2")) {
-        throw new Error(`Resolved CLI is not opencode2: ${cli.display} — please install opencode2`);
+      if (!cli)
+        throw new Error(
+          "OpenCode CLI (opencode2) not found — install via `npm i -g opencode-ai@beta` or set opencode2.cliPath",
+        );
+      if (
+        !cli.display.includes("opencode2") &&
+        !cli.program.includes("opencode2")
+      ) {
+        throw new Error(
+          `Resolved CLI is not opencode2: ${cli.display} — please install opencode2`,
+        );
       }
       await controller.connect();
       return true;
@@ -243,8 +263,13 @@ export function createRpcDispatcher(
     "question.list": (p) => api.questionList(str(p, "sessionID")),
     "question.reply": (p) => {
       const answers = p.answers as unknown;
-      if (!Array.isArray(answers)) throw new Error("rpc: answers must be string[][]");
-      return api.questionReply(str(p, "sessionID"), str(p, "requestID"), answers as string[][]);
+      if (!Array.isArray(answers))
+        throw new Error("rpc: answers must be string[][]");
+      return api.questionReply(
+        str(p, "sessionID"),
+        str(p, "requestID"),
+        answers as string[][],
+      );
     },
 
     // -- session parity ---------------------------------------------------------
@@ -509,11 +534,20 @@ export function createRpcDispatcher(
       const file = str(p, "file");
       const patch = str(p, "patch");
       const status = optStr(p, "status");
-      const additions = typeof p.additions === "number" ? p.additions : undefined;
-      const deletions = typeof p.deletions === "number" ? p.deletions : undefined;
-      return diffPreview.preview({ file, patch, additions, deletions, status } satisfies WireFileDiff);
+      const additions =
+        typeof p.additions === "number" ? p.additions : undefined;
+      const deletions =
+        typeof p.deletions === "number" ? p.deletions : undefined;
+      return diffPreview.preview({
+        file,
+        patch,
+        additions,
+        deletions,
+        status,
+      } satisfies WireFileDiff);
     },
-    "diff.open": async (p) => {      const file = str(p, "file");
+    "diff.open": async (p) => {
+      const file = str(p, "file");
       const diff = optStr(p, "diff") ?? "";
       if (diff) {
         const doc = await vscode.workspace.openTextDocument({
@@ -598,7 +632,8 @@ export function createRpcDispatcher(
     handle,
     getActiveSessionId,
     /** Last session the user had open (persisted in workspaceState). */
-    getLastSession: (): string | undefined => storage?.get<string>("lastSession"),
+    getLastSession: (): string | undefined =>
+      storage?.get<string>("lastSession"),
     /** Disposable for the pre-apply diff document provider. */
     previews: diffPreview,
   };
@@ -618,8 +653,8 @@ export function preferredDirectory(): string | undefined {
   const editor = vscode.window.activeTextEditor;
   let candidate: string | undefined;
   if (editor) {
-    candidate = vscode.workspace.getWorkspaceFolder(editor.document.uri)
-      ?.uri.fsPath;
+    candidate = vscode.workspace.getWorkspaceFolder(editor.document.uri)?.uri
+      .fsPath;
   }
   if (!candidate) {
     const fallback =

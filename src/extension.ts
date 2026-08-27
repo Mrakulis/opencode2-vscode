@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { installCli, resolveCli } from "./cli";
 import { AutoCompactWatcher } from "./autoCompact";
+import { AutoTitleWatcher } from "./autoTitle";
 import { OpenCodeController } from "./controller";
 import { Log } from "./log";
 import { NotificationService } from "./notifications";
@@ -18,6 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const provider = new SidebarProvider(context.extensionUri, controller, rpc);
   const autoCompact = new AutoCompactWatcher(controller, log);
+  const autoTitle = new AutoTitleWatcher(controller, log);
   const notifications = new NotificationService(
     controller,
     rpc.getActiveSessionId,
@@ -48,7 +50,8 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         case "error": {
           statusBar.text = "$(warning) OpenCode";
-          statusBar.tooltip = "OpenCode connection error — click to open the sidebar";
+          statusBar.tooltip =
+            "OpenCode connection error — click to open the sidebar";
           statusBar.backgroundColor = new vscode.ThemeColor(
             "statusBarItem.warningBackground",
           );
@@ -69,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
     log,
     controller,
     autoCompact,
+    autoTitle,
     notifications,
     rpc.previews,
     vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, provider, {

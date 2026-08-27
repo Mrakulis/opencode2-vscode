@@ -10,6 +10,8 @@ import type { SessionSummary } from "../lib/rpc";
 interface Props {
   sessions: SessionSummary[];
   activeId?: string;
+  /** Sessions currently running in ANY client window (cross-window pulse). */
+  runningIds?: ReadonlySet<string>;
   allProjects: boolean;
   onToggleAll(): void;
   onSelect(id: string): void;
@@ -22,6 +24,7 @@ interface Props {
 export function SessionsDrawer({
   sessions,
   activeId,
+  runningIds,
   allProjects,
   onToggleAll,
   onSelect,
@@ -95,70 +98,91 @@ export function SessionsDrawer({
             )}
           </div>
         )}
-        {filtered.map((s) => (
-          <div
-            key={s.id}
-            className={`session-row${s.id === activeId ? " active" : ""}`}
-            onClick={() => onSelect(s.id)}
-            role="presentation"
-          >
-            <span className="session-title">{s.title ?? "Untitled"}</span>
-            <span className="session-meta">
-              {formatTokens(totalTokens(s.tokens))} tok · {formatCost(s.cost)} ·{" "}
-              {relativeTime(s.time.updated)}
-            </span>
-            {confirming === s.id ? (
-              <span className="confirm">
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void onDelete(s.id);
-                    setConfirming(undefined);
-                  }}
-                >
-                  delete
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirming(undefined);
-                  }}
-                >
-                  keep
-                </button>
+        {filtered.map((s) => {
+          const unread = (s.time.idle ?? 0) > (s.time.viewed ?? 0);
+          const running = runningIds?.has(s.id) ?? false;
+          return (
+            <div
+              key={s.id}
+              className={`session-row${s.id === activeId ? " active" : ""}${
+                unread ? " unread" : ""
+              }${running ? " running" : ""}`}
+              onClick={() => onSelect(s.id)}
+              role="presentation"
+              title={
+                running
+                  ? "Running in another window"
+                  : unread
+                    ? "Finished — not viewed yet"
+                    : undefined
+              }
+            >
+              <span className="session-title">
+                {s.title ?? "Untitled"}
+                {running && (
+                  <span className="session-dot running" title="Running" />
+                )}
+                {unread && (
+                  <span className="session-dot unread" title="Unread" />
+                )}
               </span>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="rowdel"
-                  style={{ right: "26px" }}
-                  title="Move to another workspace folder"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void onMove(s.id);
-                  }}
-                >
-                  ⇄
-                </button>
-                <button
-                  type="button"
-                  className="rowdel"
-                  title="Delete session"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirming(s.id);
-                  }}
-                >
-                  ×
-                </button>
-              </>
-            )}
-          </div>
-        ))}
+              <span className="session-meta">
+                {formatTokens(totalTokens(s.tokens))} tok · {formatCost(s.cost)}{" "}
+                · {relativeTime(s.time.updated)}
+              </span>
+              {confirming === s.id ? (
+                <span className="confirm">
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void onDelete(s.id);
+                      setConfirming(undefined);
+                    }}
+                  >
+                    delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirming(undefined);
+                    }}
+                  >
+                    keep
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="rowdel"
+                    style={{ right: "26px" }}
+                    title="Move to another workspace folder"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void onMove(s.id);
+                    }}
+                  >
+                    ⇄
+                  </button>
+                  <button
+                    type="button"
+                    className="rowdel"
+                    title="Delete session"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirming(s.id);
+                    }}
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

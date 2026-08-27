@@ -796,7 +796,11 @@ button:focus-visible {
   border-right: 2px solid var(--oc2-user-plan);
 }
 .bubble[data-plan="build"] {
-  border-color: color-mix(in srgb, var(--oc2-user-build) 45%, var(--oc2-border));
+  border-color: color-mix(
+    in srgb,
+    var(--oc2-user-build) 45%,
+    var(--oc2-border)
+  );
   border-right: 2px solid var(--oc2-user-build);
 }
 /* legacy compat: 0.6.27 used true/false */
@@ -805,7 +809,11 @@ button:focus-visible {
   border-right: 2px solid var(--oc2-user-plan);
 }
 .bubble[data-plan="false"] {
-  border-color: color-mix(in srgb, var(--oc2-user-build) 45%, var(--oc2-border));
+  border-color: color-mix(
+    in srgb,
+    var(--oc2-user-build) 45%,
+    var(--oc2-border)
+  );
   border-right: 2px solid var(--oc2-user-build);
 }
 .msg.user .msg-actions {
@@ -1316,6 +1324,25 @@ button:focus-visible {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);
   opacity: 0.75;
+}
+.session-row.unread .session-title {
+  font-weight: 600;
+}
+.session-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+  flex: none;
+}
+.session-dot.running {
+  background: var(--oc2-accent);
+  animation: oc2-pulse 1.2s ease-in-out infinite;
+}
+.session-dot.unread {
+  background: var(--oc2-accent);
 }
 .rowdel {
   position: absolute;
@@ -1889,71 +1916,6 @@ button:focus-visible {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-/* Agent-asked questions (tool part name "question"). */
-.q-item + .q-item {
-  margin-top: var(--oc2-space-3);
-}
-.q-title {
-  font-weight: 600;
-  margin: var(--oc2-space-1) 0 var(--oc2-space-2);
-}
-.q-opt {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--oc2-border);
-  border-radius: var(--oc2-radius);
-  padding: var(--oc2-space-2);
-  background: transparent;
-  color: var(--oc2-fg);
-  cursor: pointer;
-  font-family: inherit;
-}
-.q-opt:hover {
-  border-color: var(--oc2-accent);
-}
-.q-opt.done {
-  cursor: default;
-  opacity: 0.8;
-}
-.q-label {
-  font-size: var(--oc2-font-size);
-}
-.q-desc {
-  font-size: calc(var(--oc2-font-size) - 1px);
-  color: var(--oc2-fg-muted);
-}
-.q-note {
-  color: var(--oc2-fg-muted);
-  font-size: calc(var(--oc2-font-size) - 1px);
-  margin-top: var(--oc2-space-2);
-}
-.q-other {
-  display: flex;
-  gap: var(--oc2-space-2);
-  margin-top: var(--oc2-space-2);
-}
-.q-other-input {
-  flex: 1;
-  min-width: 0;
-  background: var(--oc2-terminal-bg);
-  border: 1px solid var(--oc2-border);
-  border-radius: var(--oc2-radius);
-  padding: var(--oc2-space-1) var(--oc2-space-2);
-  color: var(--oc2-fg);
-  font-family: inherit;
-  font-size: var(--oc2-font-size);
-}
-.q-other-input:focus {
-  outline: none;
-  border-color: var(--oc2-accent);
-}
-.q-other .chip[disabled] {
-  opacity: 0.5;
-  cursor: default;
 }
 .oc2-theme-sub {
   display: flex;

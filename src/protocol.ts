@@ -148,6 +148,8 @@ export type RpcMethod =
   | "session.remove"
   | "session.rename"
   | "session.fork"
+  | "sessions.active"
+  | "session.view"
   // conversation
   | "messages.list"
   | "prompt.send"
