@@ -789,7 +789,17 @@ button:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* User bubble sticky accent border — right-edge accent, muted full border (subtle, not distracting) */
+/* User bubble sticky accent border — right-edge accent, muted full border (subtle, not distracting).
+   Only tagged messages (plan/build) get it; historic/other plain stays 1px var(--oc2-border) */
+.bubble[data-plan="plan"] {
+  border-color: color-mix(in srgb, var(--oc2-user-plan) 55%, var(--oc2-border));
+  border-right: 2px solid var(--oc2-user-plan);
+}
+.bubble[data-plan="build"] {
+  border-color: color-mix(in srgb, var(--oc2-user-build) 45%, var(--oc2-border));
+  border-right: 2px solid var(--oc2-user-build);
+}
+/* legacy compat: 0.6.27 used true/false */
 .bubble[data-plan="true"] {
   border-color: color-mix(in srgb, var(--oc2-user-plan) 55%, var(--oc2-border));
   border-right: 2px solid var(--oc2-user-plan);

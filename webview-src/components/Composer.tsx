@@ -794,7 +794,21 @@ export function Composer(props: Props) {
                 : "Send"
             }
           >
-            ↑
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              style={{ display: "block" }}
+            >
+              <path d="M8 12V4" />
+              <path d="M5 7L8 4L11 7" />
+            </svg>
           </button>
         </div>
       </div>

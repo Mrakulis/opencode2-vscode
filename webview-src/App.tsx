@@ -213,6 +213,16 @@ export function App() {
     const ag = agents.find((a) => a.id === active?.agent);
     return ag?.name?.toLowerCase().includes("plan") ?? false;
   }, [active?.agent, agents]);
+  /** Tri-state for sticky user border: plan / build / other (plain, future-proof) */
+  const agentKind = useMemo((): "plan" | "build" | "other" => {
+    const id = active?.agent?.toLowerCase() ?? "";
+    if (id.includes("plan")) return "plan";
+    if (id.includes("build")) return "build";
+    const name = agents.find((a) => a.id === active?.agent)?.name?.toLowerCase() ?? "";
+    if (name.includes("plan")) return "plan";
+    if (name.includes("build")) return "build";
+    return "other";
+  }, [active?.agent, agents]);
 
   /** Server-driven auto-retry state (SessionRetry) for visibility. */
   const [retryInfo, setRetryInfo] = useState<
@@ -1095,7 +1105,7 @@ export function App() {
         }
       }
       if (!text.trim() && (!files || files.length === 0)) return;
-      const optimistic: Extract<AnyMessage, { type: "user" }> & { planAtSend?: boolean } = {
+      const optimistic: Extract<AnyMessage, { type: "user" }> & { planAtSend?: "plan" | "build" } = {
         type: "user",
         id: `pending-${Date.now()}`,
         text:
@@ -1104,7 +1114,7 @@ export function App() {
             ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}`
             : ""),
         time: { created: Date.now() },
-        planAtSend: isPlan,
+        ...(agentKind !== "other" ? { planAtSend: agentKind } : {}),
       };
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [targetId!]: true }));

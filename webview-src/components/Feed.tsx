@@ -93,22 +93,25 @@ export function Feed({
     return ta - tb;
   });
 
-  // Sticky plan flag per user message — lookup next assistant's agent (or live fallback).
-  // Walk backwards so each user inherits the next assistant's plan, preserving border after switch.
+  // Sticky plan/build flag per user message — opt-in only.
+  // Only messages that carry explicit planAtSend ("plan"|"build") get an accent;
+  // historic/untagged/other remain plain and never hidden (future-proof).
   const userPlanById = (() => {
-    const map = new Map<string, boolean>();
-    let nextIsPlan = isPlan ?? false;
-    for (let i = sortedMessages.length - 1; i >= 0; i--) {
-      const m = sortedMessages[i]!;
-      if (isAssistant(m)) {
-        const ag = (m as { agent?: string }).agent ?? "";
-        nextIsPlan = ag.toLowerCase().includes("plan");
-      } else if (isUser(m)) {
-        const planField = (m as unknown as { planAtSend?: boolean }).planAtSend;
-        const v = typeof planField === "boolean" ? planField : nextIsPlan;
+    const map = new Map<string, "plan" | "build">();
+    try {
+      for (const m of sortedMessages) {
+        if (!isUser(m)) continue;
+        const raw = (m as unknown as { planAtSend?: unknown }).planAtSend;
+        let v: "plan" | "build" | undefined;
+        if (raw === "plan" || raw === "build") v = raw;
+        else if (raw === true) v = "plan"; // compat with 0.6.27 boolean
+        else if (raw === false) v = "build"; // compat
+        if (!v) continue;
         const id = (m as { id?: string }).id;
         if (id) map.set(id, v);
       }
+    } catch {
+      return new Map<string, "plan" | "build">();
     }
     return map;
   })();
@@ -382,7 +385,7 @@ function MessageGroup({
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
-  userPlan?: boolean;
+  userPlan?: "plan" | "build";
 }) {
   if (isUser(message)) {
     return (
@@ -405,7 +408,14 @@ function MessageGroup({
             )}
           </div>
         )}
-        <div className="bubble" data-plan={userPlan ? "true" : "false"}>
+        <div
+          className="bubble"
+          {...(userPlan === "plan"
+            ? { "data-plan": "plan" }
+            : userPlan === "build"
+              ? { "data-plan": "build" }
+              : {})}
+        >
           {message.text}
         </div>
         {(onCopyMessage || onEditMessage) && (
