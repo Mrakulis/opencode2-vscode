@@ -86,3 +86,21 @@ export function sameSessionPending(
     .filter((p) => p.sessionID === sessionID && p.requestID !== excludeRequestID)
     .map((p) => p.requestID);
 }
+
+/**
+ * On an authoritative re-sync the server's pending list is ground truth. Any
+ * request we previously marked "responded" that the server STILL lists as
+ * pending had its reply lost (SSE drop / in-flight race). This returns the
+ * still-pending ids whose stale mark should be cleared so the auto-reply
+ * effect re-sends them instead of wedging the command forever.
+ */
+export function lostReplyIds(
+  tracker: RespondedTracker,
+  pendingIds: Iterable<string>,
+): string[] {
+  const lost: string[] = [];
+  for (const id of pendingIds) {
+    if (tracker.had(id)) lost.push(id);
+  }
+  return lost;
+}

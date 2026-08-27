@@ -29,6 +29,7 @@ import {
   autoReplyFor,
   RespondedTracker,
   sameSessionPending,
+  lostReplyIds,
 } from "./lib/permissions";
 import { PROVIDERISH_RE } from "./lib/failure";
 import { HeaderBar } from "./components/HeaderBar";
@@ -452,41 +453,54 @@ export function App() {
     }
   }, []);
 
-  const refreshPendingPermissions = useCallback(async () => {
-    try {
-      const pending = (await rpc.call<
-        Array<{
-          data?: {
+  const refreshPendingPermissions = useCallback(
+    async (resync = false): Promise<void> => {
+      try {
+        const pending = (await rpc.call<
+          Array<{
+            data?: {
+              id: string;
+              sessionID: string;
+              action: string;
+              resources?: string[];
+              metadata?: unknown;
+            };
+          }>
+        >("permissions.pending")) as unknown as {
+          data?: Array<{
             id: string;
             sessionID: string;
             action: string;
             resources?: string[];
             metadata?: unknown;
-          };
-        }>
-      >("permissions.pending")) as unknown as {
-        data?: Array<{
-          id: string;
-          sessionID: string;
-          action: string;
-          resources?: string[];
-          metadata?: unknown;
-        }>;
-      };
-      const rows = pending.data ?? [];
-      setPermissions(
-        rows.map((r) => ({
-          sessionID: r.sessionID,
-          requestID: r.id,
-          action: r.action,
-          resources: r.resources ?? [],
-          files: extractPermissionFiles(r.metadata),
-        })),
-      );
-    } catch {
-      /* transient */
-    }
-  }, []);
+          }>;
+        };
+        const rows = pending.data ?? [];
+        const ids = new Set(rows.map((r) => r.id));
+        if (resync) {
+          // On an authoritative re-sync the server's pending list IS ground
+          // truth. Any request we previously marked "responded" that the server
+          // STILL lists as pending had its reply lost (SSE drop / in-flight
+          // race) — forget the stale mark so the auto-reply effect re-sends it
+          // instead of wedging the shell command forever.
+          for (const id of lostReplyIds(respondedRef.current, ids))
+            respondedRef.current.clear(id);
+        }
+        setPermissions(
+          rows.map((r) => ({
+            sessionID: r.sessionID,
+            requestID: r.id,
+            action: r.action,
+            resources: r.resources ?? [],
+            files: extractPermissionFiles(r.metadata),
+          })),
+        );
+      } catch {
+        /* transient */
+      }
+    },
+    [],
+  );
 
   /** Queued follow-ups (session inbox) for the active session — rendered as
    *  ghost bubbles at the feed tail. */
@@ -627,7 +641,7 @@ export function App() {
             void (async () => {
               const list = await refreshSessions();
               await refreshPickers();
-              void refreshPendingPermissions();
+              void refreshPendingPermissions(true);
               void refreshForms();
               void refreshQueued();
               setActiveId((current) => {
@@ -655,7 +669,7 @@ export function App() {
           void (async () => {
             const list = await refreshSessions();
             await refreshPickers();
-            void refreshPendingPermissions();
+            void refreshPendingPermissions(true);
             void refreshForms();
             void refreshQueued();
             setActiveId((current) => {
@@ -1932,7 +1946,20 @@ export function App() {
         const pending = permissions.filter(
           (p) => p.action.toLowerCase() !== "question",
         );
-        const showPermissions = pending.length > 0;
+        // Auto-acknowledged permissions (autoAllow mode, or a session the user
+        // put in auto-accept) never need a decision — render them as plain,
+        // non-blocking text and let the auto-reply effect answer them. Only
+        // genuinely interactive (askFirst, not auto-accepted) perms keep the
+        // Allow/Deny card so the user can still Deny.
+        const isAutoPerm = (p: PermissionCardData): boolean =>
+          autoReplyFor(
+            permissionMode,
+            p.action,
+            autoAcceptSessionsRef.current.has(p.sessionID),
+          ) !== undefined;
+        const autoPerms = pending.filter(isAutoPerm);
+        const interactivePerms = pending.filter((p) => !isAutoPerm(p));
+        const showPermissions = interactivePerms.length > 0;
         return (
           <div className="dock">
             {actionError && (
@@ -1944,9 +1971,9 @@ export function App() {
               <FormCard key={f.id} form={f} />
             ))}
 
-            {showPermissions && pending.some((p) => p.files?.length) && (
+            {showPermissions && interactivePerms.some((p) => p.files?.length) && (
               /* Review-Diffs summary strip (Module 1): every proposed file
-                 change across pending edit permissions with ± counts. */
+                 change across pending interactive edit permissions with ± counts. */
               <div className="dock-status" style={{ flexDirection: "column", alignItems: "stretch" }}>
                 <span
                   className="micro"
@@ -1955,7 +1982,7 @@ export function App() {
                 >
                   ⇔ Proposed changes
                 </span>
-                {pending
+                {interactivePerms
                   .flatMap((p) => (p.files ?? []).map((f) => ({ perm: p, f })))
                   .map(({ perm, f }, i) => (
                     <div
@@ -1997,6 +2024,33 @@ export function App() {
               </div>
             )}
 
+            {autoPerms.length > 0 && (
+              /* Auto-acknowledged permissions: plain, non-blocking text — the
+                 auto-reply effect answers them, so no card/buttons are shown. */
+              <div className="perm-text-strip" aria-live="polite">
+                {autoPerms.map((p) => {
+                  const kind = p.action.toLowerCase().includes("shell")
+                    ? "shell"
+                    : p.action.toLowerCase().includes("edit") ||
+                        p.action.toLowerCase().includes("write")
+                      ? "edit"
+                      : p.action.toLowerCase().includes("read")
+                        ? "read"
+                        : "other";
+                  return (
+                    <span
+                      key={p.requestID}
+                      className="perm-text"
+                      data-action={kind}
+                      title="Auto-allowed — no action needed"
+                    >
+                      OpenCode 2 → {p.action} · auto-allowed
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
             {showPermissions && (
               <div
                 className="perm-scroll"
@@ -2005,7 +2059,7 @@ export function App() {
                 onKeyDown={(e) => {
                   const target = e.target as HTMLElement;
                   if (target.closest("button")) return;
-                  const first = pending[0];
+                  const first = interactivePerms[0];
                   if (!first) return;
                   if (e.key === "a" || e.key === "A") {
                     e.preventDefault();
@@ -2019,7 +2073,7 @@ export function App() {
                   }
                 }}
               >
-                {pending.map((p) => (
+                {interactivePerms.map((p) => (
                   <PermissionRow
                     key={p.requestID}
                     perm={p}

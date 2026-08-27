@@ -5,6 +5,7 @@ import {
   RespondedTracker,
   PERMISSION_RESPONDED_TTL_MS,
   sameSessionPending,
+  lostReplyIds,
 } from "../webview-src/lib/permissions";
 
 describe("autoReplyFor", () => {
@@ -85,5 +86,24 @@ describe("sameSessionPending", () => {
   });
   it("excludes other sessions entirely", () => {
     assert.deepEqual(sameSessionPending(list, "s1", "x"), ["r1", "r2"]);
+  });
+});
+
+describe("lostReplyIds", () => {
+  it("returns still-pending ids whose reply mark was lost on resync", () => {
+    const t = new RespondedTracker();
+    t.mark("r1");
+    t.mark("r2");
+    // Server still lists r1 (reply lost); r2 dropped (answered); r3 is new.
+    assert.deepEqual(lostReplyIds(t, ["r1", "r3"]), ["r1"]);
+  });
+  it("returns [] when no marked id is still pending", () => {
+    const t = new RespondedTracker();
+    t.mark("r1");
+    assert.deepEqual(lostReplyIds(t, ["r2", "r3"]), []);
+  });
+  it("returns [] when nothing was marked", () => {
+    const t = new RespondedTracker();
+    assert.deepEqual(lostReplyIds(t, ["r1"]), []);
   });
 });

@@ -1763,6 +1763,33 @@ button:focus-visible {
   flex-direction: column;
   gap: 1px;
 }
+/* Auto-acknowledged permissions: plain, non-blocking text (no card/buttons). */
+.perm-text-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-top: 1px solid var(--oc2-border);
+}
+.perm-text {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-muted);
+  background: var(--oc2-surface-2);
+  border: 1px solid var(--oc2-border);
+  border-left: 3px solid var(--oc2-fg-muted);
+  border-radius: var(--oc2-radius);
+  padding: 2px 8px;
+}
+.perm-text[data-action="shell"] {
+  border-left-color: var(--oc2-accent);
+}
+.perm-text[data-action="edit"] {
+  border-left-color: var(--oc2-warn, #c08a2d);
+}
+.perm-text[data-action="read"] {
+  border-left-color: var(--oc2-info, #2d8ac0);
+}
 .dock-status {
   display: flex;
   align-items: center;
