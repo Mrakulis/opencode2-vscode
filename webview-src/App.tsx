@@ -43,6 +43,7 @@ import { SavedPermissionsDrawer } from "./components/SavedPermissionsDrawer";
 import { InstructionsDrawer } from "./components/InstructionsDrawer";
 import { WorktreesDrawer } from "./components/WorktreesDrawer";
 import { InboxDrawer } from "./components/InboxDrawer";
+import { UsageDrawer } from "./components/UsageDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 import { SubagentsDrawer } from "./components/SubagentsDrawer";
@@ -163,6 +164,7 @@ export function App() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [plansOpen, setPlansOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>(
     undefined,
   );
@@ -1736,6 +1738,7 @@ export function App() {
         onOpenInbox={() => {
           if (activeId) setInboxOpen(true);
         }}
+        onOpenUsage={() => setUsageOpen(true)}
         onExport={() => void exportSession()}
         onImport={() => void importSessionFile()}
         onUndo={() => void undoLastTurn()}
@@ -2063,6 +2066,7 @@ export function App() {
             onClose={() => setInboxOpen(false)}
           />
         )}
+        {usageOpen && <UsageDrawer onClose={() => setUsageOpen(false)} />}
       </main>
 
       {(() => {

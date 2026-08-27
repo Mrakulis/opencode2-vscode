@@ -7,6 +7,7 @@ import type {
   SessionMessageInfo,
 } from "@opencode-ai/client";
 import path from "node:path";
+import type { SessionStats, SessionStatsTokenTotals } from "./protocol";
 
 /**
  * The ONLY module that calls the OpenCode V2 client.
@@ -36,6 +37,46 @@ type ModelRow = Omit<ModelInfo, "enabled" | "limit"> & {
   enabled?: boolean;
   limit?: { context?: number };
 };
+
+/** Finite-number coercion: stats must never surface NaN in the UI. */
+function finiteNum(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function statTokens(v: unknown): SessionStatsTokenTotals {
+  const t = (v ?? {}) as Record<string, unknown>;
+  const cache = (t.cache ?? {}) as Record<string, unknown>;
+  return {
+    input: finiteNum(t.input),
+    output: finiteNum(t.output),
+    reasoning: finiteNum(t.reasoning),
+    cacheRead: finiteNum(cache.read),
+    cacheWrite: finiteNum(cache.write),
+  };
+}
+
+function statTools(v: unknown): SessionStats["tools"] {
+  const t = (v ?? {}) as Record<string, unknown>;
+  if (t.mode !== "summary" && t.mode !== "detail") return { mode: "none" };
+  const tot = (t.totals ?? {}) as Record<string, unknown>;
+  const totals = {
+    calls: finiteNum(tot.calls),
+    succeeded: finiteNum(tot.succeeded),
+    failed: finiteNum(tot.failed),
+    unfinished: finiteNum(tot.unfinished),
+  };
+  if (t.mode === "summary") return { mode: "summary", totals };
+  const usage = Array.isArray(t.usage)
+    ? (t.usage as Array<Record<string, unknown>>).map((u) => ({
+        name: String(u.name ?? "?"),
+        calls: finiteNum(u.calls),
+        succeeded: finiteNum(u.succeeded),
+        failed: finiteNum(u.failed),
+        unfinished: finiteNum(u.unfinished),
+      }))
+    : [];
+  return { mode: "detail", totals, usage };
+}
 
 export function createApi({ getClient }: ApiAdapterDeps) {
   return {
@@ -208,6 +249,55 @@ export function createApi({ getClient }: ApiAdapterDeps) {
             : undefined
       ) as unknown;
       return typeof text === "string" && text.length > 0 ? text : undefined;
+    },
+
+    // -- usage stats -----------------------------------------------------------
+    /**
+     * Aggregated usage across ALL projects (server-side session.stats).
+     * Verified live 2026-08-27: the bare call returns tools.mode "summary";
+     * the SDK's nested tools-detail input is currently ignored by the server,
+     * so detail rows render only if the server default ever changes.
+     */
+    sessionStats: async (): Promise<SessionStats> => {
+      const res = (await getClient().session.stats()) as unknown;
+      const d = (res ?? {}) as Record<string, unknown>;
+      const s = (d.data ?? d) as Record<string, unknown>;
+      return {
+        sessions: finiteNum(s.sessions),
+        subagents: finiteNum(s.subagents),
+        prompts: finiteNum(s.prompts),
+        steps: finiteNum(s.steps),
+        cost: finiteNum(s.cost),
+        activeDays: finiteNum(s.activeDays),
+        streak: finiteNum(s.streak),
+        tokens: statTokens(s.tokens),
+        tools: statTools(s.tools),
+        activity: Array.isArray(s.activity)
+          ? (s.activity as Array<Record<string, unknown>>)
+              .map((a) => ({
+                date: String(a.date ?? ""),
+                steps: finiteNum(a.steps),
+              }))
+              .filter((a) => a.date !== "")
+          : [],
+        models: Array.isArray(s.models)
+          ? (s.models as Array<Record<string, unknown>>).map((m) => {
+              // Verified live 2026-08-27: `model` arrives as a flat
+              // "provider/id" string — normalize object refs too, just in case.
+              const ref = m.model;
+              const model =
+                typeof ref === "string"
+                  ? ref
+                  : `${String((ref as Record<string, unknown>).providerID ?? "?")}/${String((ref as Record<string, unknown>).id ?? "?")}`;
+              return {
+                model,
+                steps: finiteNum(m.steps),
+                cost: finiteNum(m.cost),
+                tokens: statTokens(m.tokens),
+              };
+            })
+          : [],
+      };
     },
 
     // -- pickers -------------------------------------------------------------

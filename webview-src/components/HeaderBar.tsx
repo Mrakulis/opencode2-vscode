@@ -16,6 +16,8 @@ interface Props {
   /** Abandon a staged revert (session.revert.clear) when available. */
   onRevertClear?(): Promise<void> | void;
   onOpenInbox(): void;
+  /** Opens the global usage/stats drawer (session-independent). */
+  onOpenUsage(): void;
   onExport(): void;
   onImport(): void;
   onUndo(): void;
@@ -191,6 +193,17 @@ export function HeaderBar(props: Props) {
                 }}
               >
                 Inbox…
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenUsage();
+                }}
+                title="Tokens, cost, streaks and tool reliability"
+              >
+                Usage…
               </button>
               <button
                 type="button"

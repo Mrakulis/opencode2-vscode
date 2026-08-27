@@ -85,6 +85,7 @@ export function createRpcDispatcher(
     "session.fork": (p) => api.fork(str(p, "sessionID")),
     "sessions.active": () => api.sessionActive(),
     "session.view": (p) => api.sessionView(str(p, "sessionID"), num(p, "idle")),
+    "session.stats": () => api.sessionStats(),
     "transcript.copy": (p) => {
       const text = str(p, "markdown");
       return Promise.resolve(vscode.env.clipboard.writeText(text));

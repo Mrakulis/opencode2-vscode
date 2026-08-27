@@ -36,6 +36,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 - **Resilient connection** — reconnects with backoff + full resync; a non-blocking banner offers Restart Background Service during drops; last-open session is restored after reloads
 - **Session awareness** — unread dots on sessions that finished while you weren't looking (server-tracked `idle`/`viewed`, clears on open and syncs to other windows/TUI), plus a pulsing indicator for sessions running in another client window (`session.active`)
 - **Auto-title (opt-in)** — after a session's first completed turn, a short title is generated (`session.generate`) and applied — unless you named it yourself
+- **Usage & stats drawer** — global totals across all projects: tokens, cost, day streak, activity bars, per-model spend and tool reliability; open via the status-strip counters or `⋯` → `Usage…`
 - **Own theme system** — OpenCode Dark & Light plus Tokyo Night, Gruvbox, Nord and Catppuccin presets (cycle from the `⋯` menu or pick in settings); compact/comfortable density
 
 ## Requirements

@@ -182,3 +182,6 @@ export function isAssistant(
 ): m is Extract<AnyMessage, { type: "assistant" }> {
   return m.type === "assistant";
 }
+
+// Shared wire payloads components render directly.
+export type { SessionStats } from "../../src/protocol";

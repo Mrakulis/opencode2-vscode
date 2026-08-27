@@ -4,11 +4,16 @@ import fs from "node:fs";
 const proto = fs.readFileSync("src/protocol.ts", "utf8");
 const rpc = fs.readFileSync("src/rpc.ts", "utf8");
 const css = fs.readFileSync("webview-src/styles.css", "utf8");
-const tsxFiles = ["Composer.tsx", "Feed.tsx", "FormCard.tsx", "HeaderBar.tsx", "InboxDrawer.tsx", "InstructionsDrawer.tsx", "McpDrawer.tsx", "ModelManager.tsx", "ProvidersDrawer.tsx", "SavedPermissionsDrawer.tsx", "SessionsDrawer.tsx", "StatusStrip.tsx", "WorktreesDrawer.tsx"]
+const tsxFiles = ["Composer.tsx", "Feed.tsx", "FormCard.tsx", "HeaderBar.tsx", "InboxDrawer.tsx", "InstructionsDrawer.tsx", "McpDrawer.tsx", "ModelManager.tsx", "PlansDrawer.tsx", "ProvidersDrawer.tsx", "SavedPermissionsDrawer.tsx", "SessionsDrawer.tsx", "StatusStrip.tsx", "SubagentsDrawer.tsx", "UsageDrawer.tsx", "WorktreesDrawer.tsx"]
   .map((f) => fs.readFileSync(`webview-src/components/${f}`, "utf8"))
   .join("\n");
 const app = fs.readFileSync("webview-src/App.tsx", "utf8");
-const all = tsxFiles + app;
+// lib files that emit classNames from template strings (e.g. markdown diff
+// rendering) — scanned so their classes don't show up as false orphans.
+const libFiles = ["markdown.ts"]
+  .map((f) => fs.readFileSync(`webview-src/lib/${f}`, "utf8"))
+  .join("\n");
+const all = tsxFiles + app + libFiles;
 
 // 1) RpcMethod union members
 const unionBlock = proto.match(/export type RpcMethod =[\s\S]*?;/)?.[0] ?? "";

@@ -150,6 +150,7 @@ export type RpcMethod =
   | "session.fork"
   | "sessions.active"
   | "session.view"
+  | "session.stats"
   // conversation
   | "messages.list"
   | "prompt.send"
@@ -249,6 +250,69 @@ export type RpcMethod =
   | "diff.open"
   | "diff.previewPreApply"
   | "image.save";
+
+/** One per-tool usage row (present only when the server reports detail mode). */
+export interface SessionStatsToolRow {
+  name: string;
+  calls: number;
+  succeeded: number;
+  failed: number;
+  unfinished: number;
+}
+
+/** Normalized token totals (server `TokenUsageInfo` with cache flattened). */
+export interface SessionStatsTokenTotals {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+/**
+ * Normalized `session.stats` payload — aggregated across ALL projects.
+ * Shape verified live (scripts/stats-probe.mjs): the server answers the bare
+ * call with tools.mode "summary"; per-tool detail rows render only if the
+ * server default changes — the adapter normalizes them either way.
+ */
+export interface SessionStats {
+  sessions: number;
+  subagents: number;
+  prompts: number;
+  steps: number;
+  cost: number;
+  activeDays: number;
+  streak: number;
+  tokens: SessionStatsTokenTotals;
+  tools:
+    | { mode: "none" }
+    | {
+        mode: "summary";
+        totals: {
+          calls: number;
+          succeeded: number;
+          failed: number;
+          unfinished: number;
+        };
+      }
+    | {
+        mode: "detail";
+        totals: {
+          calls: number;
+          succeeded: number;
+          failed: number;
+          unfinished: number;
+        };
+        usage: SessionStatsToolRow[];
+      };
+  activity: Array<{ date: string; steps: number }>;
+  models: Array<{
+    model: string;
+    steps: number;
+    cost: number;
+    tokens: SessionStatsTokenTotals;
+  }>;
+}
 
 export function isInbound(value: unknown): value is InboundMessage {
   return (

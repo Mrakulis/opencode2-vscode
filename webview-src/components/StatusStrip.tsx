@@ -18,6 +18,8 @@ interface Props {
   model?: string;
   /** Context % at which the meter turns "hot" (auto-compact threshold or 85). */
   alertPct?: number;
+  /** Opens the Usage drawer when the token/cost cluster is clicked. */
+  onOpenUsage?: () => void;
 }
 
 /** Full token counter: input / output / reasoning / cache, plus cost + context. */
@@ -30,6 +32,7 @@ export function StatusStrip({
   ctxLimit,
   model,
   alertPct = 85,
+  onOpenUsage,
 }: Props) {
   const total =
     tokens &&
@@ -52,41 +55,60 @@ export function StatusStrip({
           offline
         </span>
       )}
-      {tokens && (
-        <>
-          <span
-            className="micro stat"
-            title={model ? `model: ${model}` : undefined}
-            style={model ? { cursor: "default" } : undefined}
+      {(() => {
+        // Token/cost cluster — also the entry point to the Usage drawer.
+        const cluster = (
+          <>
+            {tokens && (
+              <>
+                <span
+                  className="micro stat"
+                  title={model ? `model: ${model}` : undefined}
+                  style={model ? { cursor: "default" } : undefined}
+                >
+                  ↑{formatTokens(tokens.input)}
+                </span>
+                <span className="micro stat" title="completion (output) tokens">
+                  ↓{formatTokens(tokens.output)}
+                </span>
+                {tokens.reasoning > 0 && (
+                  <span className="micro stat" title="reasoning tokens">
+                    ✻{formatTokens(tokens.reasoning)}
+                  </span>
+                )}
+                {(tokens.cache.read > 0 || tokens.cache.write > 0) && (
+                  <span
+                    className="micro stat"
+                    title={`cached: ${formatTokens(tokens.cache.read)} read · ${formatTokens(tokens.cache.write)} written`}
+                  >
+                    ⟲{formatTokens(tokens.cache.read + tokens.cache.write)}
+                  </span>
+                )}
+                <span className="micro total" title="total tokens">
+                  = {total}
+                </span>
+              </>
+            )}
+            {cost !== undefined && (
+              <span className="micro" title="session cost">
+                {formatCost(cost)}
+              </span>
+            )}
+          </>
+        );
+        return onOpenUsage ? (
+          <button
+            type="button"
+            className="stat-cluster"
+            title="Usage & stats"
+            onClick={onOpenUsage}
           >
-            ↑{formatTokens(tokens.input)}
-          </span>
-          <span className="micro stat" title="completion (output) tokens">
-            ↓{formatTokens(tokens.output)}
-          </span>
-          {tokens.reasoning > 0 && (
-            <span className="micro stat" title="reasoning tokens">
-              ✻{formatTokens(tokens.reasoning)}
-            </span>
-          )}
-          {(tokens.cache.read > 0 || tokens.cache.write > 0) && (
-            <span
-              className="micro stat"
-              title={`cached: ${formatTokens(tokens.cache.read)} read · ${formatTokens(tokens.cache.write)} written`}
-            >
-              ⟲{formatTokens(tokens.cache.read + tokens.cache.write)}
-            </span>
-          )}
-          <span className="micro total" title="total tokens">
-            = {total}
-          </span>
-        </>
-      )}
-      {cost !== undefined && (
-        <span className="micro" title="session cost">
-          {formatCost(cost)}
-        </span>
-      )}
+            {cluster}
+          </button>
+        ) : (
+          cluster
+        );
+      })()}
       {ctxPct !== null && (
         <>
           <span
