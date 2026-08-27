@@ -764,7 +764,9 @@ button:focus-visible {
 
 .msg.user {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--oc2-space-1);
 }
 .bubble {
   max-width: 88%;
@@ -774,6 +776,10 @@ button:focus-visible {
   padding: var(--oc2-space-2) var(--oc2-space-3);
   white-space: pre-wrap;
   word-break: break-word;
+}
+.msg.user .msg-actions {
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .msg.assistant .msg-head {
@@ -1140,7 +1146,29 @@ button:focus-visible {
 .diff .line.meta {
   color: var(--oc2-fg-muted);
 }
+.diff .line,
+.md-diff .diff-line {
+  display: block;
+}
+.md-diff .diff-line.add {
+  background: var(--oc2-diff-add-bg);
+  color: var(--oc2-diff-add-fg);
+}
+.md-diff .diff-line.del {
+  background: var(--oc2-diff-del-bg);
+  color: var(--oc2-diff-del-fg);
+}
+.md-diff .diff-line.meta {
+  color: var(--oc2-fg-muted);
+}
 .diff {
+  font-family: var(--oc2-mono);
+  white-space: pre;
+  overflow-x: auto;
+  max-height: min(360px, 45vh);
+  overflow-y: auto;
+}
+.md-diff {
   font-family: var(--oc2-mono);
   white-space: pre;
   overflow-x: auto;

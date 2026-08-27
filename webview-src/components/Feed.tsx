@@ -134,6 +134,7 @@ export function Feed({
   // Glue to the bottom whenever the CONTENT resizes while pinned — this
   // catches everything React misses: image loads, details expansion,
   // code-block wrapping, streaming growth between renders.
+  // Only while busy — after completion the feed should stay where user left it.
   useEffect(() => {
     const el = scrollRef.current;
     const content = contentRef.current;
@@ -141,14 +142,14 @@ export function Feed({
     const ro = new ResizeObserver(() => {
       // rAF-coalesced: a fast fling can resize content many times per frame;
       // one correction per frame is enough and avoids sync-layout churn.
-      if (!pinnedRef.current) return;
+      if (!pinnedRef.current || !busy) return;
       if (roRafRef.current) return;
       roRafRef.current = requestAnimationFrame(() => {
         roRafRef.current = undefined;
         scrollToBottom(scrollRef.current);
       });
     });
-        ro.observe(content);
+    ro.observe(content);
     // Also watch the scroller itself: dock pills appearing/disappearing
     // change the feed height, which would otherwise leave you shy of the
     // latest after Jump.
@@ -157,16 +158,17 @@ export function Feed({
       ro.disconnect();
       if (roRafRef.current) cancelAnimationFrame(roRafRef.current);
     };
-  }, []);
+  }, [busy]);
 
   // Follow output only while the user stays pinned to the bottom.
   // Resumes automatically after the user clicks "Jump to latest".
+  // Only while busy — after completion leave scroll position alone.
   useEffect(() => {
-    if (pinnedRef.current) {
+    if (busy && pinnedRef.current) {
       scrollToBottom(scrollRef.current);
       setShowJump(false); // actively following → the pill must be hidden
     }
-  }, [sortedMessages]);
+  }, [sortedMessages, busy]);
 
   /**
    * Exact, guarded scroll-to-bottom.
