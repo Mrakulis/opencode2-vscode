@@ -35,9 +35,6 @@ export function Feed({
   queued,
   onQueuedOpen,
   onUnqueue,
-  onAnswer,
-  onQuestionReply,
-  questionsDisabled,
   onCopyMessage,
   onRegenerate,
   onEditMessage,
@@ -70,9 +67,6 @@ export function Feed({
   /** Removes one queued item. */
   onUnqueue?: (id: string) => void;
   /** Delivers a chosen question-option label into the conversation. */
-  onAnswer?: (text: string) => void;
-  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
-  questionsDisabled?: boolean;
   /** Per-message actions. */
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
@@ -244,9 +238,6 @@ export function Feed({
               onRetry={onRetry}
               retryPendingLast={retryPendingLast}
               retryNote={retryNote ?? null}
-              onAnswer={onAnswer}
-              onQuestionReply={onQuestionReply}
-              questionsDisabled={questionsDisabled}
               onCopyMessage={onCopyMessage}
               onRegenerate={onRegenerate}
               onEditMessage={onEditMessage}
@@ -345,9 +336,6 @@ function MessageGroup({
   onRetry,
   retryPendingLast,
   retryNote,
-  onAnswer,
-  onQuestionReply,
-  questionsDisabled,
   onCopyMessage,
   onRegenerate,
   onEditMessage,
@@ -363,9 +351,6 @@ function MessageGroup({
   onRetry?: () => void;
   retryPendingLast?: boolean;
   retryNote?: string | null;
-  onAnswer?: (text: string) => void;
-  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
-  questionsDisabled?: boolean;
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
@@ -490,9 +475,6 @@ function MessageGroup({
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
           fullShellOutput={fullShellOutput}
-          onAnswer={onAnswer}
-          onQuestionReply={onQuestionReply}
-          questionsDisabled={questionsDisabled}
         />
       ))}
       {(onCopyMessage || (isLast && onRegenerate)) && (
@@ -621,11 +603,8 @@ function Part(props: {
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
-  onAnswer?: (text: string) => void;
-  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
-  questionsDisabled?: boolean;
 }) {
-  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, onAnswer, onQuestionReply, questionsDisabled } =
+  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput } =
     props as {
       part: MessagePartText | MessagePartReasoning | MessagePartTool;
       busy: boolean;
@@ -633,9 +612,6 @@ function Part(props: {
       expandShellTools: boolean;
       expandEditTools: boolean;
       fullShellOutput: boolean;
-      onAnswer?: (text: string) => void;
-      onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
-      questionsDisabled?: boolean;
     };
   if (part.type === "text") {
     return (
@@ -663,9 +639,6 @@ function Part(props: {
         expandShellTools={expandShellTools}
         expandEditTools={expandEditTools}
         fullShellOutput={fullShellOutput}
-        onAnswer={onAnswer}
-        onQuestionReply={onQuestionReply}
-        questionsDisabled={questionsDisabled}
       />
     );
   }
@@ -911,18 +884,11 @@ function ToolCard({
   expandShellTools,
   expandEditTools,
   fullShellOutput,
-  onAnswer,
-  onQuestionReply,
-  questionsDisabled,
-}: {
+  }: {
   part: ToolPart;
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
-  /** Delivers the chosen option label back into the conversation. */
-  onAnswer?: (text: string) => void;
-  onQuestionReply?: (answers: (string | null)[], toolCallId?: string) => void;
-  questionsDisabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -979,25 +945,12 @@ function ToolCard({
     );
   }
 
-  // Agent-asked questions: V2 has a dedicated question reply endpoint
-  // (POST /api/session/:id/question/:requestID/reply) with batch answers.
-  // We render all questions visible, one expanded at a time, and submit the
-  // batch via that endpoint so the tool actually resumes.
+  // Agent-asked questions render inline as plain text in the feed, with the
+  // options lettered a/b/c… The OpenCode V2 server exposes no distributed
+  // question-reply route, so the user answers naturally in the chat — never a
+  // blocking interactive "question window" that can stall the conversation.
   if (part.name === "question") {
-    // When the user has temporarily disabled interactive questions (until the
-    // server ships question-reply routes), render them as plain markdown text
-    // so the user can simply answer in the chat.
-    if (questionsDisabled) {
-      return <QuestionAsText state={part.state as QuestionToolState} />;
-    }
-    return (
-      <QuestionCard
-        state={part.state as QuestionToolState}
-        onBatchReply={(answers: (string | null)[]) =>
-          onQuestionReply?.(answers, (part as unknown as { id?: string }).id)
-        }
-      />
-    );
+    return <QuestionAsText state={part.state as QuestionToolState} />;
   }
 
   let title = part.name;
@@ -1214,181 +1167,23 @@ function QuestionAsText({ state }: { state: QuestionToolState }) {
             const lines = [`**${title}**`];
             if (q.question && q.header) lines.push(q.question);
             const opts = Array.isArray(q.options) ? q.options : [];
-            for (const o of opts) {
+            opts.forEach((o, oi) => {
+              const letter = String.fromCharCode(97 + oi); // a, b, c…
               lines.push(
-                `- ${o.label ?? "(unnamed option)"}${o.description ? ` — ${o.description}` : ""}`,
+                `- **${letter})** ${o.label ?? "(unnamed option)"}${o.description ? ` — ${o.description}` : ""}`,
               );
-            }
+            });
             return lines.join("\n");
           })
           .join("\n\n");
   return (
     <div className={`tool-card kind-question st-${state.status} static`}>
       <div className="tool-head">
-        ❓ question {qs.length > 1 ? `(${qs.length})` : ""} · plain text
+        ❓ question {qs.length > 1 ? `(${qs.length})` : ""}
       </div>
       <div className="tool-body">
         <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(md) }} />
       </div>
-    </div>
-  );
-}
-
-/** Card for agent-asked questions (`question` tool parts). While the turn is
- *  active, every option is clickable AND a free-text "Other…" input lets the
- *  user answer with something the agent didn't offer. Answers are delivered
- *  as chat messages (steered mid-turn) — the beta has no dedicated endpoint. */
-function QuestionCard({
-  state,
-  onAnswer,
-  onBatchReply,
-}: {
-  state: QuestionToolState;
-  onAnswer?: (text: string) => void;
-  onBatchReply?: (answers: (string | null)[]) => void;
-}) {
-  const qs = Array.isArray(state.input?.questions)
-    ? state.input!.questions!
-    : [];
-  const active = state.status === "running" || state.status === "streaming";
-  const unsupported = state.status === "unsupported";
-  const [expandedIdx, setExpandedIdx] = useState<number>(0);
-  const [answers, setAnswers] = useState<(string | null)[]>(() => Array(qs.length).fill(null));
-  useEffect(() => {
-    setExpandedIdx(0);
-    setAnswers(Array(qs.length).fill(null));
-  }, [qs.length]);
-  const submitBatch = (current: (string | null)[]) => {
-    if (onBatchReply) {
-      onBatchReply(current);
-      return;
-    }
-    const formatted = qs
-      .map((q, i) => `"${q.header ?? q.question ?? `Question ${i + 1}`}"="${current[i] ?? "Unanswered"}"`)
-      .join(", ");
-    onAnswer?.(`User has answered your questions: ${formatted}. You can now continue with the user's answers in mind.`);
-  };
-  const answerOne = (qi: number, text: string): void => {
-    if (!active) return;
-    setAnswers((prev) => {
-      const next = [...prev];
-      next[qi] = text;
-      const nextIdx = next.findIndex((v) => v === null);
-      setExpandedIdx(nextIdx === -1 ? qs.length : nextIdx);
-      if (nextIdx === -1) setTimeout(() => submitBatch(next), 0);
-      return next;
-    });
-  };
-  const answeredCount = answers.filter((v) => v !== null).length;
-  const hasIncomplete = answeredCount > 0 && answeredCount < qs.length;
-  return (
-    <div className={`tool-card kind-question st-${state.status} static`}>
-      <div className="tool-head">❓ question {qs.length > 1 ? `(${answeredCount}/${qs.length})` : ""}</div>
-      <div className="tool-body">
-        {qs.map((q, qi) => {
-          const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
-          const opts = Array.isArray(q.options) ? q.options : [];
-          const isExpanded = qi === expandedIdx && active && answers[qi] === null;
-          const isDone = !unsupported && answers[qi] !== null;
-          return (
-            <div key={qi} className={`q-item${isExpanded ? " expanded" : ""}${isDone ? " done" : ""}`}>
-              <button
-                type="button"
-                className="q-title"
-                onClick={() => !isDone && active && setExpandedIdx(qi)}
-                disabled={isDone || !active}
-                title={unsupported ? "Unsupported by your OpenCode server build" : isDone ? `Answered: ${answers[qi]}` : isExpanded ? "Expanded — choose an option below" : "Collapsed — click to expand"}
-                style={{ cursor: isDone || !active ? "default" : "pointer", fontWeight: isExpanded ? 600 : undefined }}
-              >
-                {unsupported ? "⚠️ " : isDone ? "✓ " : isExpanded ? "▾ " : "▸ "}{qTitle}
-              </button>
-              {isExpanded && !isDone && (
-                <>
-                  {opts.map((o, oi) => {
-                    const label = o.label ?? `Option ${oi + 1}`;
-                    return (
-                      <button
-                        key={oi}
-                        type="button"
-                        className="q-opt"
-                        title={o.description}
-                        onClick={() => answerOne(qi, label)}
-                      >
-                        <span className="q-label">{label}</span>
-                        {o.description && <span className="q-desc">{o.description}</span>}
-                      </button>
-                    );
-                  })}
-                  <OtherRow onSubmit={(text) => answerOne(qi, `${qTitle}: ${text}`)} />
-                </>
-              )}
-              {isDone && !unsupported && <div className="q-note">answered: {answers[qi]}</div>}
-            </div>
-          );
-        })}
-        {hasIncomplete && active && (
-          <button
-            type="button"
-            className="chip primary"
-            style={{ marginTop: "var(--oc2-space-2)" }}
-            onClick={() => submitBatch(answers)}
-            title="Continue with current answers; remaining will be sent as Unanswered"
-          >
-            Continue ({answeredCount}/{qs.length} answered) — Unanswered will be sent as “Unanswered”
-          </button>
-        )}
-        {qs.length === 0 && (
-          <pre className="tool-error">
-            {state.error?.message ?? "no question data"}
-          </pre>
-        )}
-        {!active && state.status === "error" && (
-          <div className="q-note">
-            question closed without an answer
-            {state.error?.message ? ` (${state.error.message})` : ""}
-          </div>
-        )}
-        {!active && unsupported && (
-          <div className="q-note">
-            ⚠️ {state.error?.message ?? "Question replies aren't supported by this server build."} Reply in the chat or CLI/TUI.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Free-text alternative to the preset options ("Other…"). */
-function OtherRow({ onSubmit }: { onSubmit: (text: string) => void }) {
-  const [text, setText] = useState("");
-  const submit = (): void => {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
-    onSubmit(t);
-  };
-  return (
-    <div className="q-other">
-      <input
-        className="q-other-input"
-        placeholder="Other… type your own answer"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            submit();
-          }
-        }}
-      />
-      <button
-        type="button"
-        className="chip"
-        disabled={!text.trim()}
-        onClick={submit}
-      >
-        Send
-      </button>
     </div>
   );
 }

@@ -173,7 +173,6 @@ export function App() {
     { id: string; providerID: string; name?: string } | undefined
   >(undefined);
   const permissionMode = cfg?.permissions.mode ?? "askFirst";
-  const questionsDisabled = !(cfg?.ui.questionsSupported ?? false);
 
   // Apply the config embedded by the host at render time — ensures settings are checked on extension/reload, not just after hello.
   useEffect(() => {
@@ -1796,7 +1795,6 @@ export function App() {
             expandEditTools={cfg?.ui.expandEditTools ?? false}
             fullShellOutput={cfg?.ui.fullShellOutput ?? false}
             messageStats={cfg?.ui.messageStats ?? true}
-            questionsDisabled={questionsDisabled}
             onRetry={() => void retryLast()}
             retryPendingLast={retryPending}
             retryInfo={retryInfo}
@@ -1815,101 +1813,6 @@ export function App() {
                   ),
                 )
             }
-            onAnswer={(text) => {
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
-                  if (!Array.isArray(m.content)) return msg;
-                  let changed = false;
-                  const nextContent = m.content.map((part) => {
-                    if (part.type === "tool" && part.name === "question" && (part.state?.status === "running" || part.state?.status === "streaming")) {
-                      changed = true;
-                      return { ...part, state: { ...part.state, status: "completed" } } as typeof part;
-                    }
-                    return part;
-                  });
-                  return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
-                }),
-              );
-              void sendMessage(text, undefined, "steer").catch((e: unknown) =>
-                setNotice(`Send failed — ${e instanceof Error ? e.message : String(e)}`),
-              );
-            }}
-            onQuestionReply={async (answers, toolCallId) => {
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  const m = msg as unknown as { content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }> };
-                  if (!Array.isArray(m.content)) return msg;
-                  let changed = false;
-                  const nextContent = m.content.map((part) => {
-                    if (part.type === "tool" && part.name === "question" && (part.state?.status === "running" || part.state?.status === "streaming")) {
-                      changed = true;
-                      return { ...part, state: { ...part.state, status: "completed" } } as typeof part;
-                    }
-                    return part;
-                  });
-                  return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
-                }),
-              );
-              const batch: string[][] = answers.map((a) => (a == null ? [] : [a]));
-              try {
-                const pending = await rpc.call<Array<Record<string, unknown>>>("question.list", { sessionID: activeId! });
-                const match = pending.find((r) => {
-                  const tool = (r.tool ?? (r as any).metadata?.tool ?? {}) as Record<string, unknown>;
-                  return tool.callID === toolCallId || tool.messageID === toolCallId || (r as { id?: string }).id === toolCallId;
-                }) as Record<string, unknown> | undefined;
-                const requestID = ((match as Record<string, unknown> | undefined)?.id ?? (match as Record<string, unknown> | undefined)?.requestID ?? (pending[0] as Record<string, unknown> | undefined)?.id ?? (pending[0] as Record<string, unknown> | undefined)?.requestID ?? toolCallId ?? "") as string;
-                if (!requestID) throw new Error("No pending question found");
-                await rpc.call("question.reply", { sessionID: activeId!, requestID, answers: batch });
-                void refreshMessages(activeId!);
-              } catch (e) {
-                const code = (e as { code?: string } | null)?.code;
-                const unsupported =
-                  code === "QuestionHTTPUnavailable" ||
-                  (e instanceof Error && /no pending question/i.test(e.message));
-                // Re-mark the card so the UI explains why it can't complete,
-                // instead of leaving the user staring at a silent hang.
-                setMessages((prev) =>
-                  prev.map((msg) => {
-                    const m = msg as unknown as {
-                      content?: Array<{ type?: string; name?: string; state?: Record<string, unknown> }>;
-                    };
-                    if (!Array.isArray(m.content)) return msg;
-                    let changed = false;
-                    const nextContent = m.content.map((part) => {
-                      if (
-                        part.type === "tool" &&
-                        part.name === "question" &&
-                        part.state?.status === "completed"
-                      ) {
-                        changed = true;
-                        return {
-                          ...part,
-                          state: {
-                            ...part.state,
-                            status: "unsupported",
-                            error: {
-                              message:
-                                "Your OpenCode server build doesn't support question replies yet.",
-                            },
-                          },
-                        } as typeof part;
-                      }
-                      return part;
-                    });
-                    return changed ? ({ ...msg, content: nextContent } as typeof msg) : msg;
-                  }),
-                );
-                setNotice(
-                  unsupported
-                    ? "⚠️ Your OpenCode server doesn't support interactive question replies yet — the agent won't receive this answer. Reply in the chat or via the CLI/TUI."
-                    : `Question reply failed (${e instanceof Error ? e.message : String(e)}) — the agent won't see this answer.`,
-                );
-                // No steered fallback: the agent is parked on the question
-                // tool's reply channel and a normal message can't satisfy it,
-                // so forwarding would only create a misleading duplicate.
-              }
-            }}
             onCopyMessage={(m) => {
               const t = (m as { text?: unknown }).text;
               const parts = (m as { content?: Array<{ text?: string }> }).content;
