@@ -11,7 +11,7 @@ export function formatCost(usd: number | undefined): string {
 }
 
 export function formatTokens(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return "—";
+  if (n === undefined || Number.isNaN(n) || !Number.isFinite(n)) return "—";
   if (n < 1000) return String(n);
   if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
   return `${(n / 1_000_000).toFixed(1)}M`;
@@ -30,6 +30,9 @@ export function totalTokens(
 ): number | undefined {
   if (!tokens) return undefined;
   const { input, output, reasoning, cache } = tokens;
+  // `cache` may be absent on some server snapshots — guard like contextPercent()
+  // instead of dereferencing cache.read (TypeError).
+  if (!cache || typeof cache !== "object") return undefined;
   const parts = [input, output, reasoning, cache.read, cache.write];
   if (parts.some((v) => typeof v !== "number" || Number.isNaN(v)))
     return undefined;

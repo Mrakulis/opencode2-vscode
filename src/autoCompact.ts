@@ -143,9 +143,12 @@ export class AutoCompactWatcher implements vscode.Disposable {
   private refreshLimits(): void {
     try {
       const client = this.controller.getClient();
-      void client.model
-        .list()
-        .then((res) => this.setContextLimits(res.data as never))
+      // Go through the adapter's normalized `models()` so list-shape drift
+      // (bare array vs `{data}`) can't break limit caching — reading `res.data`
+      // directly silently returned nothing and disabled auto-compaction.
+      void createApi({ getClient: () => client })
+        .models()
+        .then((models) => this.setContextLimits(models))
         .catch(() => undefined);
     } catch {
       /* not connected */
