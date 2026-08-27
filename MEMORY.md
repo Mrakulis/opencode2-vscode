@@ -27,7 +27,7 @@
 - Event routing: explicit table in `webview-src/lib/events.ts` (drift-guarded against the installed SDK's V2Event union; `session.usage.recorded` existed in beta-18050 types but never its union, and is gone entirely in beta-18230 — keep unrouted; `.updated` drives session refetches; catalog drift events tick pickers). Delta streaming: `webview-src/lib/deltas.ts` (text/reasoning/tool deltas keyed by `assistantMessageID` + `ordinal`; tool progress appends into the matching tool card). REST re-sync remains the safety net; `refreshMessages` overlays longer local text/reasoning AND streamed tool output onto lagging snapshots.
 - Feed autoscroll: bottom-first pin check (≤1px from max ⇒ pinned), directional unpin (>24px up, or 2% of feed), ResizeObserver on the content wrapper glued via rAF-coalesced floored scrollToBottom, `overflow-anchor:none`. New prompts force-jump and re-pin.
 - Retries are SERVER-side (`session.retry.scheduled`, `SessionStatus: retry`, message.retry). UI: retry affordance lives INLINE on the failed assistant message (`Feed` + `assistantFailed()` in `lib/failure.ts` — finish:"error" / error obj / persisted retry marker), shown only while it's the newest message so it scrolls away naturally. `lib/rpc.ts` can't be imported in node tests (acquireVsCodeApi at module load) — keep testable helpers out of it. No client backoff.
-- Permissions port upstream session auto-accept (`lib/permissions.ts`): auto-allow replies `"once"` per-session, questions stay interactive, `RespondedTracker` dedupes (1h TTL/1000 cap, cleared on reply failure), drain pending on enable. `"always"` persists rules but is manual-only. Server allow/deny config rules always win.
+- Permissions port upstream session auto-accept (`lib/permissions.ts`): auto-allow replies `"once"` per-session, questions stay interactive, `RespondedTracker` dedupes (1h TTL/1000 cap, cleared on reply failure), drain pending on enable. `"always"` persists rules but is manual-only. Server allow/deny config rules always win. **Rejecting one pending request rejects ALL pending in the same session** (OpenCode cancels them server-side) — `App` batch-replies + drains the UI together via `sameSessionPending()` (added v0.6.23+). `RespondedTracker.had/mark` take an injectable clock for tests.
 - Shell/terminal output capped ~8 lines (internally scrollable; `fullShellOutput` overrides). Diff button opens VS Code side-by-side (HEAD↔worktree); inline preview capped too.
 - share/unshare: no V2 API endpoints — permanently N/A.
 
@@ -52,6 +52,7 @@
 - Type predicates must target a subtype or narrowing silently no-ops.
 - `.mjs` files cannot contain TS syntax; PowerShell mangles unicode in md files — use node scripts/edit tooling.
 - vsce refuses `"private": true` in package.json.
+- **README badges are intentionally STATIC** (flat style, hard-coded hex): the dynamic `img.shields.io/github/license/...` lookup 404s ("not identifiable by github") because the repo is private/unreadable by shields, so the license badge is a hardcoded `MIT`. Sponsor badge links to `github.com/sponsors/Mrakulis` and uses the app's build-mode accent purple (`#7C5CFF`, muted `#4A3796`) — not the bright `#7C5CFF` default. No Marketplace version/installs badges until the extension is actually published there.
 
 ## Environment (Windows box)
 

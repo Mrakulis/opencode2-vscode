@@ -1,5 +1,10 @@
 # OpenCode 2 for VS Code
 
+<p align="center">
+  <a href="https://github.com/sponsors/Mrakulis"><img alt="Sponsor Mrakulis" src="https://img.shields.io/badge/sponsor-Mrakulis-4A3796?style=flat"></a>
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3F7FB3?style=flat">
+</p>
+
 > **Independent project · experimental.** Not affiliated with, endorsed by, or maintained by the OpenCode team ([Anomaly](https://github.com/anomalyco/opencode)). Built on the public **OpenCode V2 API**, which moves fast on the `beta` channel. Treat this client as a work in progress: individual features may break or lag behind upstream between beta builds.
 
 A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GUI-first (not a terminal clone), with full V2 API coverage: slash commands, skills, `@` file mentions, forms, worktrees, undo/redo with file reversion, and more.
