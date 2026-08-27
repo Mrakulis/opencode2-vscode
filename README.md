@@ -37,6 +37,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 - **Session awareness** — unread dots on sessions that finished while you weren't looking (server-tracked `idle`/`viewed`, clears on open and syncs to other windows/TUI), plus a pulsing indicator for sessions running in another client window (`session.active`)
 - **Auto-title (opt-in)** — after a session's first completed turn, a short title is generated (`session.generate`) and applied — unless you named it yourself
 - **Usage & stats drawer** — global totals across all projects: tokens, cost, day streak, activity bars, per-model spend and tool reliability; open via the status-strip counters or `⋯` → `Usage…`
+- **Git working-tree badge** — the branch chip shows live `+N −M` change counts and opens the working-diff review on click
 - **Own theme system** — OpenCode Dark & Light plus Tokyo Night, Gruvbox, Nord and Catppuccin presets (cycle from the `⋯` menu or pick in settings); compact/comfortable density
 
 ## Requirements
@@ -105,7 +106,7 @@ The extension is developed and tested against a specific client pin (`@opencode-
 
 ## Workspaces
 
-Open a folder, and every **new** session is anchored to it — the agent reads/edits inside that directory, exactly like running the CLI from a terminal already cd'd there. The header shows the bound folder as a chip (plus the git branch when available). The sessions drawer defaults to the same scope; flip `this folder` ⇄ `all projects` to see history across projects.
+Open a folder, and every **new** session is anchored to it — the agent reads/edits inside that directory, exactly like running the CLI from a terminal already cd'd there. The header shows the bound folder as a chip, plus the git branch with live `+N −M` working-tree counts (click to review the diff). The sessions drawer defaults to the same scope; flip `this folder` ⇄ `all projects` to see history across projects.
 
 ## Architecture notes
 

@@ -7,6 +7,8 @@ interface Props {
   sessionId?: string;
   workspaceName?: string;
   branch?: string;
+  /** Working-tree change counts for the branch chip badge. */
+  vcsDiff?: { added: number; removed: number };
   drawerOpen: boolean;
   onToggleDrawer(): void;
   onRename(title: string): Promise<void>;
@@ -121,12 +123,24 @@ export function HeaderBar(props: Props) {
         </span>
       )}
       {props.branch && (
-        <span
+        <button
+          type="button"
           className="ws-chip branch-chip"
-          title={`Git branch: ${props.branch}`}
+          title={`Git branch: ${props.branch} — click to review working-tree changes`}
+          onClick={props.onOpenWorkingDiff}
         >
           ⑂ {truncate(props.branch, 16)}
-        </span>
+          {props.vcsDiff && props.vcsDiff.added + props.vcsDiff.removed > 0 && (
+            <span className="branch-diff">
+              {props.vcsDiff.added > 0 && (
+                <span className="add">+{props.vcsDiff.added}</span>
+              )}
+              {props.vcsDiff.removed > 0 && (
+                <span className="del">−{props.vcsDiff.removed}</span>
+              )}
+            </span>
+          )}
+        </button>
       )}
 
       <div className="header-right" ref={menuRef}>

@@ -338,7 +338,14 @@ export function createRpcDispatcher(
     "websearch.providers": () => api.websearchProviders(),
 
     // -- vcs & worktrees ------------------------------------------------------------
-    "vcs.info": () => api.vcsInfo(),
+    "vcs.info": (p) => {
+      const dir = optStr(p, "directory");
+      return api.vcsInfo(dir ? canonicalizeDirectory(dir) : undefined);
+    },
+    "vcs.status": (p) => {
+      const dir = optStr(p, "directory");
+      return api.vcsStatus(dir ? canonicalizeDirectory(dir) : undefined);
+    },
     "vcs.diff": (p) => {
       const mode = p.mode === "branch" ? "branch" : "working";
       return api.vcsDiff(mode, optStr(p, "directory"));

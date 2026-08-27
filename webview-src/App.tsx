@@ -107,6 +107,9 @@ export function App() {
   const [instructionsTick, setInstructionsTick] = useState(0);
   const [slashTick, setSlashTick] = useState(0);
   const [vcsBranch, setVcsBranch] = useState<string | undefined>(undefined);
+  const [vcsDiff, setVcsDiff] = useState<
+    { added: number; removed: number } | undefined
+  >(undefined);
   /** Transient error from overflow-menu actions (import/export/undo…). */
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   /** Mirror of `messages` so event handlers can merge deltas without stale closures. */
@@ -653,12 +656,44 @@ export function App() {
 
   const refreshVcs = useCallback(async () => {
     try {
-      const info = await rpc.call<{ branch?: string } | undefined>("vcs.info");
+      const info = await rpc.call<{ branch?: string } | undefined>("vcs.info", {
+        directory: workspaceDir,
+      });
       setVcsBranch(info?.branch || undefined);
     } catch {
       setVcsBranch(undefined);
     }
-  }, []);
+  }, [workspaceDir]);
+
+  /**
+   * Working-tree +/− counts for the branch chip. Trailing-debounced on a
+   * timer (never called directly from filesystem.changed — bursts during
+   * agent runs must coalesce into one git scan, not one per event).
+   */
+  const refreshVcsCounts = useCallback(async () => {
+    try {
+      setVcsDiff(
+        await rpc.call<{ added: number; removed: number } | undefined>(
+          "vcs.status",
+          { directory: workspaceDir },
+        ),
+      );
+    } catch {
+      setVcsDiff(undefined);
+    }
+  }, [workspaceDir]);
+  const vcsCountTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const scheduleVcsCounts = useCallback(() => {
+    if (vcsCountTimer.current) clearTimeout(vcsCountTimer.current);
+    vcsCountTimer.current = setTimeout(() => void refreshVcsCounts(), 1200);
+  }, [refreshVcsCounts]);
+  useEffect(() => {
+    const onFocus = () => scheduleVcsCounts();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [scheduleVcsCounts]);
 
   const reloadSlash = useCallback(async () => {
     setSlashTick((t) => t + 1);
@@ -685,8 +720,11 @@ export function App() {
 
   // Branch chip: fetch once per connection + on vcs events.
   useEffect(() => {
-    if (conn === "connected") void refreshVcs();
-  }, [conn, refreshVcs]);
+    if (conn === "connected") {
+      void refreshVcs();
+      void refreshVcsCounts();
+    }
+  }, [conn, refreshVcs, refreshVcsCounts]);
 
   // ---- push events ---------------------------------------------------------
   useEffect(() => {
@@ -823,7 +861,10 @@ export function App() {
                 if (a === "forms") void refreshForms();
                 if (a === "mcp") setMcpTick((t) => t + 1);
                 if (a === "providers") setProvidersTick((t) => t + 1);
-                if (a === "vcs") void refreshVcs();
+                if (a === "vcs") {
+                  void refreshVcs();
+                  scheduleVcsCounts();
+                }
                 if (a === "worktrees") setWorktreeTick((t) => t + 1);
                 if (a === "instructions") setInstructionsTick((t) => t + 1);
                 if (a === "inbox") {
@@ -1712,6 +1753,7 @@ export function App() {
         title={active?.title}
         sessionId={activeId}
         branch={vcsBranch}
+        vcsDiff={vcsDiff}
         workspaceName={
           active?.location?.directory
             ? active.location.directory.split(/[\\/]/).filter(Boolean).pop()

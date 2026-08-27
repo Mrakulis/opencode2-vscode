@@ -7,7 +7,11 @@ import type {
   SessionMessageInfo,
 } from "@opencode-ai/client";
 import path from "node:path";
-import type { SessionStats, SessionStatsTokenTotals } from "./protocol";
+import type {
+  SessionStats,
+  SessionStatsTokenTotals,
+  VcsStatusSummary,
+} from "./protocol";
 
 /**
  * The ONLY module that calls the OpenCode V2 client.
@@ -76,6 +80,20 @@ function statTools(v: unknown): SessionStats["tools"] {
       }))
     : [];
   return { mode: "detail", totals, usage };
+}
+
+/**
+ * VCS location input. The pinned beta SDK types vcs inputs with a
+ * double-nested location (`{location:{location:{directory}}}`), but the live
+ * server reads the query param as a flat LocationRef
+ * (`location[directory]=...`) — verified via scripts/vcs-probe.mjs: the
+ * SDK-typed shape is silently ignored and the call resolves to the home
+ * directory. The cast at the call sites bridges that drift (no `any`).
+ */
+function vcsLocation(
+  directory?: string,
+): { location: { directory: string } } | undefined {
+  return directory ? { location: { directory } } : undefined;
 }
 
 export function createApi({ getClient }: ApiAdapterDeps) {
@@ -669,15 +687,52 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     },
 
     // -- vcs -------------------------------------------------------------------
-    vcsInfo: async (): Promise<{ branch?: string } | undefined> => {
+    vcsInfo: async (
+      directory?: string,
+    ): Promise<{ branch?: string } | undefined> => {
       try {
-        const res = await getClient().vcs.get();
+        const loc = vcsLocation(directory);
+        const res = loc
+          ? await getClient().vcs.get(
+              loc as unknown as Parameters<OpenCodeClient["vcs"]["get"]>[0],
+            )
+          : await getClient().vcs.get();
         const info = res.data as unknown as
           { branch?: { name?: string; current?: string } | string } | undefined;
         if (!info?.branch) return undefined;
         if (typeof info.branch === "string") return { branch: info.branch };
         return { branch: info.branch.name ?? info.branch.current };
       } catch {
+        return undefined;
+      }
+    },
+    /** Working-tree +/− totals for the branch-chip badge (vcs.status). */
+    vcsStatus: async (
+      directory?: string,
+    ): Promise<VcsStatusSummary | undefined> => {
+      try {
+        const loc = vcsLocation(directory);
+        const res = loc
+          ? ((await getClient().vcs.status(
+              loc as unknown as Parameters<OpenCodeClient["vcs"]["status"]>[0],
+            )) as unknown)
+          : ((await getClient().vcs.status()) as unknown);
+        // Verified against SDK types: VcsStatusOutput wraps `data:
+        // Array<VcsFileStatus>`; accept a bare array too (house rule).
+        const rows: Array<Record<string, unknown>> = Array.isArray(res)
+          ? (res as Array<Record<string, unknown>>)
+          : (((res as Record<string, unknown>).data as unknown[]) ?? []).map(
+              (r) => r as Record<string, unknown>,
+            );
+        let added = 0;
+        let removed = 0;
+        for (const row of rows) {
+          added += typeof row.additions === "number" ? row.additions : 0;
+          removed += typeof row.deletions === "number" ? row.deletions : 0;
+        }
+        return { files: rows.length, added, removed };
+      } catch {
+        // No VCS / not a git repo — expected failure, chip just shows no badge.
         return undefined;
       }
     },

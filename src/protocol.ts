@@ -209,6 +209,7 @@ export type RpcMethod =
   | "websearch.providers"
   // vcs & worktrees
   | "vcs.info"
+  | "vcs.status"
   | "vcs.diff"
   | "worktree.list"
   | "worktree.create"
@@ -312,6 +313,13 @@ export interface SessionStats {
     cost: number;
     tokens: SessionStatsTokenTotals;
   }>;
+}
+
+/** Working-tree change summary for the header branch chip badge. */
+export interface VcsStatusSummary {
+  files: number;
+  added: number;
+  removed: number;
 }
 
 export function isInbound(value: unknown): value is InboundMessage {

@@ -1702,6 +1702,22 @@ button:focus-visible {
   text-underline-offset: 2px;
 }
 
+/* ---------- branch chip working-tree badge ---------- */
+button.ws-chip {
+  cursor: pointer;
+  font: inherit;
+}
+.branch-diff {
+  margin-left: var(--oc2-space-1);
+  font-family: var(--oc2-mono);
+}
+.branch-diff .add {
+  color: var(--oc2-diff-add-fg);
+}
+.branch-diff .del {
+  color: var(--oc2-diff-del-fg);
+}
+
 /* ---------- usage drawer ---------- */
 .usage-grid {
   display: grid;
