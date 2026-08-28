@@ -39,7 +39,7 @@ export function Feed({
   onCopyMessage,
   onRegenerate,
   onEditMessage,
-  isPlan,
+  agentKind,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -73,8 +73,8 @@ export function Feed({
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
-  /** Current live plan state — used to tag pending user bubbles and as fallback for history */
-  isPlan?: boolean;
+  /** Live agent kind — seeds trailing pending user when no following assistant yet */
+  agentKind?: "plan" | "build" | "other";
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -93,22 +93,43 @@ export function Feed({
     return ta - tb;
   });
 
-  // Sticky plan/build flag per user message — opt-in only.
-  // Only messages that carry explicit planAtSend ("plan"|"build") get an accent;
-  // historic/untagged/other remain plain and never hidden (future-proof).
+  // Sticky plan/build per user message — explicit tag only.
+  // `plan`/`build` get accent, `custom/other` stays plain. No else coercion.
   const userPlanById = (() => {
     const map = new Map<string, "plan" | "build">();
     try {
+      // 1) explicit tags (overlay from App + any future server planAtSend)
       for (const m of sortedMessages) {
         if (!isUser(m)) continue;
         const raw = (m as unknown as { planAtSend?: unknown }).planAtSend;
-        let v: "plan" | "build" | undefined;
-        if (raw === "plan" || raw === "build") v = raw;
-        else if (raw === true) v = "plan"; // compat with 0.6.27 boolean
-        else if (raw === false) v = "build"; // compat
-        if (!v) continue;
         const id = (m as { id?: string }).id;
-        if (id) map.set(id, v);
+        if (!id) continue;
+        if (raw === "plan") map.set(id, "plan");
+        if (raw === "build") map.set(id, "build");
+        if (raw === true) map.set(id, "plan");
+        if (raw === false) map.set(id, "build");
+      }
+      // 2) fallback inference from next assistant's agent for untagged history
+      // Seed with live agentKind for trailing pending (no following assistant yet)
+      let next: "plan" | "build" | undefined;
+      if (agentKind === "plan") next = "plan";
+      if (agentKind === "build") next = "build";
+      for (let i = sortedMessages.length - 1; i >= 0; i--) {
+        const m = sortedMessages[i]!;
+        if (isAssistant(m)) {
+          const a = ((m as { agent?: unknown }).agent as string | undefined) ?? "";
+          const low = a.toLowerCase();
+          if (low.includes("plan")) next = "plan";
+          if (low.includes("build")) next = "build";
+          if (!low.includes("plan") && !low.includes("build")) next = undefined;
+        }
+        if (isUser(m)) {
+          const id = (m as { id?: string }).id;
+          if (!id) continue;
+          if (map.has(id)) continue;
+          if (next === "plan") map.set(id, "plan");
+          if (next === "build") map.set(id, "build");
+        }
       }
     } catch {
       return new Map<string, "plan" | "build">();

@@ -127,6 +127,8 @@ export function App() {
   const [retryPending, setRetryPending] = useState(false);
   /** Full streamed text per `${messageId}|${kind}` — survives refetches. */
   const deltaAccRef = useRef(new Map<string, string>());
+  /** Sticky plan/build per user message — survives server refetches (which have no planAtSend). */
+  const planOverlayRef = useRef<Map<string, Map<string, "plan" | "build">>>(new Map());
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const busySessionsRef = useRef<Record<string, boolean>>({});
   useEffect(() => {
@@ -448,7 +450,7 @@ export function App() {
       // Suppress system-reminder lifecycle messages (all agents) that are already
       // conveyed by the whole-UI tint — filter at ingestion so they never reach Feed.
       const REMINDER_RE = /<system-reminder>|You are (?:in|NO LONGER in)\b/i;
-      const filtered = merged.filter((m) => {
+      let filtered = merged.filter((m) => {
         const t = (m as { type?: unknown }).type;
         if (t === "assistant") {
           // Strip reminder text/reasoning parts even inside assistant content.
@@ -466,6 +468,51 @@ export function App() {
           return true;
         }
       });
+      // Overlay sticky plan/build per user message — server has no planAtSend, so re-apply
+      // client-side tag using explicit ifs only (no else coercion). Custom stays plain.
+      {
+        const overlay = getPlanOverlay(sessionId);
+        // Migrate pending ids to real server ids (match by text of the pending optimistic)
+        const pendingEntries = [...overlay.entries()].filter(([k]) => k.startsWith("pending-"));
+        for (const [pid, v] of pendingEntries) {
+          const pend = messagesRef.current.find((mm) => (mm as { id?: string }).id === pid) as
+            | { text?: string }
+            | undefined;
+          if (!pend?.text) continue;
+          const candidate = [...filtered]
+            .reverse()
+            .find(
+              (mm) =>
+                isUser(mm as AnyMessage) &&
+                (mm as unknown as { planAtSend?: unknown }).planAtSend === undefined &&
+                (mm as unknown as { text?: string }).text === pend.text,
+            ) as unknown as { id: string } | undefined;
+          if (candidate?.id) {
+            overlay.set(candidate.id, v);
+            overlay.delete(pid);
+          }
+        }
+        // Cap per-session overlay (like RespondedTracker 1k) to avoid unbounded growth
+        if (overlay.size > 1000) {
+          const toDrop = overlay.size - 1000;
+          let n = 0;
+          for (const k of overlay.keys()) {
+            if (n++ >= toDrop) break;
+            overlay.delete(k);
+          }
+        }
+        // Stamp planAtSend onto the server list so Feed's explicit-tag path sees it
+        filtered = filtered.map((m) => {
+          if (!isUser(m as AnyMessage)) return m;
+          const mid = (m as { id?: string }).id;
+          if (!mid) return m;
+          if ((m as unknown as { planAtSend?: unknown }).planAtSend) return m;
+          const v = overlay.get(mid);
+          if (v === "plan") return { ...(m as Record<string, unknown>), planAtSend: "plan" } as unknown as AnyMessage;
+          if (v === "build") return { ...(m as Record<string, unknown>), planAtSend: "build" } as unknown as AnyMessage;
+          return m;
+        });
+      }
       setMessages(filtered);
       // Record the newest assistant-step failure (if any) so smart-retry can
       // repair the model binding and new-session defaults can warn about it.
@@ -639,6 +686,15 @@ export function App() {
     },
     [refreshMessages, refreshQueued],
   );
+
+  function getPlanOverlay(sessionId: string): Map<string, "plan" | "build"> {
+    let m = planOverlayRef.current.get(sessionId);
+    if (!m) {
+      m = new Map<string, "plan" | "build">();
+      planOverlayRef.current.set(sessionId, m);
+    }
+    return m;
+  }
 
   /** Re-fetch pending agent form requests (all sessions; UI filters by visibility). */
   const refreshForms = useCallback(async () => {
@@ -1226,8 +1282,14 @@ export function App() {
             ? `📎 ${files.map((f) => f.name ?? f.uri).join(", ")}`
             : ""),
         time: { created: Date.now() },
-        ...(agentKind !== "other" ? { planAtSend: agentKind } : {}),
       };
+      if (agentKind === "plan") (optimistic as { planAtSend?: "plan" | "build" }).planAtSend = "plan";
+      if (agentKind === "build") (optimistic as { planAtSend?: "plan" | "build" }).planAtSend = "build";
+      {
+        const ov = getPlanOverlay(targetId);
+        if (agentKind === "plan") ov.set(optimistic.id, "plan");
+        if (agentKind === "build") ov.set(optimistic.id, "build");
+      }
       setMessages((m) => [...m, optimistic]);
       setBusySessions((b) => ({ ...b, [targetId!]: true }));
       setRetryInfo(undefined); // a fresh run must not inherit stale retry state
@@ -1273,7 +1335,7 @@ export function App() {
       newSession,
       refreshMessages,
       refreshQueued,
-      isPlan,
+      agentKind,
     ],
   );
 
@@ -1969,7 +2031,7 @@ export function App() {
           <Feed
             messages={messages}
             busy={busy}
-            isPlan={isPlan}
+            agentKind={agentKind}
             showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
             expandShellTools={cfg?.ui.expandShellTools ?? false}
             expandEditTools={cfg?.ui.expandEditTools ?? false}
