@@ -2170,7 +2170,13 @@ export function App() {
             onClose={() => setInboxOpen(false)}
           />
         )}
-        {usageOpen && <UsageDrawer onClose={() => setUsageOpen(false)} />}
+        {usageOpen && (
+          <UsageDrawer
+            onClose={() => setUsageOpen(false)}
+            workspaceDir={workspaceDir}
+            activeId={activeId}
+          />
+        )}
       </main>
 
       {(() => {

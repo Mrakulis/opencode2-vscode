@@ -271,13 +271,18 @@ export function createApi({ getClient }: ApiAdapterDeps) {
 
     // -- usage stats -----------------------------------------------------------
     /**
-     * Aggregated usage across ALL projects (server-side session.stats).
-     * Verified live 2026-08-27: the bare call returns tools.mode "summary";
-     * the SDK's nested tools-detail input is currently ignored by the server,
-     * so detail rows render only if the server default ever changes.
+     * Aggregated usage (server-side session.stats). Without a project it
+     * returns the global aggregate across ALL projects (verified live
+     * 2026-08-27: bare call returns tools.mode "summary"). With a project
+     * it scopes to that Project.ID — used by the Usage drawer Project tab.
      */
-    sessionStats: async (): Promise<SessionStats> => {
-      const res = (await getClient().session.stats()) as unknown;
+    sessionStats: async (opts?: {
+      project?: string;
+    }): Promise<SessionStats> => {
+      const rawArgs = opts?.project ? ({ project: opts.project } as never) : undefined;
+      const res = (await (rawArgs
+        ? (getClient().session.stats as unknown as (a: unknown) => Promise<unknown>)(rawArgs)
+        : getClient().session.stats())) as unknown;
       const d = (res ?? {}) as Record<string, unknown>;
       const s = (d.data ?? d) as Record<string, unknown>;
       return {
@@ -818,8 +823,13 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         })),
       };
     },
-    projectCurrent: async (): Promise<Record<string, unknown> | undefined> => {
-      const res = await getClient().project.current();
+    projectCurrent: async (
+      directory?: string,
+    ): Promise<Record<string, unknown> | undefined> => {
+      const loc = directory ? ({ location: { directory } } as never) : undefined;
+      const res = loc
+        ? await (getClient().project.current as unknown as (a: unknown) => Promise<unknown>)(loc)
+        : await getClient().project.current();
       return res as unknown as Record<string, unknown> | undefined;
     },
   };

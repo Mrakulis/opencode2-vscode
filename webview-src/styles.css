@@ -1771,6 +1771,29 @@ button.ws-chip {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.usage-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-bottom: 1px solid var(--oc2-border);
+  flex-wrap: wrap;
+}
+.usage-scope-hint {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.usage-hint {
+  padding: 4px var(--oc2-space-3);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  color: var(--oc2-fg-subtle);
+  font-family: var(--oc2-mono);
+}
 .model-meta.act {
   text-transform: lowercase;
 }

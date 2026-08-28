@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCost, formatTokens } from "../lib/format";
-import { rpc, type SessionStats } from "../lib/rpc";
+import { rpc, type SessionStats, type SessionSummary } from "../lib/rpc";
+
+export type UsageScope = "total" | "project" | "session";
 
 /**
  * Aggregate per-project model rows into one row per model — the server emits
@@ -45,31 +47,218 @@ function ActivityBars({ activity }: { activity: SessionStats["activity"] }) {
   );
 }
 
-/**
- * Usage & stats drawer: global token/cost totals, streak, activity bars,
- * per-model spend and tool reliability. Backed by the server-side
- * session.stats aggregate (all projects) — read-only, no session required.
- */
-export function UsageDrawer({ onClose }: { onClose(): void }) {
+function normalizeDir(p: string): string {
+  return p.replace(/[\\/]+$/, "").toLowerCase().replace(/\\/g, "/");
+}
+
+function isInProject(sessionDir: string, workspaceDir: string): boolean {
+  const a = normalizeDir(sessionDir);
+  const b = normalizeDir(workspaceDir);
+  return a === b || a.startsWith(b + "/");
+}
+
+function statsFromSessions(
+  sessions: SessionSummary[],
+  workspaceDir?: string,
+): SessionStats {
+  const filtered = workspaceDir
+    ? sessions.filter((s) => isInProject(s.location.directory, workspaceDir))
+    : sessions;
+  let cost = 0;
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  const byModel = new Map<string, SessionStats["models"][number]>();
+  let subagents = 0;
+  for (const s of filtered) {
+    cost += s.cost ?? 0;
+    input += s.tokens.input ?? 0;
+    output += s.tokens.output ?? 0;
+    reasoning += s.tokens.reasoning ?? 0;
+    cacheRead += s.tokens.cache.read ?? 0;
+    cacheWrite += s.tokens.cache.write ?? 0;
+    if (s.parentID) subagents += 1;
+    if (s.model) {
+      const key = `${s.model.providerID}/${s.model.id}`;
+      const cur = byModel.get(key);
+      const tok = {
+        input: s.tokens.input ?? 0,
+        output: s.tokens.output ?? 0,
+        reasoning: s.tokens.reasoning ?? 0,
+        cacheRead: s.tokens.cache.read ?? 0,
+        cacheWrite: s.tokens.cache.write ?? 0,
+      };
+      if (!cur) {
+        byModel.set(key, { model: key, steps: 1, cost: s.cost ?? 0, tokens: tok });
+      } else {
+        cur.steps += 1;
+        cur.cost += s.cost ?? 0;
+        cur.tokens.input += tok.input;
+        cur.tokens.output += tok.output;
+        cur.tokens.reasoning += tok.reasoning;
+        cur.tokens.cacheRead += tok.cacheRead;
+        cur.tokens.cacheWrite += tok.cacheWrite;
+      }
+    }
+  }
+  return {
+    sessions: filtered.length,
+    subagents,
+    prompts: filtered.length,
+    steps: filtered.length,
+    cost,
+    activeDays: 0,
+    streak: 0,
+    tokens: { input, output, reasoning, cacheRead, cacheWrite },
+    tools: { mode: "none" },
+    activity: [],
+    models: [...byModel.values()].sort((a, b) => b.cost - a.cost),
+  };
+}
+
+function statsForSession(s: SessionSummary): SessionStats {
+  const tokens = {
+    input: s.tokens.input ?? 0,
+    output: s.tokens.output ?? 0,
+    reasoning: s.tokens.reasoning ?? 0,
+    cacheRead: s.tokens.cache.read ?? 0,
+    cacheWrite: s.tokens.cache.write ?? 0,
+  };
+  const modelKey = s.model ? `${s.model.providerID}/${s.model.id}` : undefined;
+  return {
+    sessions: 1,
+    subagents: 0,
+    prompts: 1,
+    steps: 1,
+    cost: s.cost ?? 0,
+    activeDays: 0,
+    streak: 0,
+    tokens,
+    tools: { mode: "none" },
+    activity: [],
+    models: modelKey
+      ? [{ model: modelKey, steps: 1, cost: s.cost ?? 0, tokens }]
+      : [],
+  };
+}
+
+interface Props {
+  onClose(): void;
+  workspaceDir?: string;
+  activeId?: string;
+}
+
+export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
+  const [scope, setScope] = useState<UsageScope>("total");
   const [stats, setStats] = useState<SessionStats | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  // cache per scope so switching is instant after first load
+  const [cache, setCache] = useState<Partial<Record<UsageScope, SessionStats>>>({});
 
   const load = useCallback(async () => {
+    setError(undefined);
+    // serve from cache if present
+    if (cache[scope]) {
+      setStats(cache[scope]);
+      return;
+    }
+    setLoading(true);
     try {
-      setStats(await rpc.call<SessionStats>("session.stats"));
+      let next: SessionStats | undefined;
+      if (scope === "total") {
+        next = await rpc.call<SessionStats>("session.stats");
+      } else if (scope === "project") {
+        // Try server-scoped stats via Project.ID first for richer data (tools/activity)
+        let projectId: string | undefined;
+        try {
+          const cur = await rpc.call<Record<string, unknown>>("project.current", workspaceDir ? { directory: workspaceDir } : {});
+          const id = cur?.id;
+          if (typeof id === "string" && id.length > 0) projectId = id;
+          // some servers return { data: { id } } wrapper
+          if (!projectId && typeof (cur as { data?: unknown })?.data === "object") {
+            const inner = (cur as { data: Record<string, unknown> }).data;
+            if (typeof inner.id === "string") projectId = inner.id;
+          }
+        } catch {
+          // ignore — fallback to client aggregation
+        }
+        if (projectId) {
+          try {
+            next = await rpc.call<SessionStats>("session.stats", { project: projectId });
+          } catch {
+            // fallback below
+          }
+        }
+        if (!next) {
+          // Client-side fallback: aggregate sessions filtered to workspaceDir
+          const all = await rpc
+            .call<SessionSummary[]>("session.list", { allProjects: true })
+            .catch(() => [] as SessionSummary[]);
+          next = statsFromSessions(all, workspaceDir);
+        }
+      } else if (scope === "session") {
+        if (!activeId) {
+          setError("No active session — select a session first.");
+          setStats(undefined);
+          setLoading(false);
+          return;
+        }
+        // Find active session from list
+        const all = await rpc
+          .call<SessionSummary[]>("session.list", { allProjects: true })
+          .catch(() => [] as SessionSummary[]);
+        const found = all.find((s) => s.id === activeId);
+        if (!found) {
+          setError("Active session not found.");
+          setStats(undefined);
+          setLoading(false);
+          return;
+        }
+        next = statsForSession(found);
+      }
+      if (next) {
+        setStats(next);
+        setCache((prev) => ({ ...prev, [scope]: next }));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setStats(undefined);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [scope, workspaceDir, activeId, cache]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const models = useMemo(
-    () => (stats ? aggregateModels(stats.models) : []),
-    [stats],
-  );
+  // reset cache when workspace/session changes invalidate project/session scopes
+  useEffect(() => {
+    setCache((prev) => {
+      const next = { ...prev };
+      delete next.project;
+      delete next.session;
+      return next;
+    });
+  }, [workspaceDir, activeId]);
+
+  const models = useMemo(() => {
+    if (!stats) return [];
+    const agg = aggregateModels(stats.models);
+    // Only show models that actually consumed tokens (drawer was showing every catalog entry)
+    return agg.filter((m) => {
+      const total =
+        m.tokens.input +
+        m.tokens.output +
+        m.tokens.reasoning +
+        m.tokens.cacheRead +
+        m.tokens.cacheWrite;
+      return total > 0;
+    });
+  }, [stats]);
   const tokenTotal = stats
     ? stats.tokens.input +
       stats.tokens.output +
@@ -77,6 +266,10 @@ export function UsageDrawer({ onClose }: { onClose(): void }) {
       stats.tokens.cacheRead +
       stats.tokens.cacheWrite
     : 0;
+
+  const projectLabel = workspaceDir
+    ? workspaceDir.split(/[\\/]/).filter(Boolean).pop() ?? workspaceDir
+    : "Project";
 
   return (
     <div className="drawer-backdrop" onClick={onClose}>
@@ -91,9 +284,43 @@ export function UsageDrawer({ onClose }: { onClose(): void }) {
             ×
           </button>
         </header>
+        <div className="usage-scope">
+          <span className="oc2-pop-filters" role="group" aria-label="Usage scope">
+            {(["total", "project", "session"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={`oc2-pop-fchip${scope === k ? " on" : ""}`}
+                aria-pressed={scope === k}
+                onClick={() => setScope(k)}
+                disabled={k === "session" && !activeId}
+                title={
+                  k === "session" && !activeId
+                    ? "No active session"
+                    : k === "project" && !workspaceDir
+                      ? "No workspace folder"
+                      : undefined
+                }
+              >
+                {k === "total" ? "Total" : k === "project" ? projectLabel : "Session"}
+              </button>
+            ))}
+          </span>
+          {scope === "project" && workspaceDir && (
+            <span className="usage-scope-hint" title={workspaceDir}>
+              {workspaceDir}
+            </span>
+          )}
+          {scope === "session" && activeId && (
+            <span className="usage-scope-hint" title={activeId}>
+              {activeId.slice(0, 8)}…
+            </span>
+          )}
+        </div>
         {error && <div className="composer-error">{error}</div>}
         <div className="drawer-list">
-          {!stats && !error && <div className="drawer-empty">Loading…</div>}
+          {loading && !stats && !error && <div className="drawer-empty">Loading…</div>}
+          {!loading && !stats && !error && <div className="drawer-empty">No data</div>}
           {stats && (
             <>
               <div className="usage-grid">
@@ -119,21 +346,35 @@ export function UsageDrawer({ onClose }: { onClose(): void }) {
                   <span className="usage-num">{formatCost(stats.cost)}</span>
                   <span className="usage-label">total cost</span>
                 </div>
-                <div className="usage-cell">
-                  <span className="usage-num">
-                    {stats.streak.toLocaleString()}
-                  </span>
-                  <span className="usage-label">day streak</span>
-                </div>
-                <div className="usage-cell">
-                  <span className="usage-num">
-                    {stats.activeDays.toLocaleString()}
-                  </span>
-                  <span className="usage-label">active days</span>
-                </div>
+                {scope === "total" ? (
+                  <>
+                    <div className="usage-cell">
+                      <span className="usage-num">
+                        {stats.streak.toLocaleString()}
+                      </span>
+                      <span className="usage-label">day streak</span>
+                    </div>
+                    <div className="usage-cell">
+                      <span className="usage-num">
+                        {stats.activeDays.toLocaleString()}
+                      </span>
+                      <span className="usage-label">active days</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="usage-cell">
+                    <span className="usage-num">—</span>
+                    <span className="usage-label" title="Global only">
+                      {scope === "project" ? "project" : "session"} scope
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <ActivityBars activity={stats.activity} />
+              {scope === "total" && <ActivityBars activity={stats.activity} />}
+              {scope !== "total" && stats.activity.length === 0 && (
+                <div className="usage-hint">Activity &amp; streak are global totals only.</div>
+              )}
 
               <div className="usage-section">tokens</div>
               <div className="usage-row">
@@ -164,7 +405,7 @@ export function UsageDrawer({ onClose }: { onClose(): void }) {
                 <span>total</span>
                 <span>{formatTokens(tokenTotal)}</span>
               </div>
-              {stats.tools.mode !== "none" && (
+              {stats.tools.mode !== "none" ? (
                 <>
                   <div className="usage-section">tool calls</div>
                   <div className="usage-row">
@@ -209,7 +450,9 @@ export function UsageDrawer({ onClose }: { onClose(): void }) {
                         </div>
                       ))}
                 </>
-              )}
+              ) : scope !== "total" ? (
+                <div className="usage-hint">Tool calls are global totals only.</div>
+              ) : null}
 
               {models.length > 0 && (
                 <>
