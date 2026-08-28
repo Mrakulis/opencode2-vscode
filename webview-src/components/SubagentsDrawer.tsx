@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { formatCost, formatTokens } from "../lib/format";
 
@@ -42,6 +42,7 @@ export function SubagentsDrawer({ subagents, initialId, onClose }: Props) {
   );
   const [tail, setTail] = useState<TailMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const tailRef = useRef<HTMLDivElement>(null);
 
   const current = subagents.find((s) => s.id === selected) ?? subagents[0];
 
@@ -82,7 +83,14 @@ export function SubagentsDrawer({ subagents, initialId, onClose }: Props) {
     if (!current) return;
     const id = setInterval(() => void refreshTail(current.id), 1500);
     return () => clearInterval(id);
-  }, [current?.id, refreshTail, current]);
+  }, [current?.id, refreshTail]);
+
+  // Newest at bottom — keep tail pinned to bottom like main feed
+  useEffect(() => {
+    const el = tailRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [tail]);
 
   const terminate = async (): Promise<void> => {
     if (!current) return;
@@ -122,7 +130,7 @@ export function SubagentsDrawer({ subagents, initialId, onClose }: Props) {
               style={{ textAlign: "left", cursor: "pointer" }}
               onClick={() => setSelected(s.id)}
             >
-              <span className={`dot ${active ? "ok busy" : "off"}`} />
+              <span className={`dot ${active ? "busy" : "off"}`} />
               <span className="model-name" title={s.title ?? s.agent}>
                 {s.title || s.agent || "subagent"}
               </span>
@@ -160,6 +168,7 @@ export function SubagentsDrawer({ subagents, initialId, onClose }: Props) {
             )}
           </div>
           <div
+            ref={tailRef}
             className="drawer-list"
             style={{ maxHeight: "45vh", overflowY: "auto" }}
           >

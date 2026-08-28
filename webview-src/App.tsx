@@ -178,6 +178,44 @@ export function App() {
     () => childrenOf(sessions, activeId),
     [sessions, activeId],
   );
+  const hasActiveSubagents = useMemo(
+    () => childSubs.some(isSubagentActive),
+    [childSubs],
+  );
+  const groupedSubs = useMemo(() => {
+    const map = new Map<
+      string,
+      { agent: string; ids: string[]; total: number; active: number }
+    >();
+    for (const s of childSubs) {
+      const key = s.agent ?? "subagent";
+      const cur = map.get(key);
+      const active = isSubagentActive(s) ? 1 : 0;
+      if (!cur) map.set(key, { agent: key, ids: [s.id], total: 1, active });
+      else {
+        cur.ids.push(s.id);
+        cur.total += 1;
+        cur.active += active;
+      }
+    }
+    return [...map.values()];
+  }, [childSubs]);
+  // Auto-hide strip 4s after all subagents finish (TUI-like ephemeral)
+  const [stripVisible, setStripVisible] = useState(false);
+  useEffect(() => {
+    if (hasActiveSubagents) {
+      setStripVisible(true);
+      return;
+    }
+    if (childSubs.length === 0) {
+      setStripVisible(false);
+      return;
+    }
+    // Show 0/N grace then hide
+    setStripVisible(true);
+    const t = setTimeout(() => setStripVisible(false), 4000);
+    return () => clearTimeout(t);
+  }, [hasActiveSubagents, childSubs.length]);
   const [inboxTick, setInboxTick] = useState(0);
   const [compacting, setCompacting] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
@@ -2380,24 +2418,28 @@ export function App() {
         );
       })()}
 
-      {childSubs.length > 0 && (
-        /* Subagent status chips (Module 6): clickable per child session. */
+      {stripVisible && groupedSubs.length > 0 && (
+        /* Subagent status chips - grouped by agent type, TUI-like ephemeral */
         <div className="strip" style={{ padding: "2px 8px" }}>
-          {childSubs.slice(0, 5).map((s) => (
+          {groupedSubs.slice(0, 3).map((g) => (
             <button
-              key={s.id}
+              key={g.agent}
               type="button"
-              className={`chip${isSubagentActive(s) ? " on" : ""}`}
-              title={`${s.title || s.agent || "subagent"} — ${isSubagentActive(s) ? "running" : "finished"} · click to inspect`}
+              className={`chip${g.active > 0 ? " on" : ""}`}
+              title={`${g.agent} — ${g.active > 0 ? `${g.active}/${g.total} running` : `${g.total} finished`} · click to inspect`}
               onClick={() => {
-                setSelectedSubagent(s.id);
+                setSelectedSubagent(g.ids[0]);
                 setSubagentsOpen(true);
               }}
             >
-              🤖 {s.agent ?? "subagent"}
-              {isSubagentActive(s) ? " ●" : ""}
+              🤖 {g.agent}
+              {g.total > 1 ? ` ×${g.total}` : ""}
+              {g.active > 0 ? " ●" : ""}
             </button>
           ))}
+          {groupedSubs.length > 3 && (
+            <span className="micro">+{groupedSubs.length - 3} more</span>
+          )}
           <span className="spacer" />
           <button
             type="button"
