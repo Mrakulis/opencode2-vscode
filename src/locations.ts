@@ -28,6 +28,9 @@ export function wellKnownCliLocations(
     out.push(
       path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", bin),
       path.join(npmRoot, "node_modules", "opencode-ai", "bin", bin),
+      // Shim fallback for GUI-launched VS Code with minimal PATH — npm
+      // always creates `%APPDATA%\npm\<name>.cmd` alongside the real binary.
+      path.join(npmRoot, `${name}.cmd`),
     );
     return out;
   }

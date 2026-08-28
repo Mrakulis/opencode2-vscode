@@ -11,16 +11,16 @@ describe("wellKnownCliLocations", () => {
 
   it("returns the Windows npm layout for win32", () => {
     const out = wellKnownCliLocations("opencode2", "win32");
-    assert.ok(out.length >= 2);
-    for (const p of out) {
-      assert.ok(p.endsWith("opencode2.exe"), p);
-      assert.ok(p.includes("node_modules"), p);
-    }
+    assert.ok(out.length >= 3);
+    // real binaries + shim fallback for GUI-launched VS Code with minimal PATH
+    assert.ok(out.some((p) => p.endsWith("opencode2.exe") && p.includes("node_modules")), out.join(", "));
+    assert.ok(out.some((p) => p.endsWith("opencode2.cmd")), out.join(", "));
   });
 
   it("returns the Windows npm layout for the npm bin name too", () => {
     const out = wellKnownCliLocations("opencode", "win32");
-    for (const p of out) assert.ok(p.endsWith("opencode.exe"), p);
+    assert.ok(out.some((p) => p.endsWith("opencode.exe") && p.includes("node_modules")), out.join(", "));
+    assert.ok(out.some((p) => p.endsWith("opencode.cmd")), out.join(", "));
   });
 
   it("covers user-prefix and system dirs on Linux", () => {

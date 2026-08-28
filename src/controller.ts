@@ -79,7 +79,7 @@ export class OpenCodeController implements vscode.Disposable {
   // is time-boxed and retried with backoff while auto-start is enabled.
   private retryTimer?: ReturnType<typeof setTimeout>;
   private retryCount = 0;
-  private readonly connectTimeoutMs = 20_000;
+  private readonly connectTimeoutMs = 35_000;
   private readonly retryBaseMs = 4_000;
   private readonly maxRetries = 20;
 
@@ -129,14 +129,14 @@ export class OpenCodeController implements vscode.Disposable {
   }
 
   /** (Re)establish the connection. Safe to call repeatedly; later calls win. */
-  async connect(cli?: ResolvedCli): Promise<OpenCodeClient> {
+  async connect(cli?: ResolvedCli, opts?: { force?: boolean }): Promise<OpenCodeClient> {
     const generation = ++this.generation;
     this.clearRetry();
     this.setConnecting();
 
     try {
       const { client, health } = await this.withTimeout(
-        this.establish(cli, generation),
+        this.establish(cli, generation, opts?.force),
         this.connectTimeoutMs,
       );
       if (generation !== this.generation) {
@@ -174,7 +174,7 @@ export class OpenCodeController implements vscode.Disposable {
             : message;
         this.lastError = authHint;
         this.emitter.fire("error");
-        this.scheduleRetry(generation, cli);
+        this.scheduleRetry(generation, cli, opts?.force);
       }
       throw error instanceof Error ? error : new Error(message);
     }
@@ -184,11 +184,12 @@ export class OpenCodeController implements vscode.Disposable {
   private async establish(
     cli: ResolvedCli | undefined,
     generation: number,
+    force?: boolean,
   ): Promise<{
     client: OpenCodeClient;
     health: Awaited<ReturnType<OpenCodeClient["health"]["get"]>>;
   }> {
-    const client = await this.createClient(cli);
+    const client = await this.createClient(cli, force);
     if (generation !== this.generation) throw new SupersededError();
     const health = await client.health.get();
     if (generation !== this.generation) throw new SupersededError();
@@ -215,12 +216,13 @@ export class OpenCodeController implements vscode.Disposable {
   private scheduleRetry(
     generation: number,
     cli: ResolvedCli | undefined,
+    force?: boolean,
   ): void {
     if (generation !== this.generation || this.client) return;
     const autoStart = vscode.workspace
       .getConfiguration("opencode2")
-      .get<boolean>("server.autoStart", true);
-    if (!autoStart) return;
+      .get<boolean>("server.autoStart", false);
+    if (!autoStart && !force) return;
     if (this.retryCount >= this.maxRetries) {
       this.log.warn(
         "connection retries exhausted — run 'OpenCode 2: Restart Background Service'",
@@ -239,7 +241,7 @@ export class OpenCodeController implements vscode.Disposable {
       this.pendingTimers.delete(timer);
       this.retryTimer = undefined;
       if (generation !== this.generation || this.client) return;
-      void this.connect(cli).catch(() => {
+      void this.connect(cli, force ? { force } : undefined).catch(() => {
         /* next retry scheduled by connect() on failure */
       });
     }, delay);
@@ -255,11 +257,11 @@ export class OpenCodeController implements vscode.Disposable {
     }
   }
 
-  async restart(): Promise<void> {
+  async restart(opts?: { force?: boolean }): Promise<void> {
     this.generation++; // invalidate in-flight connects
     this.client = undefined;
     this.activeBaseUrl = undefined;
-    await this.connect();
+    await this.connect(undefined, opts?.force ? { force: true } : undefined);
   }
 
   /**
@@ -346,7 +348,7 @@ export class OpenCodeController implements vscode.Disposable {
     }
   }
 
-  private async createClient(cli?: ResolvedCli): Promise<OpenCodeClient> {
+  private async createClient(cli?: ResolvedCli, force?: boolean): Promise<OpenCodeClient> {
     const config = vscode.workspace.getConfiguration("opencode2");
     const explicitUrl = config.get<string>("server.baseUrl", "").trim();
     const serverMode = config.get<"own" | "discover">("server.mode", "own");
@@ -382,24 +384,20 @@ export class OpenCodeController implements vscode.Disposable {
 
     // 3) "own" mode (default): reuse an existing healthy service before
     //    spawning a new one — every window reload would otherwise blind-spawn
-    //    another detached service. A stale registration (dead pid, crashed
-    //    service) falls through to a fresh spawn instead of wedging the
-    //    connection on retries against a corpse.
+    //    another detached service. `discoverService()` already health-checks
+    //    via `Service.discover` (fetch /api/health), so a returned endpoint
+    //    is healthy; stale registrations return undefined and fall through.
     const existing = await this.discoverService();
-    if (existing && (await this.isHealthy(existing))) {
+    if (existing) {
       this.log.debug(
         `own mode found an already-registered service at ${existing.url}`,
       );
       return this.makeFor(existing);
-    } else if (existing) {
-      this.log.warn(
-        `discovered service at ${existing.url} failed its health probe — falling through to spawn`,
-      );
     }
-    const autoStart = config.get<boolean>("server.autoStart", true);
-    if (!autoStart) {
+    const autoStart = config.get<boolean>("server.autoStart", false);
+    if (!autoStart && !force) {
       throw new Error(
-        "No running OpenCode service found and opencode2.server.autoStart is disabled.",
+        "No running OpenCode service found and opencode2.server.autoStart is disabled — press 'Start opencode2' or enable opencode2.server.autoStart.",
       );
     }
     let spawnCommand: string[];
@@ -428,17 +426,21 @@ export class OpenCodeController implements vscode.Disposable {
   private async startHiddenService(spawnCommand: string[]): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      let stderr = "";
       const fail = (error: Error): void => {
         if (settled) return;
         settled = true;
-        this.log.error("hidden service spawn failed", error);
-        reject(error);
+        const msg = stderr ? `${error.message}\n${stderr}` : error.message;
+        const err = new Error(msg);
+        (err as unknown as { cause?: unknown }).cause = (error as unknown as { cause?: unknown })?.cause ?? error;
+        this.log.error("hidden service spawn failed", err);
+        reject(err);
       };
       let child: ReturnType<typeof spawn>;
       try {
         child = spawn(spawnCommand[0]!, spawnCommand.slice(1), {
           detached: true,
-          stdio: "ignore",
+          stdio: ["ignore", "ignore", "pipe"],
           windowsHide: true, // CREATE_NO_WINDOW — suppresses the detached console window
           env: process.env,
         });
@@ -446,7 +448,18 @@ export class OpenCodeController implements vscode.Disposable {
         fail(error instanceof Error ? error : new Error(String(error)));
         return;
       }
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString("utf8").slice(-8000);
+      });
+      if (child.stderr && typeof (child.stderr as unknown as { unref?: () => void }).unref === "function") {
+        (child.stderr as unknown as { unref: () => void }).unref();
+      }
       child.once("error", fail);
+      child.once("close", (code, signal) => {
+        if (!settled && code !== 0 && code !== null) {
+          fail(new Error(`service process exited with code ${code}${signal ? ` signal ${signal}` : ""}`));
+        }
+      });
       child.once("spawn", () => {
         if (settled) return;
         settled = true;
@@ -460,9 +473,9 @@ export class OpenCodeController implements vscode.Disposable {
     });
   }
 
-  /** Poll discoverService() until a healthy registration appears (≤15s). */
+  /** Poll discoverService() until a healthy registration appears (≤30s). */
   private async waitForDiscovery(): Promise<Endpoint> {
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + 30_000;
     let delay = 400;
     while (Date.now() < deadline) {
       const endpoint = await this.discoverService();
@@ -474,7 +487,7 @@ export class OpenCodeController implements vscode.Disposable {
       delay = Math.min(delay * 1.7, 2000);
     }
     throw new Error(
-      "OpenCode service failed to register within 15s of starting it.",
+      "OpenCode service failed to register within 30s of starting it — check opencode2.cliPath and Output channel.",
     );
   }
 

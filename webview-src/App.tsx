@@ -314,7 +314,16 @@ export function App() {
   const refreshActiveSessions = useCallback(async () => {
     try {
       const running = await rpc.call<string[]>("sessions.active");
-      setActiveRunning(new Set(running));
+      const set = new Set(running);
+      setActiveRunning(set);
+      // Hydrate busy state after reload — sessions.active is server-authoritative
+      // for currently executing sessions. The webview's busySessions resets on
+      // reload, so we restore it here; terminal events will clear entries later.
+      setBusySessions(() => {
+        const next: Record<string, boolean> = {};
+        for (const id of set) next[id] = true;
+        return next;
+      });
     } catch {
       /* not connected — keep last known set */
     }
@@ -711,15 +720,16 @@ export function App() {
   }, []);
 
   const refreshVcs = useCallback(async () => {
+    const dir = composerDirectory;
     try {
       const info = await rpc.call<{ branch?: string } | undefined>("vcs.info", {
-        directory: workspaceDir,
+        directory: dir,
       });
       setVcsBranch(info?.branch || undefined);
     } catch {
       setVcsBranch(undefined);
     }
-  }, [workspaceDir]);
+  }, [composerDirectory]);
 
   /**
    * Working-tree +/− counts for the branch chip. Trailing-debounced on a
@@ -727,17 +737,18 @@ export function App() {
    * agent runs must coalesce into one git scan, not one per event).
    */
   const refreshVcsCounts = useCallback(async () => {
+    const dir = composerDirectory;
     try {
       setVcsDiff(
         await rpc.call<{ added: number; removed: number } | undefined>(
           "vcs.status",
-          { directory: workspaceDir },
+          { directory: dir },
         ),
       );
     } catch {
       setVcsDiff(undefined);
     }
-  }, [workspaceDir]);
+  }, [composerDirectory]);
   const vcsCountTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -1165,8 +1176,10 @@ export function App() {
   // Derive server auto-retry state from the latest assistant message too — the
   // `retry: { attempt, at, error }` field survives REST snapshots, so even if
   // an event was missed the retry pill still appears while the run is alive.
+  // After reload `busy` may be false (hydrated via sessions.active may not
+  // include retry), so also hydrate from the message itself.
   useEffect(() => {
-    if (!busy || !activeId) return;
+    if (!activeId) return;
     const last = [...messages].reverse().find(isAssistant);
     const r = (
       last as unknown as
@@ -1179,6 +1192,8 @@ export function App() {
         attempt: r.attempt,
         message: r.error?.message ?? prev?.message,
       }));
+      // Retry implies busy even if sessions.active didn't report it
+      if (!busy) setBusySessions((b) => ({ ...b, [activeId]: true }));
     }
   }, [messages, busy, activeId]);
 
@@ -1534,7 +1549,7 @@ export function App() {
   /** Open the VCS working-tree diff (from the OpenCode server, not just git). */
   const openWorkingDiff = useCallback(async () => {
     try {
-      const diff = await rpc.call<string>("vcs.diff", { mode: "working" });
+      const diff = await rpc.call<string>("vcs.diff", { mode: "working", directory: composerDirectory });
       await rpc.call("diff.open", {
         file: "working-tree",
         diff: diff || "(no changes)",
@@ -1542,7 +1557,7 @@ export function App() {
     } catch {
       /* surfaced by state */
     }
-  }, []);
+  }, [composerDirectory]);
 
   const cycleTheme = useCallback(() => {
     const current = cfg?.ui.theme ?? "dark";

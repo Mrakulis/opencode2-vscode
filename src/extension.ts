@@ -100,7 +100,7 @@ export function activate(context: vscode.ExtensionContext): void {
           location: vscode.ProgressLocation.Notification,
           title: "OpenCode 2: restarting service...",
         },
-        () => controller.restart(),
+        () => controller.restart({ force: true }),
       );
     }),
     vscode.commands.registerCommand("opencode2.openTerminal", async () => {

@@ -2,7 +2,7 @@
   "name": "opencode2-vscode-gui",
   "displayName": "OpenCode 2 — Sidebar GUI",
   "description": "Independent VS Code sidebar GUI for the OpenCode coding agent — slash commands, skills, forms, worktrees, undo/redo, themes. Not affiliated with the OpenCode team.",
-  "version": "0.6.34",
+  "version": "0.6.35",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -223,8 +223,8 @@
         },
         "opencode2.server.autoStart": {
           "type": "boolean",
-          "default": true,
-          "description": "Start the shared OpenCode background service when no healthy service is discovered."
+          "default": false,
+          "description": "Start the shared OpenCode background service when no healthy service is discovered. Off by default — use 'Restart Background Service' / 'Start opencode2' button or enable this setting to auto-start on window open."
         },
         "opencode2.cliPath": {
           "type": "string",

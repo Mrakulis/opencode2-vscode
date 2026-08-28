@@ -5,6 +5,7 @@ import * as os from "node:os";
 import { createApi } from "./apiAdapter";
 import { canonicalizeDirectory } from "./directory";
 import { DiffPreviewDocs, type WireFileDiff } from "./diffDocs";
+import { WorkingDiffDocs } from "./workingDiffDocs";
 import { resolveCli as resolveCliImpl } from "./cli";
 import type { ResolvedCli } from "./cli";
 import type { OpenCodeController } from "./controller";
@@ -32,6 +33,7 @@ export function createRpcDispatcher(
     getClient: () => controller.getClient(),
   });
   const diffPreview = new DiffPreviewDocs();
+  const workingDiffDocs = new WorkingDiffDocs();
 
   let activeSessionId: string | undefined;
   /** Which session the webview is currently viewing (for notification routing). */
@@ -185,7 +187,7 @@ export function createRpcDispatcher(
         dir ? canonicalizeDirectory(dir) : undefined,
       );
     },
-    "service.restart": () => controller.restart(),
+    "service.restart": () => controller.restart({ force: true }),
     "cli.start": async () => {
       // Strictly opencode2 — never fall back to legacy `opencode` (v1).
       const log = new Log();
@@ -202,7 +204,7 @@ export function createRpcDispatcher(
           `Resolved CLI is not opencode2: ${cli.display} — please install opencode2`,
         );
       }
-      await controller.connect();
+      await controller.connect(undefined, { force: true });
       return true;
     },
     // Bespoke plan-checklist support (local file; no V2 server contract).
@@ -564,15 +566,8 @@ export function createRpcDispatcher(
       const file = str(p, "file");
       const diff = optStr(p, "diff") ?? "";
       if (diff) {
-        const doc = await vscode.workspace.openTextDocument({
-          language: "diff",
-          content: diff,
-        });
-        await vscode.window.showTextDocument(doc, {
-          preview: false,
-          viewColumn: vscode.ViewColumn.Active,
-        });
-        return true;
+        // Read-only provider doc — no save prompt on close (unlike untitled)
+        return workingDiffDocs.show(diff, `OpenCode Diff: ${file}`);
       }
       // No diff string: open whole-file diff via VS Code's git provider (shows full file)
       const base =
@@ -648,8 +643,13 @@ export function createRpcDispatcher(
     /** Last session the user had open (persisted in workspaceState). */
     getLastSession: (): string | undefined =>
       storage?.get<string>("lastSession"),
-    /** Disposable for the pre-apply diff document provider. */
-    previews: diffPreview,
+    /** Disposable for diff document providers. */
+    previews: {
+      dispose: () => {
+        diffPreview.dispose();
+        workingDiffDocs.dispose();
+      },
+    } as unknown as vscode.Disposable,
   };
 }
 
