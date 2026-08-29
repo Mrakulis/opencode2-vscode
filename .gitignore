@@ -6,6 +6,7 @@ dist/
 out/
 media/webview/
 *.vsix
+!vsix/.gitkeep
 
 # secrets
 .env

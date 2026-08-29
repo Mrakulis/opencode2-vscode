@@ -28,6 +28,9 @@ MEMORY.md
 agents.md
 AUDIT_AND_PLAN.md
 
+# vsix output
+vsix/**
+
 # secrets
 .env
 .env.*
