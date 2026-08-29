@@ -63,7 +63,7 @@ export function Feed({
   /** True while the server is compacting this session's context. */
   compacting?: boolean;
   /** Queued follow-ups (session inbox) rendered as pending ghost bubbles. */
-  queued?: Array<{ id: string; text?: string }>;
+  queued?: Array<{ id: string; text?: string; files?: Array<{ uri: string; name?: string }> }>;
   /** Opens the Inbox drawer (bubble click). */
   onQueuedOpen?: () => void;
   /** Removes one queued item. */
@@ -339,7 +339,7 @@ export function Feed({
                 title={onQueuedOpen ? "Open inbox" : undefined}
                 onClick={() => onQueuedOpen?.()}
               >
-                {truncate(q.text ?? "(attachment)", 140)}
+                {truncate(q.text ?? (q.files?.length ? `📎 ${q.files.map((f) => f.name ?? f.uri).join(", ")}` : "(attachment)"), 140)}
               </span>
               {onUnqueue && (
                 <button

@@ -684,7 +684,7 @@ export function App() {
   /** Queued follow-ups (session inbox) for the active session — rendered as
    *  ghost bubbles at the feed tail. */
   const [queuedItems, setQueuedItems] = useState<
-    Array<{ id: string; text?: string }>
+    Array<{ id: string; text?: string; files?: Array<{ uri: string; name?: string }> }>
   >([]);
   /** Draft prefill from a message "edit" action (MessageGroup → Composer). */
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(
@@ -705,9 +705,19 @@ export function App() {
       setQueuedItems(
         (rows ?? []).map((r) => {
           const payload = (r.payload ?? {}) as Record<string, unknown>;
+          const rawFiles = payload.files;
+          const files = Array.isArray(rawFiles)
+            ? (rawFiles as Array<Record<string, unknown>>)
+                .filter((f) => typeof f?.uri === "string")
+                .map((f) => ({
+                  uri: f.uri as string,
+                  name: typeof f.name === "string" ? f.name : undefined,
+                }))
+            : undefined;
           return {
             id: typeof r.id === "string" ? r.id : "",
             text: typeof payload.text === "string" ? payload.text : undefined,
+            files: files && files.length > 0 ? files : undefined,
           };
         }),
       );
@@ -1208,8 +1218,12 @@ export function App() {
   useEffect(() => {
     if (!busy || !activeId) return;
     const id = setInterval(() => void refreshMessages(activeId), 1500);
-    return () => clearInterval(id);
-  }, [busy, activeId, refreshMessages]);
+    const qid = setInterval(() => void refreshQueued(), 1500);
+    return () => {
+      clearInterval(id);
+      clearInterval(qid);
+    };
+  }, [busy, activeId, refreshMessages, refreshQueued]);
 
   // Derive server auto-retry state from the latest assistant message too — the
   // `retry: { attempt, at, error }` field survives REST snapshots, so even if
@@ -2221,6 +2235,10 @@ export function App() {
             sessionId={activeId}
             refreshTick={inboxTick}
             onClose={() => setInboxOpen(false)}
+            onEdit={(text) => {
+              setComposerPrefill(text);
+              void refreshQueued();
+            }}
           />
         )}
         {usageOpen && (
