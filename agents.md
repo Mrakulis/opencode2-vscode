@@ -30,7 +30,7 @@ npm run package      # build + npx @vscode/vsce package -> .vsix
 
 Gate = typecheck + tests (+ `npm run audit` for UI/theme changes).
 
-## V2 API rules (critical)
+## V2 API rules (critical) — P0, no bypass
 
 - All server I/O lives in the **extension host** (`src/controller.ts`). The webview never makes HTTP calls — it talks postMessage RPC only (`src/protocol.ts` is the single shared contract).
 - Connect via `Service.discover()` / `Service.headers()` from `@opencode-ai/client/service`. Auto-start uses our own hidden spawn of `<cli> serve --service`, then polls discovery — do NOT reintroduce `Service.ensure()`.
@@ -56,23 +56,42 @@ Gate = typecheck + tests (+ `npm run audit` for UI/theme changes).
 - Match surrounding style; prettier owns formatting (`npm run format`).
 - Errors: catch specific expected failures; rethrow or surface unexpected ones — no silent catches.
 
+## Scope & budget — anti-runaway, lightweight
+
+- Stay within the user's request. If you need >3 files or cross-cutting (adapter+protocol+webview), state plan and ask once before expanding.
+- Read a file before editing it. Prefer minimal diff; don't reformat unrelated code (prettier will handle it).
+- Budget: ≤12 tool calls before re-anchoring to the original request; if hit, summarize progress and ask to continue.
+- No speculative refactors or "while I'm here" cleanups unless asked.
+
 ## Boundaries
 
-**Always**
-- Run `npm run typecheck`, `npm test`, and `npm run build` before claiming done; run `npm run audit` for picker/theme/rpc changes.
-- Update `MEMORY.md` when finishing a milestone or learning a durable gotcha.
-- Keep new md files inside the project root only.
-
-**Ask first**
-- Adding any dependency (runtime or dev).
-- Changing the settings namespace or public command IDs.
-
-**Never**
+**P0 — NEVER (no bypass)**
 - Commit API keys or tokens (the graphify LLM key lives in `.env`, gitignored).
 - Write to files outside this project folder.
 - Edit generated outputs (`dist/`, `media/webview/`) directly.
+- Use `Service.ensure()` — use `Service.discover()` + hidden spawn with `windowsHide`.
 - Mix V1 CLI/TUI concepts into the client: the catalog comes from V2 endpoints, and TUI-only events (`tui.*`) are ignored.
+
+**P1 — ASK FIRST (one question, then proceed)**
+- Adding any dependency (runtime or dev).
+- Changing the settings namespace or public command IDs.
+- Pushing without a verified version bump (`package.json` + `CHANGELOG.md` + gate).
+- Expanding scope beyond request (>3 files / new feature) or touching `src/protocol.ts` / `src/apiAdapter.ts` contract.
+
+On "ask first": ask once via question/steer, wait for answer, don't loop. If user says "go ahead" / "push now" / "yes, expand scope", that is explicit confirmation for this session.
+
+**P2 — ALWAYS (but bounded)**
+- Gate before claiming done: `npm run typecheck`, `npm test`, `npm run build` (+ `npm run audit` for picker/theme/rpc changes). Max 2 auto-fix attempts per failure; on third failure, report output and ask.
+- Update `MEMORY.md` on milestones/gotchas only (not every small fix).
+- Keep new md files inside the project root only.
+
+## Loop breakers
+
+- If same error/failure repeats twice, stop retrying the same edit — explain and ask.
+- Don't retry with client-side backoff; retries are server-side only.
+- If blocked by P0/P1 and user explicitly overrides a P1, obey the override for this session and note it in the summary.
+- Progress over perfection: don't loop on formatting/style — minimal diff + prettier is enough.
 
 ## Definition of done
 
-Typecheck passes → tests pass → build succeeds → feature verified against a live service where feasible → MEMORY updated → committed with conventional message → pushed (graphify regenerates via the post-commit hook).
+Typecheck passes → tests pass → build succeeds (+ `npm run audit` where applicable) → feature verified against a live service where feasible → `package.json` version bumped + `CHANGELOG.md` moved from `Unreleased` → versioned entry **only if releasing** → committed with conventional message (`chore(release): vX.Y.Z` or `feat`/`fix` with bump) → `git tag vX.Y.Z && git push origin vX.Y.Z` only after bump is verified — never push on `Unreleased` alone (graphify regenerates via the post-commit hook).

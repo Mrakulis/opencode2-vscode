@@ -436,12 +436,32 @@ export class OpenCodeController implements vscode.Disposable {
         this.log.error("hidden service spawn failed", err);
         reject(err);
       };
+      // Normalize shim spawns for true silent start: cmd.exe via /d /s /c
+      // with quoted shim ensures CREATE_NO_WINDOW fully suppresses conhost
+      // flash (plain /d /c without /s can still show a brief window on some
+      // AV/Windows configs). Non-shim spawns (node/.exe) already hide cleanly.
+      let spawnProg = spawnCommand[0]!;
+      let spawnArgs = spawnCommand.slice(1);
+      const isCmdShim =
+        spawnProg.toLowerCase() === "cmd.exe" ||
+        spawnProg.toLowerCase().endsWith("\\cmd.exe") ||
+        spawnProg.toLowerCase().endsWith("/cmd.exe");
+      if (isCmdShim && spawnArgs.length >= 3 && spawnArgs[0] === "/d" && spawnArgs[1] === "/c") {
+        // Already handled in cli.ts describe, but normalize legacy /d /c to /d /s /c with quoted target
+        const shimTarget = spawnArgs[2]!;
+        const rest = spawnArgs.slice(3);
+        const quotedTarget = shimTarget.startsWith('"') ? shimTarget : `"${shimTarget}"`;
+        const cmdString = [quotedTarget, ...rest].join(" ");
+        spawnArgs = ["/d", "/s", "/c", cmdString];
+      }
       let child: ReturnType<typeof spawn>;
       try {
-        child = spawn(spawnCommand[0]!, spawnCommand.slice(1), {
+        child = spawn(spawnProg, spawnArgs, {
           detached: true,
           stdio: ["ignore", "ignore", "pipe"],
           windowsHide: true, // CREATE_NO_WINDOW — suppresses the detached console window
+          shell: false,
+          windowsVerbatimArguments: false,
           env: process.env,
         });
       } catch (error) {

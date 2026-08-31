@@ -630,6 +630,46 @@ button:focus-visible {
 .filter {
   padding: 1px var(--oc2-space-2);
 }
+.filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--oc2-bg-input);
+  color: var(--oc2-fg);
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  padding: 3px 24px 3px var(--oc2-space-2);
+  font-family: inherit;
+  font-size: calc(var(--oc2-font-size) - 1px);
+  line-height: 1.4;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--oc2-fg-muted) 50%),
+    linear-gradient(135deg, var(--oc2-fg-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 1px),
+    calc(100% - 10px) calc(50% - 1px);
+  background-size:
+    4px 4px,
+    4px 4px;
+  background-repeat: no-repeat;
+}
+.filter-select:hover {
+  border-color: var(--oc2-border-strong);
+  background-color: var(--oc2-bg-hover);
+}
+.filter-select:focus-visible {
+  outline: 1px solid var(--oc2-accent);
+  outline-offset: -1px;
+  border-color: var(--oc2-accent);
+}
+.filter-select option {
+  background: var(--oc2-bg-menu);
+  color: var(--oc2-fg);
+}
+.drawer-head .filter-select {
+  flex: none;
+  min-width: 92px;
+}
 .prov-section {
   border-bottom: 1px solid var(--oc2-border);
   padding-bottom: var(--oc2-space-1);

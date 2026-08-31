@@ -23,16 +23,27 @@ export function wellKnownCliLocations(
 
   if (platform === "win32") {
     // npm layout under %APPDATA%\npm — where `npm i -g opencode-ai@beta`
-    // drops the real binaries next to the cmd shims.
+    // drops the real binaries next to the cmd shims. GUI-launched VS Code
+    // often has a minimal PATH without %APPDATA%\npm, so we must probe
+    // both the real binaries and the shim fallback. Prefer real exes — the
+    // shim path via cmd.exe can still flash a conhost window despite
+    // windowsHide (see src/controller.ts startHiddenService).
     const npmRoot = path.join(process.env.APPDATA ?? "", "npm");
     out.push(
+      // Direct npm bin (real exe when npm creates it, or shim-adjacent)
+      path.join(npmRoot, `${name}.exe`),
+      path.join(npmRoot, `${name}.cmd`),
+      // Package-internal binaries (both package names, both exe + extensionless)
+      path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", `${name}.exe`),
+      path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", name),
+      path.join(npmRoot, "node_modules", "opencode-ai", "bin", `${name}.exe`),
+      path.join(npmRoot, "node_modules", "opencode-ai", "bin", name),
+      // Legacy/alternate exe names at package roots (covers different npm versions)
       path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", bin),
       path.join(npmRoot, "node_modules", "opencode-ai", "bin", bin),
-      // Shim fallback for GUI-launched VS Code with minimal PATH — npm
-      // always creates `%APPDATA%\npm\<name>.cmd` alongside the real binary.
-      path.join(npmRoot, `${name}.cmd`),
     );
-    return out;
+    // Deduplicate while preserving order
+    return [...new Set(out)];
   }
 
   // POSIX: user installs (bare ~/bin, XDG ~/.local/bin, npm user prefix

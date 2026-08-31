@@ -30,25 +30,18 @@ async function resolveCli() {
     const exe = hits.find((h) => /\.exe$/i.test(h));
     if (exe) return { program: exe };
     if (hits.length) return { program: hits[0] };
-    // npm-known real binary
+    // npm-known binaries — expanded set mirrors src/locations.ts win32 list
     const npmRoot = path.join(process.env.APPDATA ?? "", "npm");
     if (name === "opencode2" || name === "opencode") {
       const cand = [
-        path.join(
-          npmRoot,
-          "node_modules",
-          "@opencode-ai",
-          "cli",
-          "bin",
-          "opencode2.exe",
-        ),
-        path.join(
-          npmRoot,
-          "node_modules",
-          "opencode-ai",
-          "bin",
-          "opencode.exe",
-        ),
+        path.join(npmRoot, `${name}.exe`),
+        path.join(npmRoot, `${name}.cmd`),
+        path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", `${name}.exe`),
+        path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", name),
+        path.join(npmRoot, "node_modules", "opencode-ai", "bin", `${name}.exe`),
+        path.join(npmRoot, "node_modules", "opencode-ai", "bin", name),
+        path.join(npmRoot, "node_modules", "@opencode-ai", "cli", "bin", "opencode2.exe"),
+        path.join(npmRoot, "node_modules", "opencode-ai", "bin", "opencode.exe"),
       ].find((p) => {
         try {
           return require("fs").statSync(p).isFile();
@@ -75,12 +68,57 @@ if (ep) {
 }
 
 const cli = await resolveCli();
-console.log(`step 2: spawning hidden: ${cli.program} serve --service`);
-const cmd = [cli.program, "serve", "--service"];
+// Shim-aware hidden spawn mirrors src/controller.ts:startHiddenService:
+// - real exe/node → direct spawn with windowsHide
+// - .cmd shim → sibling exe check → node-direct parse → cmd.exe /d /s /c fallback
+let cmd;
+let spawnOpts = { detached: true, stdio: "ignore", windowsHide: true, shell: false, env: process.env };
+if (/\.cmd$/i.test(cli.program)) {
+  const siblingExe = cli.program.replace(/\.cmd$/i, ".exe");
+  try {
+    if (require("fs").statSync(siblingExe).isFile()) {
+      console.log(`step 2: shim ${cli.program} has sibling exe → spawning hidden: ${siblingExe} serve --service`);
+      cmd = [siblingExe, "serve", "--service"];
+    } else throw new Error("no sibling");
+  } catch {
+    // try parsing shim for direct node target (same logic as src/cli.ts describe)
+    let direct = null;
+    try {
+      const content = require("fs").readFileSync(cli.program, "utf8");
+      const m = content.match(/"%~dp0\\([^"]+)"/);
+      if (m?.[1]) {
+        const target = path.join(path.dirname(cli.program), m[1].replace(/\//g, path.sep));
+        if (require("fs").statSync(target).isFile()) {
+          direct = target;
+          const nodeExe = path.join(path.dirname(cli.program), "node.exe");
+          let nodeProg = "node";
+          try { if (require("fs").statSync(nodeExe).isFile()) nodeProg = nodeExe; } catch {}
+          if (/\.js$/i.test(target) || !/\.exe$/i.test(target)) {
+            console.log(`step 2: shim ${cli.program} → parsed direct node target → spawning hidden: ${nodeProg} ${target} serve --service`);
+            cmd = [nodeProg, target, "serve", "--service"];
+          } else {
+            console.log(`step 2: shim ${cli.program} → parsed exe target → spawning hidden: ${target} serve --service`);
+            cmd = [target, "serve", "--service"];
+          }
+        }
+      }
+    } catch {}
+    if (!direct) {
+      console.log(`step 2: spawning hidden via cmd shim: cmd.exe /d /s /c "${cli.program} serve --service"`);
+      cmd = ["cmd.exe", "/d", "/s", "/c", `"${cli.program}" serve --service`];
+    }
+  }
+} else {
+  console.log(`step 2: spawning hidden: ${cli.program} serve --service`);
+  cmd = [cli.program, "serve", "--service"];
+}
+console.log(`  spawn: ${cmd.join(" ")} with windowsHide:true shell:false`);
 const child = spawn(cmd[0], cmd.slice(1), {
   detached: true,
   stdio: "ignore",
-  windowsHide: true, // CREATE_NO_WINDOW
+  windowsHide: true,
+  shell: false,
+  windowsVerbatimArguments: false,
   env: process.env,
 });
 child.unref();

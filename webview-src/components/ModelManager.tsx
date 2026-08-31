@@ -60,7 +60,7 @@ export function ModelManager(props: Props) {
           autoFocus
         />
         <select
-          className="filter"
+          className="filter-select"
           value={filter}
           onChange={(e) => setFilter(e.target.value as VisibilityFilter)}
           title="Filter by visibility"
@@ -99,7 +99,10 @@ export function ModelManager(props: Props) {
           <div className="drawer-empty">No matching models.</div>
         )}
         {filtered.map((group) => {
-          const allKeys = group.models.map(modelKey);
+          const fullProviderModels = props.models.filter(
+            (m) => m.providerID === group.providerID,
+          );
+          const allKeys = fullProviderModels.map(modelKey);
           const allHidden = allKeys.every((k) => props.hidden.includes(k));
           return (
             <section key={group.providerID} className="prov-section">
@@ -121,7 +124,7 @@ export function ModelManager(props: Props) {
                         value: toggleProviderModels(
                           props.hidden,
                           group.providerID,
-                          group.models,
+                          fullProviderModels,
                         ),
                       },
                     ])

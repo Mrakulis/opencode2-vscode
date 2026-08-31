@@ -12,7 +12,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 ## Features
 
 - **Native sidebar chat** with an agent that reads and edits your code
-- **Auto-connects** to the shared V2 background service (discover → hidden auto-start, no ports to manage)
+- **Auto-connects** to the shared V2 background service (discover → hidden auto-start when `server.autoStart` is enabled, no ports to manage)
 - **Live streaming** — incremental text/reasoning deltas plus tool cards and inline diffs
 - **Slash commands & skills** — type `/` for the V2 command catalog (`command.list`), skills included; runs via `session.command` / `session.skill`
 - **`@` file mentions** — fuzzy file picker backed by `file.find`; files attach as prompt context
@@ -49,7 +49,7 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 
 ### Version compatibility
 
-The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18230**. Because OpenCode itself moves fast on the beta channel:
+The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18314**. Because OpenCode itself moves fast on the beta channel:
 
 - Newer/older server betas generally work — all API access goes through a defensive adapter layer that normalizes known shape drift, and missing optional features degrade quietly.
 - Explicit server `deny` rules are always enforced by the server regardless of extension version.
@@ -60,7 +60,7 @@ The extension is developed and tested against a specific client pin (`@opencode-
 
 1. Open a workspace folder.
 2. Click the OpenCode icon in the activity bar.
-3. The extension discovers your running OpenCode service (or starts one).
+3. The extension discovers your running OpenCode service (or starts one via **Start opencode2** / `Restart Background Service` when `server.autoStart` is off).
 4. Type a prompt — or `/` for commands, `@` to attach a file.
 
 ## Commands
@@ -81,12 +81,12 @@ The extension is developed and tested against a specific client pin (`@opencode-
 |---|---|---|
 | `server.baseUrl` | `""` | Explicit server URL; empty = use `server.mode` |
 | `server.mode` | `own` | `own` (start our own hidden service) / `discover` (find an already-running one) |
-| `server.autoStart` | `true` | Start a shared background service automatically when discovery finds nothing healthy |
+| `server.autoStart` | `false` | Start a shared background service automatically when discovery finds nothing healthy (off by default since v0.6.35 — use the **Start opencode2** button or `Restart Background Service` command to spawn on demand) |
 | `cliPath` | `""` | Custom CLI path; empty = try `opencode2` then `opencode` |
 | `debug.logs` | `false` | Verbose logging in the output channel |
 | `ui.theme` | `dark` | Theme preset: dark, light, tokyonight, gruvbox, nord, catppuccin |
 | `ui.density` | `compact` | `compact` / `comfortable` |
-| `ui.accentTint` | `off` | Optional accent color tint |
+| `ui.accentTint` | `""` | Optional accent color tint (empty = follow theme) |
 | `ui.sounds` | `true` | Subtle chimes on finish/permission |
 | `ui.showReasoning` | `collapsed` | Reasoning blocks: hide / collapsed / expanded |
 | `ui.expandShellTools` | `false` | Shell tool cards expanded by default |

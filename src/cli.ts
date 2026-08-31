@@ -147,11 +147,60 @@ function describe(candidate: string): ResolvedCli | undefined {
   if (isRealExe(expanded)) {
     return { program: expanded, prefixArgs: [], display: expanded };
   }
-  // .cmd / .bat shim -> route through cmd.exe
+  // .cmd / .bat shim -> route through cmd.exe. Prefer a sibling .exe
+  // when it exists — spawning node/.exe directly is truly hidden (CREATE_NO_WINDOW
+  // fully suppresses conhost), while cmd.exe can still flash briefly. This
+  // mirrors wellKnownCliLocations prioritization but also handles PATH hits.
   if (/\.cmd$/i.test(expanded) || /\.bat$/i.test(expanded)) {
+    const siblingExe = expanded.replace(/\.(cmd|bat)$/i, ".exe");
+    try {
+      const s = fs.statSync(siblingExe);
+      if (s.isFile()) {
+        return { program: siblingExe, prefixArgs: [], display: siblingExe };
+      }
+    } catch {
+      /* no sibling exe — fall through to cmd wrapper */
+    }
+    // No sibling exe — try to parse shim and spawn node directly to avoid
+    // cmd.exe flash. npm shims are `@"%~dp0\node.exe" "%~dp0\node_modules\...\bin\..." %*`
+    // Fallback to cmd.exe only if parsing fails.
+    try {
+      const content = fs.readFileSync(expanded, "utf8");
+      // Extract quoted target like "%~dp0\node_modules\opencode-ai\bin\opencode"
+      const m = content.match(/"%~dp0\\([^"]+)"/);
+      if (m?.[1]) {
+        const shimDir = path.dirname(expanded);
+        const target = path.join(shimDir, m[1].replace(/\//g, path.sep));
+        try {
+          const ts = fs.statSync(target);
+          if (ts.isFile()) {
+            // Find node.exe that the shim would have used (%~dp0\node.exe)
+            const nodeExe = path.join(shimDir, "node.exe");
+            let nodeProg: string | undefined;
+            try {
+              if (fs.statSync(nodeExe).isFile()) nodeProg = nodeExe;
+            } catch {
+              /* no bundled node — use PATH node */
+            }
+            // If we have a JS file, spawn via node directly for true hidden start
+            if (/\.js$/i.test(target) || !/\.exe$/i.test(target)) {
+              const node = nodeProg ?? "node";
+              return { program: node, prefixArgs: [target], display: expanded };
+            }
+            return { program: target, prefixArgs: [], display: expanded };
+          }
+        } catch {
+          /* target not found */
+        }
+      }
+    } catch {
+      /* read failed — fall through */
+    }
     return {
       program: "cmd.exe",
-      prefixArgs: ["/d", "/c", expanded],
+      // /d = no AutoRun, /s = handle quoted command correctly, /c = run then terminate
+      // Quoting the shim path handles spaces in APPDATA; /s ensures the quotes are stripped correctly
+      prefixArgs: ["/d", "/s", "/c", `"${expanded}"`],
       display: expanded,
     };
   }
