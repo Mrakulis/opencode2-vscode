@@ -21,6 +21,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.40] - 2026-09-01
+
+### Fixed
+- **Companion server entry moved to `⋯` dropdown** — `Start Companion Server` no longer a top-bar `$(vm-connect)` icon (`package.json:view/title`), now lives in the header `⋯` menu (`webview-src/components/HeaderBar.tsx` `Companion server…` between `MCP servers…` and `Saved permissions…`, `webview-src/App.tsx` `onOpenCompanion` → `settings.open` `opencode2.server.listen`). `src/rpc.ts:settings.open` now accepts optional `query` param for filtered settings. Reserved slot for app Play Store link.
+
+---
+
 ## [0.6.38] - 2026-08-31
 
 ### Fixed
@@ -174,7 +181,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
-[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.39...HEAD
+[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.40...HEAD
+[0.6.40]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.40
 [0.6.39]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.39
 [0.6.38]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.38
 [0.6.37]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.37

@@ -1900,6 +1900,9 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
+        onOpenCompanion={() =>
+          void rpc.call("settings.open", { query: "opencode2.server.listen" } as unknown as Record<string, unknown>).catch(() => undefined)
+        }
         onOpenSavedPermissions={() => setSavedPermsOpen(true)}
         onOpenInstructions={() => {
           if (activeId) setInstructionsOpen(true);

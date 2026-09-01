@@ -514,10 +514,11 @@ export function createRpcDispatcher(
       );
       return true;
     },
-    "settings.open": async () => {
+    "settings.open": async (p) => {
+      const query = typeof p.query === "string" && p.query.length > 0 ? p.query : "opencode2";
       await vscode.commands.executeCommand(
         "workbench.action.openSettings",
-        "opencode2",
+        query,
       );
       return true;
     },

@@ -32,6 +32,7 @@ interface Props {
   onOpenManager(): void;
   onOpenProviders(): void;
   onOpenMcp(): void;
+  onOpenCompanion(): void;
   onOpenSettings(): void;
   theme: string;
   onToggleTheme(id?: string): void;
@@ -350,6 +351,17 @@ export function HeaderBar(props: Props) {
                 }}
               >
                 MCP servers…
+              </button>
+              <button
+                type="button"
+                className="menu-item manage"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onOpenCompanion();
+                }}
+                title="Start companion server — set IP/port and get the app link"
+              >
+                Companion server…
               </button>
               <button
                 type="button"
