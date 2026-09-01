@@ -275,16 +275,57 @@ export function createApi({ getClient }: ApiAdapterDeps) {
      * returns the global aggregate across ALL projects (verified live
      * 2026-08-27: bare call returns tools.mode "summary"). With a project
      * it scopes to that Project.ID — used by the Usage drawer Project tab.
+     * Date-bounded: `from`/`to` are epoch ms, `timezone` is an IANA name
+     * (webview pulls via Intl.DateTimeFormat). Server returns `range` echo.
      */
     sessionStats: async (opts?: {
       project?: string;
+      from?: number;
+      to?: number;
+      timezone?: string;
     }): Promise<SessionStats> => {
-      const rawArgs = opts?.project ? ({ project: opts.project } as never) : undefined;
+      const hasArgs = Boolean(
+        opts?.project || opts?.from !== undefined || opts?.to !== undefined || opts?.timezone,
+      );
+      const rawArgs = hasArgs
+        ? ({
+            ...(opts?.project ? { project: opts.project } : {}),
+            ...(opts?.from !== undefined ? { from: opts.from } : {}),
+            ...(opts?.to !== undefined ? { to: opts.to } : {}),
+            ...(opts?.timezone ? { timezone: opts.timezone } : {}),
+          } as never)
+        : undefined;
       const res = (await (rawArgs
         ? (getClient().session.stats as unknown as (a: unknown) => Promise<unknown>)(rawArgs)
         : getClient().session.stats())) as unknown;
       const d = (res ?? {}) as Record<string, unknown>;
       const s = (d.data ?? d) as Record<string, unknown>;
+      // server may echo range as {from,to} with numbers or ISO strings
+      const rawRange = s.range as Record<string, unknown> | undefined;
+      let range: SessionStats["range"] | undefined;
+      if (rawRange && typeof rawRange === "object") {
+        const rf = rawRange.from;
+        const rt = rawRange.to;
+        const toNum = (v: unknown): number | undefined => {
+          if (typeof v === "number" && Number.isFinite(v)) return v;
+          if (typeof v === "string" && v.trim() !== "") {
+            const n = Number(v);
+            if (Number.isFinite(n)) return n;
+            const t = Date.parse(v);
+            if (Number.isFinite(t)) return t;
+          }
+          return undefined;
+        };
+        const fromNum = toNum(rf);
+        const toNumV = toNum(rt);
+        if (fromNum !== undefined || toNumV !== undefined) {
+          range = { ...(fromNum !== undefined ? { from: fromNum } : {}), ...(toNumV !== undefined ? { to: toNumV } : {}) };
+        }
+      }
+      // if server didn't echo, preserve the requested range so UI subtitle still shows
+      if (!range && (opts?.from !== undefined || opts?.to !== undefined)) {
+        range = { ...(opts?.from !== undefined ? { from: opts.from } : {}), ...(opts?.to !== undefined ? { to: opts.to } : {}) };
+      }
       return {
         sessions: finiteNum(s.sessions),
         subagents: finiteNum(s.subagents),
@@ -320,6 +361,7 @@ export function createApi({ getClient }: ApiAdapterDeps) {
               };
             })
           : [],
+        ...(range ? { range } : {}),
       };
     },
 

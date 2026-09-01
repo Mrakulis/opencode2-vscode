@@ -2,7 +2,7 @@
   "name": "opencode2-vscode-gui",
   "displayName": "OpenCode 2 — Sidebar GUI",
   "description": "Independent VS Code sidebar GUI for the OpenCode coding agent — slash commands, skills, forms, worktrees, undo/redo, themes. Not affiliated with the OpenCode team.",
-  "version": "0.6.38",
+  "version": "0.6.39",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -83,6 +83,18 @@
       {
         "command": "opencode2.installCli",
         "title": "OpenCode 2: Install CLI"
+      },
+      {
+        "command": "opencode2.showExtensionServerUrl",
+        "title": "OpenCode 2: Show Extension Server URL"
+      },
+      {
+        "command": "opencode2.restartExtensionServer",
+        "title": "OpenCode 2: Restart Extension Server"
+      },
+      {
+        "command": "opencode2.companionServer",
+        "title": "OpenCode 2: Start Companion Server"
       }
     ],
     "keybindings": [
@@ -118,6 +130,17 @@
           "command": "opencode2.openTerminal",
           "when": "view == opencode2.sidebar",
           "group": "navigation@3"
+        },
+        {
+          "command": "opencode2.companionServer",
+          "when": "view == opencode2.sidebar",
+          "group": "navigation@4",
+          "icon": "$(vm-connect)"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "opencode2.companionServer"
         }
       ]
     },
@@ -311,6 +334,39 @@
           ],
           "default": "askFirst",
           "markdownDescription": "How to handle permission requests, using OpenCode's own permission semantics. **Ask first** prompts for approval (default). **Auto allow** auto-approves each request with *Allow once* — the same behaviour as OpenCode's session auto-accept (CLI `--auto`); explicit `deny` rules in your `permissions` config still win. **Deny** auto-rejects requests that would otherwise ask. `question` requests always prompt. Saved *Allow forever* rules are only created via the button on each prompt, never automatically."
+        },
+        "opencode2.server.listenEnabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Host a stable HTTP server from the extension itself (fixed `IP:port` + own auth) that forwards to the local Opencode service. Off by default — enable to get a deterministic URL for remote clients (mobile companion, Tailscale, browser). When off, the extension only uses `Service.discover()` + random local port."
+        },
+        "opencode2.server.listenHostname": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Bind address for the extension-owned server. Use 127.0.0.1 for loopback-only, 0.0.0.0 for LAN. Requires restart of the extension server."
+        },
+        "opencode2.server.listenPort": {
+          "type": "number",
+          "default": 4096,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Port for the extension-owned server. Must be free. First VS Code window wins when multiple windows are open."
+        },
+        "opencode2.server.listenUsername": {
+          "type": "string",
+          "default": "opencode",
+          "description": "Basic-auth username for the extension-owned server."
+        },
+        "opencode2.server.listenPassword": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Basic-auth password for the extension-owned server. Empty = no auth (only safe on 127.0.0.1; 0.0.0.0 without a password is refused). Stored as plain text in settings — prefer a long random value."
+        },
+        "opencode2.server.listenCors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional CORS origins to allow on the extension-owned server (e.g. http://localhost:5173)."
         }
       }
     }

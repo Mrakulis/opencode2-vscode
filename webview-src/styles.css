@@ -1826,6 +1826,59 @@ button.ws-chip {
   border-bottom: 1px solid var(--oc2-border);
   flex-wrap: wrap;
 }
+.usage-period {
+  display: flex;
+  align-items: center;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-bottom: 1px solid var(--oc2-border);
+  flex-wrap: wrap;
+}
+.usage-range-label {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-custom-dates {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--oc2-space-2);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  border-bottom: 1px solid var(--oc2-border);
+  flex-wrap: wrap;
+}
+.usage-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-muted);
+}
+.usage-date-field input[type="date"] {
+  background: var(--oc2-bg-input);
+  color: var(--oc2-fg);
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  padding: 2px 6px;
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 2px);
+}
+.usage-clear {
+  font-family: var(--oc2-mono);
+  font-size: calc(var(--oc2-font-size) - 3px);
+  color: var(--oc2-fg-muted);
+  border: 1px solid var(--oc2-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.usage-clear:hover {
+  color: var(--oc2-fg);
+  border-color: var(--oc2-border-strong);
+}
 .usage-scope-hint {
   font-family: var(--oc2-mono);
   font-size: calc(var(--oc2-font-size) - 3px);

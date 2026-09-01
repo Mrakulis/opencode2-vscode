@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.39] - 2026-09-01
+
+### Added
+- **Companion server (extension-owned)** — stable `http://IP:port` with own Basic auth (`opencode2.server.listenEnabled/hostname/port/username/password/cors`). The extension is now the server of record: `src/extensionServer.ts` creates a `http.Server`, validates `Basic` via `timingSafeEqual` (static password), applies CORS, and proxies chunked `text/event-stream` (`GET /api/event`) to the local daemon via `Service.discover()` + `Service.headers()` (HTTP+SSE reliable route, no polling). Remote clients (mobile companion, Tailscale, browser) use one deterministic URL. `POST /opencode2/extension/start` triggers `controller.restart({force:true})` so a phone can start the daemon from `502`. `0.0.0.0` without a password is refused. Commands `Start Companion Server` (top-menu `$(vm-connect)` → opens `opencode2.server.listen` settings), `Show Extension Server URL`, `Restart Extension Server`.
+- **Usage date range** — `session.stats` now accepts `from`/`to`/`timezone` (epoch ms + IANA) with `range` echo (`src/apiAdapter.ts`, `src/protocol.ts:SessionStats.range`, `src/rpc.ts:optNum`), backing the Usage drawer range filter.
+
+### Changed
+- `ExtensionServer` lifecycle wired in `src/extension.ts` (`start()` after `controller.connect()`, `onDidChangeConfiguration(server.listen)` restart, first window wins on `EADDRINUSE`).
+
+---
+
 ## [0.6.38] - 2026-08-31
 
 ### Fixed
@@ -163,7 +174,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
-[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.38...HEAD
+[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.39...HEAD
+[0.6.39]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.39
 [0.6.38]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.38
 [0.6.37]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.37
 [0.6.36]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.36

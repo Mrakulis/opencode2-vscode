@@ -3,6 +3,7 @@ import { installCli, resolveCli } from "./cli";
 import { AutoCompactWatcher } from "./autoCompact";
 import { AutoTitleWatcher } from "./autoTitle";
 import { OpenCodeController } from "./controller";
+import { ExtensionServer } from "./extensionServer";
 import { Log } from "./log";
 import { NotificationService } from "./notifications";
 import { createRpcDispatcher } from "./rpc";
@@ -11,6 +12,7 @@ import { SidebarProvider, SIDEBAR_VIEW_ID } from "./sidebarProvider";
 export function activate(context: vscode.ExtensionContext): void {
   const log = new Log();
   const controller = new OpenCodeController(log, () => resolveCli(log));
+  const extensionServer = new ExtensionServer(log, () => controller.restart({ force: true }));
   const rpc = createRpcDispatcher(
     controller,
     log,
@@ -68,9 +70,16 @@ export function activate(context: vscode.ExtensionContext): void {
     });
   };
 
+  const syncExtensionServer = (): void => {
+    void extensionServer.start().catch((err) => {
+      log.error("extension server sync failed", err);
+    });
+  };
+
   context.subscriptions.push(
     log,
     controller,
+    extensionServer,
     autoCompact,
     autoTitle,
     notifications,
@@ -120,6 +129,40 @@ export function activate(context: vscode.ExtensionContext): void {
       await provider.reveal();
       await provider.createAndSelectSession();
     }),
+    vscode.commands.registerCommand("opencode2.showExtensionServerUrl", async () => {
+      const url = extensionServer.url;
+      if (!url) {
+        const cfg = vscode.workspace.getConfiguration("opencode2");
+        const enabled = cfg.get<boolean>("server.listenEnabled", false);
+        if (!enabled) {
+          void vscode.window.showInformationMessage("Extension server is disabled — enable opencode2.server.listenEnabled first.");
+        } else {
+          void vscode.window.showWarningMessage("Extension server is not running — check Output channel for errors.");
+        }
+        return;
+      }
+      await vscode.env.clipboard.writeText(url);
+      void vscode.window.showInformationMessage(`Copied: ${url}`);
+    }),
+    vscode.commands.registerCommand("opencode2.restartExtensionServer", async () => {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "OpenCode 2: restarting extension server..." },
+        () => extensionServer.start(),
+      );
+    }),
+    vscode.commands.registerCommand("opencode2.companionServer", async () => {
+      // Top-menu entry: open the screen where IP/port + password are set.
+      // Placeholder for future app link — settings screen is the source of truth.
+      await vscode.commands.executeCommand("workbench.action.openSettings", "opencode2.server.listen");
+      const url = extensionServer.url;
+      if (url) {
+        const copy = "Copy URL";
+        const choice = await vscode.window.showInformationMessage(`Companion server at ${url} — configure IP/port above.`, copy);
+        if (choice === copy) await vscode.env.clipboard.writeText(url);
+      } else {
+        void vscode.window.showInformationMessage("Set IP/port above, then enable opencode2.server.listenEnabled. App link coming soon.");
+      }
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("opencode2")) return;
       if (
@@ -128,10 +171,14 @@ export function activate(context: vscode.ExtensionContext): void {
       ) {
         connect();
       }
+      if (event.affectsConfiguration("opencode2.server.listen")) {
+        syncExtensionServer();
+      }
     }),
   );
 
   connect();
+  syncExtensionServer();
 }
 
 export function deactivate(): void {

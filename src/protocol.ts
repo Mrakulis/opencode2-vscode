@@ -275,6 +275,7 @@ export interface SessionStatsTokenTotals {
  * Shape verified live (scripts/stats-probe.mjs): the server answers the bare
  * call with tools.mode "summary"; per-tool detail rows render only if the
  * server default changes — the adapter normalizes them either way.
+ * Date-bounded calls include `range` (echoed from `from`/`to` + `timezone`).
  */
 export interface SessionStats {
   sessions: number;
@@ -313,6 +314,8 @@ export interface SessionStats {
     cost: number;
     tokens: SessionStatsTokenTotals;
   }>;
+  /** Server-echoed range for date-bounded queries; absent for `All time`. */
+  range?: { from?: number; to?: number };
 }
 
 /** Working-tree change summary for the header branch chip badge. */

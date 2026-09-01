@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCost, formatTokens } from "../lib/format";
 import { rpc, type SessionStats, type SessionSummary } from "../lib/rpc";
+import {
+  type Range,
+  type UsagePeriod,
+  dateInputValue,
+  formatRange,
+  getLocalTimezone,
+  inRange,
+  parseDateInput,
+  periodToRange,
+} from "../lib/usageRange";
 
 export type UsageScope = "total" | "project" | "session";
 
@@ -60,10 +70,17 @@ function isInProject(sessionDir: string, workspaceDir: string): boolean {
 function statsFromSessions(
   sessions: SessionSummary[],
   workspaceDir?: string,
+  range?: Range,
 ): SessionStats {
-  const filtered = workspaceDir
+  let filtered = workspaceDir
     ? sessions.filter((s) => isInProject(s.location.directory, workspaceDir))
     : sessions;
+  if (range && (range.from !== undefined || range.to !== undefined)) {
+    filtered = filtered.filter((s) => {
+      const t = s.time.updated ?? s.time.created;
+      return inRange(t, range);
+    });
+  }
   let cost = 0;
   let input = 0;
   let output = 0;
@@ -115,6 +132,7 @@ function statsFromSessions(
     tools: { mode: "none" },
     activity: [],
     models: [...byModel.values()].sort((a, b) => b.cost - a.cost),
+    ...(range && (range.from !== undefined || range.to !== undefined) ? { range } : {}),
   };
 }
 
@@ -150,26 +168,101 @@ interface Props {
   activeId?: string;
 }
 
+const PERIOD_STORAGE_KEY = "oc2.usagePeriod";
+const CUSTOM_FROM_KEY = "oc2.usageCustomFrom";
+const CUSTOM_TO_KEY = "oc2.usageCustomTo";
+
+function loadInitialPeriod(): UsagePeriod {
+  try {
+    const v = localStorage.getItem(PERIOD_STORAGE_KEY);
+    if (v === "7d" || v === "30d" || v === "mtd" || v === "all" || v === "custom") return v;
+  } catch {
+    /* ignore */
+  }
+  return "mtd";
+}
+
+function loadInitialCustom(): Range | undefined {
+  try {
+    const f = localStorage.getItem(CUSTOM_FROM_KEY);
+    const t = localStorage.getItem(CUSTOM_TO_KEY);
+    const from = f ? Number(f) : undefined;
+    const to = t ? Number(t) : undefined;
+    if (from !== undefined || to !== undefined) {
+      return {
+        ...(from !== undefined && Number.isFinite(from) ? { from } : {}),
+        ...(to !== undefined && Number.isFinite(to) ? { to } : {}),
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
 export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
   const [scope, setScope] = useState<UsageScope>("total");
+  const [period, setPeriod] = useState<UsagePeriod>(() => loadInitialPeriod());
+  const [customRange, setCustomRange] = useState<Range | undefined>(() => loadInitialCustom());
   const [stats, setStats] = useState<SessionStats | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
-  // cache per scope so switching is instant after first load
-  const [cache, setCache] = useState<Partial<Record<UsageScope, SessionStats>>>({});
+  const [estimated, setEstimated] = useState(false);
+  // cache per scope+period so switching is instant after first load
+  const [cache, setCache] = useState<Map<string, SessionStats>>(new Map());
+
+  const range = useMemo(() => periodToRange(period, customRange), [period, customRange]);
+  const timezone = useMemo(() => getLocalTimezone(), []);
+  const rangeLabel = useMemo(() => {
+    if (period === "all") return "All time";
+    if (period === "custom") return formatRange(customRange, "Custom range");
+    if (period === "7d") return "Last 7 days";
+    if (period === "30d") return "Last 30 days";
+    if (period === "mtd") return formatRange(range);
+    return formatRange(range);
+  }, [period, customRange, range]);
+
+  const cacheKey = useMemo(() => {
+    const r = range.from !== undefined || range.to !== undefined ? `${range.from ?? ""}-${range.to ?? ""}` : "all";
+    return `${scope}:${period}:${r}:${workspaceDir ?? ""}:${activeId ?? ""}`;
+  }, [scope, period, range.from, range.to, workspaceDir, activeId]);
 
   const load = useCallback(async () => {
     setError(undefined);
+    setEstimated(false);
     // serve from cache if present
-    if (cache[scope]) {
-      setStats(cache[scope]);
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      setStats(cached);
       return;
     }
     setLoading(true);
     try {
       let next: SessionStats | undefined;
+      let usedFallback = false;
+      const hasRange = range.from !== undefined || range.to !== undefined;
+      const rangeParams = hasRange
+        ? {
+            ...(range.from !== undefined ? { from: range.from } : {}),
+            ...(range.to !== undefined ? { to: range.to } : {}),
+            timezone,
+          }
+        : {};
+
       if (scope === "total") {
-        next = await rpc.call<SessionStats>("session.stats");
+        try {
+          next = await rpc.call<SessionStats>("session.stats", hasRange ? rangeParams : {});
+          // if server ignored range (returned more than expected), we can't detect, but keep as is
+        } catch {
+          // fallback to client aggregation for date-bounded total
+          const all = await rpc
+            .call<SessionSummary[]>("session.list", { allProjects: true })
+            .catch(() => [] as SessionSummary[]);
+          next = statsFromSessions(all, undefined, hasRange ? range : undefined);
+          usedFallback = hasRange;
+        }
+        // if we have a fallback need when hasRange but stats were large, optionally refine via client
+        // we keep server result as source of truth
       } else if (scope === "project") {
         // Try server-scoped stats via Project.ID first for richer data (tools/activity)
         let projectId: string | undefined;
@@ -187,17 +280,24 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
         }
         if (projectId) {
           try {
-            next = await rpc.call<SessionStats>("session.stats", { project: projectId });
+            next = await rpc.call<SessionStats>("session.stats", {
+              project: projectId,
+              ...rangeParams,
+            });
           } catch {
             // fallback below
           }
         }
         if (!next) {
-          // Client-side fallback: aggregate sessions filtered to workspaceDir
+          // Client-side fallback: aggregate sessions filtered to workspaceDir + range
           const all = await rpc
             .call<SessionSummary[]>("session.list", { allProjects: true })
             .catch(() => [] as SessionSummary[]);
-          next = statsFromSessions(all, workspaceDir);
+          next = statsFromSessions(all, workspaceDir, hasRange ? range : undefined);
+          usedFallback = hasRange;
+        } else if (hasRange && !next.range) {
+          // server didn't echo range, inject for subtitle
+          next = { ...next, range };
         }
       } else if (scope === "session") {
         if (!activeId) {
@@ -217,11 +317,42 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
           setLoading(false);
           return;
         }
-        next = statsForSession(found);
+        if (hasRange) {
+          const t = found.time.updated ?? found.time.created;
+          if (!inRange(t, range)) {
+            next = {
+              sessions: 0,
+              subagents: 0,
+              prompts: 0,
+              steps: 0,
+              cost: 0,
+              activeDays: 0,
+              streak: 0,
+              tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+              tools: { mode: "none" },
+              activity: [],
+              models: [],
+              range,
+            };
+          } else {
+            next = statsForSession(found);
+            // attach range for subtitle
+            (next as SessionStats).range = range;
+          }
+          // if session is out of range, tools/models still empty
+        } else {
+          next = statsForSession(found);
+        }
       }
       if (next) {
+        if (hasRange && !next.range) next = { ...next, range };
         setStats(next);
-        setCache((prev) => ({ ...prev, [scope]: next }));
+        setEstimated(usedFallback);
+        setCache((prev) => {
+          const m = new Map(prev);
+          m.set(cacheKey, next!);
+          return m;
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -229,7 +360,7 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [scope, workspaceDir, activeId, cache]);
+  }, [scope, workspaceDir, activeId, cache, cacheKey, range, timezone]);
 
   useEffect(() => {
     void load();
@@ -238,12 +369,34 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
   // reset cache when workspace/session changes invalidate project/session scopes
   useEffect(() => {
     setCache((prev) => {
-      const next = { ...prev };
-      delete next.project;
-      delete next.session;
-      return next;
+      const m = new Map(prev);
+      for (const k of [...m.keys()]) {
+        if (k.startsWith("project:") || k.startsWith("session:")) m.delete(k);
+      }
+      return m;
     });
   }, [workspaceDir, activeId]);
+
+  // persist period + custom range
+  useEffect(() => {
+    try {
+      localStorage.setItem(PERIOD_STORAGE_KEY, period);
+    } catch {
+      /* ignore */
+    }
+  }, [period]);
+  useEffect(() => {
+    try {
+      if (period === "custom" && customRange) {
+        if (customRange.from !== undefined) localStorage.setItem(CUSTOM_FROM_KEY, String(customRange.from));
+        else localStorage.removeItem(CUSTOM_FROM_KEY);
+        if (customRange.to !== undefined) localStorage.setItem(CUSTOM_TO_KEY, String(customRange.to));
+        else localStorage.removeItem(CUSTOM_TO_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [period, customRange]);
 
   const models = useMemo(() => {
     if (!stats) return [];
@@ -317,12 +470,85 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
             </span>
           )}
         </div>
+        <div className="usage-period">
+          <span className="oc2-pop-filters" role="group" aria-label="Usage period">
+            {(["7d", "30d", "mtd", "all", "custom"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={`oc2-pop-fchip${period === k ? " on" : ""}`}
+                aria-pressed={period === k}
+                onClick={() => setPeriod(k)}
+                title={
+                  k === "7d"
+                    ? "Last 7 days"
+                    : k === "30d"
+                      ? "Last 30 days"
+                      : k === "mtd"
+                        ? "Month to date"
+                        : k === "all"
+                          ? "All time"
+                          : "Custom date range"
+                }
+              >
+                {k === "7d" ? "7d" : k === "30d" ? "30d" : k === "mtd" ? "MTD" : k === "all" ? "All" : "Custom"}
+              </button>
+            ))}
+          </span>
+          <span className="usage-range-label" title={timezone}>
+            {rangeLabel} · {timezone}
+          </span>
+        </div>
+        {period === "custom" && (
+          <div className="usage-custom-dates">
+            <label className="usage-date-field">
+              <span>From</span>
+              <input
+                type="date"
+                value={dateInputValue(customRange?.from)}
+                onChange={(e) => {
+                  const v = parseDateInput(e.target.value);
+                  setCustomRange((prev) => ({ ...prev, from: v }));
+                }}
+              />
+            </label>
+            <label className="usage-date-field">
+              <span>To</span>
+              <input
+                type="date"
+                value={dateInputValue(customRange?.to)}
+                onChange={(e) => {
+                  const v = parseDateInput(e.target.value);
+                  // include end-of-day
+                  const end = v !== undefined ? v + 24 * 3600 * 1000 - 1 : undefined;
+                  setCustomRange((prev) => ({ ...prev, to: end }));
+                }}
+              />
+            </label>
+            {customRange?.from !== undefined || customRange?.to !== undefined ? (
+              <button
+                type="button"
+                className="usage-clear"
+                onClick={() => setCustomRange(undefined)}
+                title="Clear custom range"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        )}
         {error && <div className="composer-error">{error}</div>}
         <div className="drawer-list">
           {loading && !stats && !error && <div className="drawer-empty">Loading…</div>}
           {!loading && !stats && !error && <div className="drawer-empty">No data</div>}
           {stats && (
             <>
+              {period !== "all" && stats.sessions === 0 && (
+                <div className="usage-hint">No activity in this period.</div>
+              )}
+              {estimated && (
+                <div className="usage-hint">Range estimated from session start dates (server range not available).</div>
+              )}
               <div className="usage-grid">
                 <div className="usage-cell">
                   <span className="usage-num">

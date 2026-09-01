@@ -59,6 +59,16 @@ export function createRpcDispatcher(
       return Number(v);
     throw new Error(`rpc: missing numeric '${key}'`);
   };
+  const optNum = (
+    params: Record<string, unknown>,
+    key: string,
+  ): number | undefined => {
+    const v = params[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v)))
+      return Number(v);
+    return undefined;
+  };
 
   /** Handlers may register incrementally; unknown methods are reported, not thrown. */
   const handlers: Partial<Record<RpcMethod, Handler>> = {
@@ -89,7 +99,19 @@ export function createRpcDispatcher(
     "session.view": (p) => api.sessionView(str(p, "sessionID"), num(p, "idle")),
     "session.stats": (p) => {
       const project = optStr(p, "project");
-      return api.sessionStats(project ? { project } : undefined);
+      const from = optNum(p, "from");
+      const to = optNum(p, "to");
+      const timezone = optStr(p, "timezone");
+      const hasRange = from !== undefined || to !== undefined || timezone !== undefined;
+      if (project || hasRange) {
+        return api.sessionStats({
+          ...(project ? { project } : {}),
+          ...(from !== undefined ? { from } : {}),
+          ...(to !== undefined ? { to } : {}),
+          ...(timezone ? { timezone } : {}),
+        });
+      }
+      return api.sessionStats(undefined);
     },
     "transcript.copy": (p) => {
       const text = str(p, "markdown");
