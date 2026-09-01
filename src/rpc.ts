@@ -710,7 +710,19 @@ export function createRpcDispatcher(
       const result = await handler(request.params ?? {});
       return { id: request.id, ok: true, result };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : (() => {
+                try {
+                  const s = JSON.stringify(error);
+                  return s && s !== "{}" ? s.slice(0, 2000) : String(error);
+                } catch {
+                  return String(error);
+                }
+              })();
       log.error(`rpc ${request.method} failed`, error);
       return { id: request.id, ok: false, error: message };
     }

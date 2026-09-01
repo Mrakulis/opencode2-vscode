@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PROVIDERISH_RE, assistantFailed } from "../webview-src/lib/failure";
+import { PROVIDERISH_RE, assistantFailed, errorMessage } from "../webview-src/lib/failure";
 
 describe("PROVIDERISH_RE", () => {
   it("matches upstream provider rejects incl. Console Go invalid params", () => {
@@ -26,5 +26,31 @@ describe("assistantFailed", () => {
     assert.equal(assistantFailed(m as never), true);
     const ok = { type: "assistant", id: "y", finish: "stop" };
     assert.equal(assistantFailed(ok as never), false);
+  });
+});
+
+describe("errorMessage", () => {
+  it("uses Error.message and passes plain strings through", () => {
+    assert.equal(errorMessage(new Error("boom")), "boom");
+    assert.equal(errorMessage("plain"), "plain");
+  });
+  it("falls back to String(error) for an empty Error", () => {
+    assert.equal(errorMessage(new Error("")), "Error");
+  });
+  it("reads .message / .error off plain objects", () => {
+    assert.equal(errorMessage({ message: "obj msg" }), "obj msg");
+    assert.equal(errorMessage({ error: "err field" }), "err field");
+  });
+  it("stringifies other objects, truncated to 2000 chars", () => {
+    assert.equal(errorMessage({ code: 7, info: "x" }), '{"code":7,"info":"x"}');
+    assert.equal(errorMessage({ blob: "a".repeat(3000) }).length, 2000);
+  });
+  it("handles empty objects, primitives and circular structures", () => {
+    assert.equal(errorMessage({}), "[object Object]");
+    assert.equal(errorMessage(42), "42");
+    assert.equal(errorMessage(null), "null");
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    assert.equal(errorMessage(circular), "[object Object]");
   });
 });

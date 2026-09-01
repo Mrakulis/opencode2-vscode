@@ -4,6 +4,7 @@ import { filterVisibleModels, groupByProvider, modelKey } from "../lib/models";
 import { truncate } from "../lib/format";
 import type { PickerModel } from "../lib/models";
 import { rpc } from "../lib/rpc";
+import { errorMessage } from "../lib/failure";
 import {
   filterSlashEntries,
   type SlashEntry,
@@ -354,7 +355,11 @@ export function Composer(props: Props) {
         setAttachments((a) =>
           a.map((x) => (x.id === id ? { ...x, uri: res.uri } : x)),
         );
-      } catch {}
+      } catch (e) {
+        setAttachments((a) => a.filter((x) => x.id !== id));
+        setError(errorMessage(e));
+        setTimeout(() => setError(undefined), 4000);
+      }
     }
   }, []);
 
@@ -401,7 +406,7 @@ export function Composer(props: Props) {
       );
       setDelivery(undefined);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
       setTimeout(() => setError(undefined), 4000);
     }
   }, [text, attachments, delivery, props]);

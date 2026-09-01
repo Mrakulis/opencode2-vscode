@@ -1,5 +1,20 @@
 import type { AnyMessage } from "./rpc";
 
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message || String(e);
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object") {
+    const r = e as Record<string, unknown>;
+    if (typeof r.message === "string" && r.message) return r.message;
+    if (typeof r.error === "string" && r.error) return r.error;
+    try {
+      const s = JSON.stringify(r);
+      if (s && s !== "{}" && s !== "[]") return s.slice(0, 2000);
+    } catch {}
+  }
+  return String(e);
+}
+
 /** True when a failure looks provider/model-related (smart-retry material). */
 export const PROVIDERISH_RE =
   /provider|invalid-request|invalid_request|invalid request|invalid parameters|upstream request failed|console go|policy|guardrail|no endpoints|model|finish_reason|stream ended/i;

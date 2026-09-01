@@ -31,7 +31,7 @@ import {
   sameSessionPending,
   lostReplyIds,
 } from "./lib/permissions";
-import { PROVIDERISH_RE } from "./lib/failure";
+import { errorMessage, PROVIDERISH_RE } from "./lib/failure";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -2484,9 +2484,7 @@ export function App() {
         onSend={(t, files, delivery) => {
           // Surface transport/API send failures instead of swallowing them.
           void sendMessage(t, files, delivery).catch((e: unknown) =>
-            setNotice(
-              `Send failed — ${e instanceof Error ? e.message : String(e)}`,
-            ),
+            setNotice(`Send failed — ${errorMessage(e)}`),
           );
         }}
         prefill={composerPrefill}
@@ -2622,10 +2620,7 @@ export function App() {
           onRunPrompt={(text) => {
             // Route through the normal composer send path (steer while busy).
             void sendMessage(text, undefined, busy ? "steer" : undefined).catch(
-              (e: unknown) =>
-                setNotice(
-                  `Send failed — ${e instanceof Error ? e.message : String(e)}`,
-                ),
+              (e: unknown) => setNotice(`Send failed — ${errorMessage(e)}`),
             );
           }}
         />
