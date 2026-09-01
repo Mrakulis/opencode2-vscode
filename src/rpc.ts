@@ -645,30 +645,41 @@ export function createRpcDispatcher(
     },
     "companion.update": async (p) => {
       const cfg = vscode.workspace.getConfiguration("opencode2");
+      const tryUpdate = async (key: string, value: unknown): Promise<void> => {
+        try {
+          await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("not a registered configuration")) {
+            throw new Error(`${msg} — please reload VS Code window (Ctrl+R / Developer: Reload Window) after installing 0.6.42, then try again.`);
+          }
+          throw e;
+        }
+      };
       if (p.enabled !== undefined) {
         if (typeof p.enabled !== "boolean") throw new Error("enabled must be boolean");
-        await cfg.update("server.listenEnabled", p.enabled, vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenEnabled", p.enabled);
       }
       if (p.hostname !== undefined) {
         if (typeof p.hostname !== "string" || !p.hostname.trim()) throw new Error("hostname must be non-empty string");
-        await cfg.update("server.listenHostname", p.hostname.trim(), vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenHostname", p.hostname.trim());
       }
       if (p.port !== undefined) {
         const n = typeof p.port === "number" ? p.port : Number(p.port);
         if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error("port must be 1-65535");
-        await cfg.update("server.listenPort", n, vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenPort", n);
       }
       if (p.username !== undefined) {
         if (typeof p.username !== "string") throw new Error("username must be string");
-        await cfg.update("server.listenUsername", p.username, vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenUsername", p.username);
       }
       if (p.password !== undefined) {
         if (typeof p.password !== "string") throw new Error("password must be string");
-        await cfg.update("server.listenPassword", p.password, vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenPassword", p.password);
       }
       if (p.cors !== undefined) {
         if (!Array.isArray(p.cors) || !p.cors.every((x) => typeof x === "string")) throw new Error("cors must be string[]");
-        await cfg.update("server.listenCors", p.cors, vscode.ConfigurationTarget.Global);
+        await tryUpdate("server.listenCors", p.cors);
       }
       // trigger restart is handled by onDidChangeConfiguration, but ensure immediate sync if provided
       if (companion) await companion.start();

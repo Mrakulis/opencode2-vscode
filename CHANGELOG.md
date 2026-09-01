@@ -42,6 +42,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.43] - 2026-09-01
+
+### Fixed
+- **Companion drawer polish** — `▶ Start` / `■ Stop` buttons (not checkbox), `Save settings` now clearly saves all bind/auth fields (`hostname`/`port`/`username`/`password` + advanced CORS), and `CORS` moved to `<details> Advanced` (browser-only). Fixes `not a registered configuration` reload hint (`src/rpc.ts:companion.update`).
+
+---
+
 ## [0.6.38] - 2026-08-31
 
 ### Fixed
@@ -195,7 +202,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
-[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.42...HEAD
+[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.43...HEAD
+[0.6.43]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.43
 [0.6.42]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.42
 [0.6.41]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.41
 [0.6.40]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.40

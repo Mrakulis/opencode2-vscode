@@ -74,10 +74,31 @@ export function CompanionDrawer({ onClose }: Props) {
     }
   };
 
-  const toggleEnabled = async (next: boolean): Promise<void> => {
+  const start = async (): Promise<void> => {
+    setSaving(true);
+    setError(undefined);
+    try {
+      const corsArr = cors.split(",").map((s) => s.trim()).filter(Boolean);
+      const res = await rpc.call<CompanionStatus>("companion.update", {
+        enabled: true,
+        hostname: hostname.trim() || "127.0.0.1",
+        port,
+        username: username.trim() || "opencode",
+        password,
+        cors: corsArr,
+      });
+      setStatus(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const stop = async (): Promise<void> => {
     setSaving(true);
     try {
-      const res = await rpc.call<CompanionStatus>("companion.update", { enabled: next });
+      const res = await rpc.call<CompanionStatus>("companion.update", { enabled: false });
       setStatus(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -121,27 +142,34 @@ export function CompanionDrawer({ onClose }: Props) {
       {error && <div className="drawer-empty" style={{ color: "var(--oc2-danger)" }}>{error}</div>}
 
       <div className="drawer-list" style={{ gap: "10px", padding: "12px" }}>
-        <label className="checkrow">
-          <input type="checkbox" checked={status?.config.enabled ?? false} onChange={(e) => void toggleEnabled(e.target.checked)} disabled={saving} />
-          Enable companion server
+        <div className="oc2-mcp-auth" style={{ gap: "6px" }}>
+          {!status?.running ? (
+            <button type="button" className="primary" onClick={() => void start()} disabled={saving} title="Save settings and start the gateway">
+              ▶ Start
+            </button>
+          ) : (
+            <button type="button" className="danger" onClick={() => void stop()} disabled={saving} title="Stop the gateway">
+              ■ Stop
+            </button>
+          )}
+          <button type="button" className="chip" onClick={() => void restart()} disabled={saving || !status?.running} title="Restart gateway">
+            ↻ restart
+          </button>
           <span className="micro" style={{ opacity: 0.7, marginLeft: "6px" }}>
-            {status?.running ? "running" : "stopped"}
+            {status?.running ? `● running` : "○ stopped"}
           </span>
-        </label>
-
-        {status?.url && (
-          <div className="oc2-mcp-auth" style={{ gap: "6px" }}>
-            <span className="micro" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }} title={status.url}>
-              {status.url}
-            </span>
-            <button type="button" className="chip" onClick={() => void copyUrl()} title="Copy URL">
-              copy
-            </button>
-            <button type="button" className="chip" onClick={() => void restart()} disabled={saving} title="Restart gateway">
-              ↻ restart
-            </button>
-          </div>
-        )}
+          <span className="spacer" />
+          {status?.url && (
+            <>
+              <span className="micro" style={{ overflow: "hidden", textOverflow: "ellipsis" }} title={status.url}>
+                {status.url}
+              </span>
+              <button type="button" className="chip" onClick={() => void copyUrl()} title="Copy URL">
+                copy
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="menu-section">bind</div>
         <label>
@@ -165,15 +193,20 @@ export function CompanionDrawer({ onClose }: Props) {
           <span className="micro" style={{ opacity: 0.6 }}>Static — stays same after save. Empty = no auth (only 127.0.0.1).</span>
         </label>
 
-        <div className="menu-section">cors</div>
-        <label>
-          allowed origins (comma separated)
-          <input value={cors} onChange={(e) => setCors(e.target.value)} placeholder="http://localhost:5173" />
-        </label>
-
-        <button type="button" className="primary" onClick={() => void save()} disabled={saving}>
-          {saving ? "saving…" : "Save"}
+        <button type="button" className="primary" onClick={() => void save()} disabled={saving} title="Save hostname/port/auth without starting/stopping">
+          {saving ? "saving…" : "Save settings"}
         </button>
+
+        <details style={{ marginTop: "4px" }}>
+          <summary className="micro" style={{ cursor: "pointer", opacity: 0.7 }}>
+            Advanced
+          </summary>
+          <label style={{ marginTop: "8px" }}>
+            allowed CORS origins (comma separated)
+            <input value={cors} onChange={(e) => setCors(e.target.value)} placeholder="http://localhost:5173" />
+            <span className="micro" style={{ opacity: 0.6 }}>Browser-only; native apps ignore CORS.</span>
+          </label>
+        </details>
 
         <div className="menu-sep" />
         <div className="menu-section">mobile app</div>
