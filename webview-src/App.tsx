@@ -44,6 +44,7 @@ import { InstructionsDrawer } from "./components/InstructionsDrawer";
 import { WorktreesDrawer } from "./components/WorktreesDrawer";
 import { InboxDrawer } from "./components/InboxDrawer";
 import { UsageDrawer } from "./components/UsageDrawer";
+import { CompanionDrawer } from "./components/CompanionDrawer";
 import { Composer } from "./components/Composer";
 import { StatusStrip } from "./components/StatusStrip";
 import { SubagentsDrawer } from "./components/SubagentsDrawer";
@@ -170,6 +171,7 @@ export function App() {
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [plansOpen, setPlansOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [companionOpen, setCompanionOpen] = useState(false);
   const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>(
     undefined,
   );
@@ -1900,9 +1902,7 @@ export function App() {
         onOpenManager={() => setManagerOpen(true)}
         onOpenProviders={() => setProvidersOpen(true)}
         onOpenMcp={() => setMcpOpen(true)}
-        onOpenCompanion={() =>
-          void rpc.call("settings.open", { query: "opencode2.server.listen" } as unknown as Record<string, unknown>).catch(() => undefined)
-        }
+        onOpenCompanion={() => setCompanionOpen(true)}
         onOpenSavedPermissions={() => setSavedPermsOpen(true)}
         onOpenInstructions={() => {
           if (activeId) setInstructionsOpen(true);
@@ -2251,6 +2251,7 @@ export function App() {
             activeId={activeId}
           />
         )}
+        {companionOpen && <CompanionDrawer onClose={() => setCompanionOpen(false)} />}
       </main>
 
       {(() => {

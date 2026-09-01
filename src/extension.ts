@@ -18,6 +18,7 @@ export function activate(context: vscode.ExtensionContext): void {
     log,
     () => resolveCli(log),
     context.workspaceState,
+    extensionServer,
   );
   const provider = new SidebarProvider(context.extensionUri, controller, rpc);
   const autoCompact = new AutoCompactWatcher(controller, log);

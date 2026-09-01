@@ -4,7 +4,7 @@ import fs from "node:fs";
 const proto = fs.readFileSync("src/protocol.ts", "utf8");
 const rpc = fs.readFileSync("src/rpc.ts", "utf8");
 const css = fs.readFileSync("webview-src/styles.css", "utf8");
-const tsxFiles = ["Composer.tsx", "Feed.tsx", "FormCard.tsx", "HeaderBar.tsx", "InboxDrawer.tsx", "InstructionsDrawer.tsx", "McpDrawer.tsx", "ModelManager.tsx", "PlansDrawer.tsx", "ProvidersDrawer.tsx", "SavedPermissionsDrawer.tsx", "SessionsDrawer.tsx", "StatusStrip.tsx", "SubagentsDrawer.tsx", "UsageDrawer.tsx", "WorktreesDrawer.tsx"]
+const tsxFiles = ["Composer.tsx", "CompanionDrawer.tsx", "Feed.tsx", "FormCard.tsx", "HeaderBar.tsx", "InboxDrawer.tsx", "InstructionsDrawer.tsx", "McpDrawer.tsx", "ModelManager.tsx", "PlansDrawer.tsx", "ProvidersDrawer.tsx", "SavedPermissionsDrawer.tsx", "SessionsDrawer.tsx", "StatusStrip.tsx", "SubagentsDrawer.tsx", "UsageDrawer.tsx", "WorktreesDrawer.tsx"]
   .map((f) => fs.readFileSync(`webview-src/components/${f}`, "utf8"))
   .join("\n");
 const app = fs.readFileSync("webview-src/App.tsx", "utf8");

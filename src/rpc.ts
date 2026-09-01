@@ -9,6 +9,8 @@ import { WorkingDiffDocs } from "./workingDiffDocs";
 import { resolveCli as resolveCliImpl } from "./cli";
 import type { ResolvedCli } from "./cli";
 import type { OpenCodeController } from "./controller";
+import type { ExtensionServer } from "./extensionServer";
+import { readListenConfig } from "./extensionServer";
 import {
   isSettingKey,
   validateSettingValue,
@@ -28,6 +30,7 @@ export function createRpcDispatcher(
   log: Log,
   resolveCli?: () => Promise<ResolvedCli | undefined>,
   storage?: vscode.Memento,
+  companion?: ExtensionServer,
 ) {
   const api = createApi({
     getClient: () => controller.getClient(),
@@ -635,6 +638,48 @@ export function createRpcDispatcher(
       const buf = Buffer.from(data, "base64");
       await fs.promises.writeFile(filePath, buf);
       return { uri: filePath, name: safe };
+    },
+    "companion.status": async () => {
+      const cfg = readListenConfig();
+      return { config: cfg, url: companion?.url, running: companion?.isRunning ?? false };
+    },
+    "companion.update": async (p) => {
+      const cfg = vscode.workspace.getConfiguration("opencode2");
+      if (p.enabled !== undefined) {
+        if (typeof p.enabled !== "boolean") throw new Error("enabled must be boolean");
+        await cfg.update("server.listenEnabled", p.enabled, vscode.ConfigurationTarget.Global);
+      }
+      if (p.hostname !== undefined) {
+        if (typeof p.hostname !== "string" || !p.hostname.trim()) throw new Error("hostname must be non-empty string");
+        await cfg.update("server.listenHostname", p.hostname.trim(), vscode.ConfigurationTarget.Global);
+      }
+      if (p.port !== undefined) {
+        const n = typeof p.port === "number" ? p.port : Number(p.port);
+        if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error("port must be 1-65535");
+        await cfg.update("server.listenPort", n, vscode.ConfigurationTarget.Global);
+      }
+      if (p.username !== undefined) {
+        if (typeof p.username !== "string") throw new Error("username must be string");
+        await cfg.update("server.listenUsername", p.username, vscode.ConfigurationTarget.Global);
+      }
+      if (p.password !== undefined) {
+        if (typeof p.password !== "string") throw new Error("password must be string");
+        await cfg.update("server.listenPassword", p.password, vscode.ConfigurationTarget.Global);
+      }
+      if (p.cors !== undefined) {
+        if (!Array.isArray(p.cors) || !p.cors.every((x) => typeof x === "string")) throw new Error("cors must be string[]");
+        await cfg.update("server.listenCors", p.cors, vscode.ConfigurationTarget.Global);
+      }
+      // trigger restart is handled by onDidChangeConfiguration, but ensure immediate sync if provided
+      if (companion) await companion.start();
+      const updated = readListenConfig();
+      return { config: updated, url: companion?.url, running: companion?.isRunning ?? false };
+    },
+    "companion.restart": async () => {
+      if (!companion) throw new Error("companion server not available");
+      await companion.start();
+      const cfg = readListenConfig();
+      return { config: cfg, url: companion.url, running: companion.isRunning };
     },
   };
 

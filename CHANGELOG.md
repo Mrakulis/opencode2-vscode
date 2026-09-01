@@ -35,6 +35,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.42] - 2026-09-01
+
+### Added
+- **Companion server drawer inside the extension** — no VS Code Settings. `⋯` → `Companion server…` now opens a dedicated drawer (`webview-src/components/CompanionDrawer.tsx`) with Enable toggle, `hostname`/`port`/`username`/`password`/`CORS`, live `● URL` + Copy/Restart, and app-link placeholder. Backed by `companion.status/update/restart` RPC (`src/protocol.ts`, `src/rpc.ts:readListenConfig` + `companion.*` handlers, `src/extension.ts` wiring). Auth is static `timingSafeEqual` + `0.0.0.0` guard, `HTTP+SSE` `proxyRes.pipe(res)` streaming.
+
+---
+
 ## [0.6.38] - 2026-08-31
 
 ### Fixed
@@ -188,7 +195,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
-[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.41...HEAD
+[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.42...HEAD
+[0.6.42]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.42
 [0.6.41]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.41
 [0.6.40]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.40
 [0.6.39]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.39

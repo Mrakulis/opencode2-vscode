@@ -250,7 +250,11 @@ export type RpcMethod =
   | "file.open"
   | "diff.open"
   | "diff.previewPreApply"
-  | "image.save";
+  | "image.save"
+  // companion server (extension-owned)
+  | "companion.status"
+  | "companion.update"
+  | "companion.restart";
 
 /** One per-tool usage row (present only when the server reports detail mode). */
 export interface SessionStatsToolRow {
