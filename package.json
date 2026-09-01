@@ -2,7 +2,7 @@
   "name": "opencode2-vscode-gui",
   "displayName": "OpenCode 2 — Sidebar GUI",
   "description": "Independent VS Code sidebar GUI for the OpenCode coding agent — slash commands, skills, forms, worktrees, undo/redo, themes. Not affiliated with the OpenCode team.",
-  "version": "0.6.40",
+  "version": "0.6.41",
   "license": "MIT",
   "publisher": "Mrakulis",
   "icon": "resources/marketplace-icon.png",
@@ -336,7 +336,7 @@
         },
         "opencode2.server.listenPort": {
           "type": "number",
-          "default": 4096,
+          "default": 12421,
           "minimum": 1,
           "maximum": 65535,
           "description": "Port for the extension-owned server. Must be free. First VS Code window wins when multiple windows are open."

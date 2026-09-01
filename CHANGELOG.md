@@ -28,6 +28,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.41] - 2026-09-01
+
+### Changed
+- **Companion server default port now `12421`** — `opencode2.server.listenPort` default `4096` → `12421` (`package.json`, `src/extensionServer.ts:readListenConfig`). Avoids collision with daemon's default `4096`.
+
+---
+
 ## [0.6.38] - 2026-08-31
 
 ### Fixed
@@ -181,7 +188,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
-[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.40...HEAD
+[Unreleased]: https://github.com/Mrakulis/opencode2-vscode/compare/v0.6.41...HEAD
+[0.6.41]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.41
 [0.6.40]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.40
 [0.6.39]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.39
 [0.6.38]: https://github.com/Mrakulis/opencode2-vscode/releases/tag/v0.6.38

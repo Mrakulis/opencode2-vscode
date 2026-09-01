@@ -20,7 +20,7 @@ export function readListenConfig(): ListenConfig {
   return {
     enabled: cfg.get<boolean>("server.listenEnabled", false),
     hostname: cfg.get<string>("server.listenHostname", "127.0.0.1").trim() || "127.0.0.1",
-    port: cfg.get<number>("server.listenPort", 4096) ?? 4096,
+    port: cfg.get<number>("server.listenPort", 12421) ?? 12421,
     username: cfg.get<string>("server.listenUsername", "opencode").trim() || "opencode",
     password: cfg.get<string>("server.listenPassword", "") ?? "",
     cors: cfg.get<string[]>("server.listenCors", []) ?? [],
