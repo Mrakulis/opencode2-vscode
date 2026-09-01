@@ -47,6 +47,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 ### Fixed
 - **Companion drawer polish** — `▶ Start` / `■ Stop` buttons (not checkbox), `Save settings` now clearly saves all bind/auth fields (`hostname`/`port`/`username`/`password` + advanced CORS), and `CORS` moved to `<details> Advanced` (browser-only). Fixes `not a registered configuration` reload hint (`src/rpc.ts:companion.update`).
 
+## [0.6.44] - 2026-09-01
+
+### Fixed
+- **Companion server hardening** — (1) `ExtensionServer.start/stop` now serialize through a lifecycle promise chain: drawer `companion.update` called `start()` directly while the same config writes fired `syncExtensionServer()`, racing into double server creation and spurious `EADDRINUSE` warnings. (2) Non-allow-listed `Origin` on non-preflight requests gets `403` before proxying — browser "simple requests" skip preflight and CORS only blocks *reading*, so daemon auth injected server-side made a loopback no-password server drive-by executable (native apps send no Origin, unaffected). (3) Request handler wrapped in try/catch → `500` instead of unhandled rejection + hanging socket. (4) Client aborts (`res.close` before response end / `req.error`) destroy the upstream request — aborted SSE clients no longer leak daemon sockets. (5) `POST /opencode2/extension/start` returns the reachable companion URL as `url` plus the daemon endpoint as informational `daemon` (was the daemon loopback URL the remote caller couldn't reach). (6) `server.listen*` config changes no longer trigger a full daemon `connect()` (`src/extension.ts`).
+- **Non-Error failures surface real messages** — new `errorMessage()` helper (`webview-src/lib/failure.ts`) reads `.message`/`.error`/JSON off thrown non-Errors (mirrored host-side in the `src/rpc.ts` handle catch, 2000-char cap); adopted in composer send + image-attachment paths (`App.tsx`, `Composer.tsx` — a failed attachment placeholder is now removed instead of silently kept). Pure listen-server helpers moved to vscode-free `src/listenConfig.ts` so node tests can import them.
+
 ---
 
 ## [0.6.38] - 2026-08-31

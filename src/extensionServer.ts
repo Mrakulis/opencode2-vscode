@@ -5,15 +5,11 @@ import * as vscode from "vscode";
 import { Service, type Endpoint } from "@opencode-ai/client/service";
 import { registrationFiles } from "./flatpak";
 import { Log } from "./log";
+import { expectedAuthHeader, isLoopback, type ListenConfig } from "./listenConfig";
 
-export interface ListenConfig {
-  enabled: boolean;
-  hostname: string;
-  port: number;
-  username: string;
-  password: string;
-  cors: string[];
-}
+// Pure pieces live vscode-free in ./listenConfig so node tests can import them.
+export { expectedAuthHeader, isLoopback } from "./listenConfig";
+export type { ListenConfig } from "./listenConfig";
 
 export function readListenConfig(): ListenConfig {
   const cfg = vscode.workspace.getConfiguration("opencode2");
@@ -25,14 +21,6 @@ export function readListenConfig(): ListenConfig {
     password: cfg.get<string>("server.listenPassword", "") ?? "",
     cors: cfg.get<string[]>("server.listenCors", []) ?? [],
   };
-}
-
-function isLoopback(host: string): boolean {
-  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "::ffff:127.0.0.1";
-}
-
-function expectedAuthHeader(username: string, password: string): string {
-  return "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
 }
 
 async function discoverLocalEndpoint(log: Log): Promise<Endpoint | undefined> {
@@ -51,6 +39,13 @@ export class ExtensionServer implements vscode.Disposable {
   private activeConfig?: ListenConfig;
   private activeUrl?: string;
   private daemonStarter?: () => Promise<void>;
+  /**
+   * Serializes start/stop. `companion.update` calls start() directly while the
+   * same config write fires onDidChangeConfiguration -> syncExtensionServer();
+   * without the chain those concurrent starts race into double server
+   * creation, spurious EADDRINUSE warnings and leaked listeners.
+   */
+  private lifecycle: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly log: Log,
@@ -71,10 +66,22 @@ export class ExtensionServer implements vscode.Disposable {
     return !!this.server?.listening;
   }
 
-  async start(config?: ListenConfig): Promise<void> {
+  start(config?: ListenConfig): Promise<void> {
+    const run = this.lifecycle.then(() => this.doStart(config));
+    this.lifecycle = run.catch(() => undefined);
+    return run;
+  }
+
+  stop(): Promise<void> {
+    const run = this.lifecycle.then(() => this.doStop());
+    this.lifecycle = run.catch(() => undefined);
+    return run;
+  }
+
+  private async doStart(config?: ListenConfig): Promise<void> {
     const cfg = config ?? readListenConfig();
     if (!cfg.enabled) {
-      await this.stop();
+      await this.doStop();
       return;
     }
 
@@ -83,7 +90,7 @@ export class ExtensionServer implements vscode.Disposable {
       const msg = `Extension server refused to bind ${cfg.hostname}:${cfg.port} without a password — set opencode2.server.listenPassword or use 127.0.0.1`;
       this.log.error(msg);
       void vscode.window.showErrorMessage(msg);
-      await this.stop();
+      await this.doStop();
       return;
     }
 
@@ -100,7 +107,7 @@ export class ExtensionServer implements vscode.Disposable {
       return;
     }
 
-    await this.stop();
+    await this.doStop();
 
     const server = http.createServer((req, res) => {
       void this.handleRequest(req, res, cfg);
@@ -129,18 +136,18 @@ export class ExtensionServer implements vscode.Disposable {
     this.log.info(`Extension server listening at ${url} (auth: ${cfg.password ? "password" : "none"})`);
   }
 
-  async stop(): Promise<void> {
-    if (!this.server) {
-      this.activeUrl = undefined;
-      this.activeConfig = undefined;
-      return;
-    }
+  private async doStop(): Promise<void> {
     const s = this.server;
     this.server = undefined;
     this.activeUrl = undefined;
     this.activeConfig = undefined;
+    if (!s) return;
     await new Promise<void>((resolve) => {
-      s.close(() => resolve());
+      try {
+        s.close(() => resolve());
+      } catch {
+        resolve(); // not running (e.g. closed before listen resolved)
+      }
       // force close after 2s
       setTimeout(() => {
         try {
@@ -153,6 +160,28 @@ export class ExtensionServer implements vscode.Disposable {
   }
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse, cfg: ListenConfig): Promise<void> {
+    try {
+      await this.handleRequestInner(req, res, cfg);
+    } catch (e) {
+      // Never leave a request hanging: an unexpected throw (e.g. a malformed
+      // discovery URL) used to become an unhandled rejection + dead socket.
+      this.log.error("extensionServer request handler failed", e);
+      if (!res.headersSent) {
+        const origin = req.headers.origin;
+        if (typeof origin === "string" && (cfg.cors.includes(origin) || cfg.cors.includes("*"))) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+          res.setHeader("Vary", "Origin");
+        }
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("Internal server error");
+      } else {
+        try { res.end(); } catch {}
+      }
+    }
+  }
+
+  private async handleRequestInner(req: http.IncomingMessage, res: http.ServerResponse, cfg: ListenConfig): Promise<void> {
     // CORS preflight handling
     const origin = req.headers.origin as string | undefined;
     const corsAllowed = origin && (cfg.cors.includes(origin) || cfg.cors.includes("*"));
@@ -176,6 +205,15 @@ export class ExtensionServer implements vscode.Disposable {
       }
       res.writeHead(204);
       res.end();
+      return;
+    }
+
+    // Browser "simple requests" (GET / text/plain POST) skip preflight, so an
+    // Origin we did not allow must never be proxied — the daemon auth is
+    // injected here server-side and CORS alone only blocks reading responses.
+    if (origin && !corsAllowed) {
+      res.writeHead(403, { "Content-Type": "text/plain" });
+      res.end("Origin not allowed");
       return;
     }
 
@@ -216,7 +254,15 @@ export class ExtensionServer implements vscode.Disposable {
         const ep = await discoverLocalEndpoint(this.log);
         setCorsHeaders();
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, url: ep?.url ?? null }));
+        // `url` must be reachable by the caller (the companion itself) — the
+        // daemon endpoint is loopback-only and goes out as informational.
+        res.end(
+          JSON.stringify({
+            ok: true,
+            url: this.activeUrl ?? `http://${cfg.hostname}:${cfg.port}`,
+            daemon: ep?.url ?? null,
+          }),
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         this.log.error("remote daemon start failed", e);
@@ -294,6 +340,16 @@ export class ExtensionServer implements vscode.Disposable {
         try { res.end(); } catch {}
       }
     });
+
+    // Client disconnects must tear down the upstream socket — an aborted SSE
+    // subscription would otherwise keep the daemon streaming into a dead res.
+    const abortUpstream = (): void => {
+      proxyReq.destroy();
+    };
+    res.on("close", () => {
+      if (!res.writableEnded) abortUpstream();
+    });
+    req.on("error", abortUpstream);
 
     // Stream request body
     req.pipe(proxyReq);

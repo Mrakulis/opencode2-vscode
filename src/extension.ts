@@ -166,13 +166,16 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("opencode2")) return;
+      const affectsListen = event.affectsConfiguration("opencode2.server.listen");
+      // server.listen* is the extension-owned companion server — it must not
+      // reconnect the daemon, only resync the listen server.
       if (
-        event.affectsConfiguration("opencode2.server") ||
+        (event.affectsConfiguration("opencode2.server") && !affectsListen) ||
         event.affectsConfiguration("opencode2.cliPath")
       ) {
         connect();
       }
-      if (event.affectsConfiguration("opencode2.server.listen")) {
+      if (affectsListen) {
         syncExtensionServer();
       }
     }),
