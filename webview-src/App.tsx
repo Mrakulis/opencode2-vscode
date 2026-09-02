@@ -32,6 +32,7 @@ import {
   lostReplyIds,
 } from "./lib/permissions";
 import { errorMessage, PROVIDERISH_RE } from "./lib/failure";
+import { isParkedQuestionPart, isTerminalQuestionPart } from "./lib/questions";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -130,16 +131,17 @@ export function App() {
   const deltaAccRef = useRef(new Map<string, string>());
   /** Sticky plan/build per user message — survives server refetches (which have no planAtSend). */
   const planOverlayRef = useRef<Map<string, Map<string, "plan" | "build">>>(new Map());
-  /** Answered questions: sessionId -> toolCallId -> per-question sent text (null = open).
-   *  App-owned overlay — server refetches replace tool parts wholesale, so the
-   *  "answered" record must not live in message state. */
-  const [questionAnswers, setQuestionAnswers] = useState<
-    Record<string, Record<string, (string | null)[]>>
-  >({});
   /** Question tool calls already handed back to the user (auto-interrupt sent once). */
   const [handedBackIds, setHandedBackIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  /** Interrupt attempts per question tool call — caps the retry loop so a
+   *  persistently failing interrupt surfaces a notice instead of storming. */
+  const interruptAttemptsRef = useRef<Map<string, number>>(new Map());
+  /** Terminal (aborted/errored) question tool calls already reconciled
+   *  against the server-active set — the stale-busy watchdog fires once
+   *  per tool call. */
+  const reconciledTerminalRef = useRef<Set<string>>(new Set());
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const busySessionsRef = useRef<Record<string, boolean>>({});
   useEffect(() => {
@@ -267,41 +269,13 @@ export function App() {
     () => sessions.find((s) => s.id === activeId),
     [sessions, activeId],
   );
-  /** A question tool is parked in the active session and the turn has not
-   *  been handed back yet — the UI un-busies immediately so the user can
-   *  answer while the auto-interrupt below lands. */
-  const hasOpenQuestion = useMemo(() => {
-    if (!activeId) return false;
-    for (const m of messages) {
-      if ((m as { type?: string }).type !== "assistant") continue;
-      const content = (m as { content?: Array<Record<string, unknown>> })
-        .content;
-      if (!Array.isArray(content)) continue;
-      for (const p of content) {
-        if (
-          (p as { type?: string }).type !== "tool" ||
-          (p as { name?: string }).name !== "question"
-        )
-          continue;
-        const toolId = (p as { id?: string }).id;
-        const st = (p as { state?: { status?: string } }).state;
-        if (
-          (st?.status === "running" || st?.status === "streaming") &&
-          (!toolId || !handedBackIds.has(toolId))
-        )
-          return true;
-      }
-    }
-    return false;
-  }, [messages, activeId, handedBackIds]);
-  const busy =
-    activeId ? busySessions[activeId] === true && !hasOpenQuestion : false;
+  const busy = activeId ? busySessions[activeId] === true : false;
 
   // Hand the turn back when the agent asks a question: the V2 server has no
   // question-reply endpoint, so a parked question tool never resolves on its
   // own and chat replies would just wait as a steer/queue. Interrupt the run
-  // once per question tool call (same as ■ Stop) — the forms stay visible
-  // (parsed from state.input) and each answer goes out as a real message.
+  // once per question tool call (same as ■ Stop) — the question stays visible
+  // as plain text and the user answers in chat like any other message.
   useEffect(() => {
     if (!activeId || !busySessions[activeId]) return;
     for (const m of messages) {
@@ -310,15 +284,13 @@ export function App() {
         .content;
       if (!Array.isArray(content)) continue;
       for (const p of content) {
-        if (
-          (p as { type?: string }).type !== "tool" ||
-          (p as { name?: string }).name !== "question"
-        )
-          continue;
-        const toolId = (p as { id?: string }).id;
-        const st = (p as { state?: { status?: string } }).state;
+        const toolId = isParkedQuestionPart(p);
         if (!toolId || handedBackIds.has(toolId)) continue;
-        if (st?.status !== "running") continue;
+        // Cap retries: a persistently failing interrupt must surface a
+        // notice, not storm the server (un-marking re-ran this effect).
+        const attempts = interruptAttemptsRef.current.get(toolId) ?? 0;
+        if (attempts >= 3) continue;
+        interruptAttemptsRef.current.set(toolId, attempts + 1);
         setHandedBackIds((prev) => {
           const next = new Set(prev);
           if (next.size >= 1000) {
@@ -330,18 +302,76 @@ export function App() {
         });
         void rpc
           .call("prompt.interrupt", { sessionID: activeId })
+          .then(() => {
+            // Don't wait on the lossy SSE terminal event to un-busy: the
+            // run is over by contract once interrupt resolves — resync now
+            // so answers send as plain messages, not rejected steers.
+            interruptAttemptsRef.current.delete(toolId);
+            setBusySessions((b) => ({ ...b, [activeId]: false }));
+            void refreshMessages(activeId);
+            void refreshActiveSessions();
+          })
           .catch(() => {
             // Non-fatal: answers fall back to steer; ■ Stop still works.
-            setHandedBackIds((prev) => {
-              const next = new Set(prev);
-              next.delete(toolId);
-              return next;
-            });
+            // Reconcile with server truth — if the run is actually over
+            // (e.g. the question already aborted), the stale busy flag
+            // clears here instead of wedging the session; if it is still
+            // running, server-active keeps it busy and answers steer.
+            void refreshActiveSessions();
+            // Keep the id marked (no retry loop); surface after 3rd failure.
+            if ((interruptAttemptsRef.current.get(toolId) ?? 0) >= 3) {
+              setNotice(
+                "Couldn't interrupt the run — press ■ Stop, then send your answer.",
+              );
+            }
           });
         return; // one interrupt per pass
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, activeId, busySessions, handedBackIds]);
+  // Stale-busy watchdog for dead questions: when the run died on a question
+  // tool (status error/aborted — the agent-side call is gone, verified live)
+  // with no interrupt fired or no terminal SSE delivered, busySessions stays
+  // true forever and every send then misfires against an idle session.
+  // If the user sent nothing after the dead question, the busy flag must
+  // be stale — reconcile once per tool call against the server-active set
+  // (genuine runs stay busy, so this never un-busies live work).
+  useEffect(() => {
+    if (!activeId || !busySessions[activeId]) return;
+    let parked = false;
+    let candidate: { id: string; idx: number } | undefined;
+    let lastUserIdx = -1;
+    messages.forEach((m, idx) => {
+      const mType = (m as { type?: string }).type;
+      if (mType === "user") {
+        lastUserIdx = idx;
+        return;
+      }
+      if (mType !== "assistant") return;
+      const content = (m as { content?: Array<Record<string, unknown>> })
+        .content;
+      if (!Array.isArray(content)) return;
+      for (const p of content) {
+        if (isParkedQuestionPart(p)) {
+          parked = true;
+          continue;
+        }
+        const tid = isTerminalQuestionPart(p);
+        if (!tid) continue;
+        candidate = { id: tid, idx };
+      }
+    });
+    if (parked || !candidate) return;
+    if (reconciledTerminalRef.current.has(candidate.id)) return;
+    // A send after the abort means busy is fresh (its own turn) — not stale.
+    if (lastUserIdx > candidate.idx) return;
+    const guard = reconciledTerminalRef.current;
+    if (guard.size >= 1000) guard.clear();
+    guard.add(candidate.id);
+    void refreshActiveSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, activeId, busySessions]);
   /** Directory that scopes `@` file search — active session first, workspace fallback. */
   const composerDirectory = active?.location?.directory ?? workspaceDir;
   const isPlan = useMemo(() => {
@@ -1453,13 +1483,26 @@ export function App() {
         };
         if (files && files.length)
           (params as Record<string, unknown>).files = files;
-        // Sends into a session that is still running server-side must steer —
-        // an undelivered prompt is rejected. Answers to handed-back questions
-        // arrive here with no explicit delivery while the UI shows un-busy;
-        // the server truth in busySessionsRef decides.
-        const effectiveDelivery =
-          delivery ??
-          (busySessionsRef.current[targetId!] ? "steer" : undefined);
+        // Delivery follows SERVER truth at send time, never the lossy local
+        // busy flag. Verified live: a plain prompt into a still-running
+        // session lands in the inbox behind the live run — the reply visibly
+        // queues and only delivers after ■ Stop (interrupt success does NOT
+        // imply the run is over; aborting the question tool doesn't end the
+        // turn). Conversely a stale-true flag must not steer into an idle
+        // session. Explicit chip delivery always wins; otherwise ask the
+        // server, falling back to the local flag only when unreachable.
+        let serverBusy: boolean | undefined;
+        if (!delivery) {
+          try {
+            const running = await rpc.call<string[]>("sessions.active");
+            serverBusy = running.includes(targetId!);
+          } catch {
+            serverBusy = undefined;
+          }
+        }
+        const busyNow =
+          serverBusy ?? busySessionsRef.current[targetId!] === true;
+        const effectiveDelivery = delivery ?? (busyNow ? "steer" : undefined);
         if (effectiveDelivery) params.delivery = effectiveDelivery;
         await rpc.call("prompt.send", params);
         setRetryPending(false);
@@ -1497,39 +1540,6 @@ export function App() {
       refreshQueued,
       agentKind,
     ],
-  );
-
-  /** One question's answer → chat message. Marks the form answered
-   *  optimistically (App-owned overlay survives refetches), reverts on send
-   *  failure. Delivery is decided inside sendMessage: plain when the run was
-   *  handed back, steer when a new run is already active. */
-  const answerQuestion = useCallback(
-    (toolCallId: string, qi: number, text: string) => {
-      const sessionId = activeIdRef.current;
-      if (!sessionId) return;
-      const mark = (value: string | null): void => {
-        setQuestionAnswers((prev) => {
-          const forSession = { ...(prev[sessionId] ?? {}) };
-          const rec = [...(forSession[toolCallId] ?? [])];
-          while (rec.length <= qi) rec.push(null);
-          rec[qi] = value;
-          forSession[toolCallId] = rec;
-          // Cap recorded tool calls per session (like RespondedTracker 1k)
-          const keys = Object.keys(forSession);
-          if (keys.length > 1000) {
-            for (const k of keys.slice(0, keys.length - 1000))
-              delete forSession[k];
-          }
-          return { ...prev, [sessionId]: forSession };
-        });
-      };
-      mark(text);
-      void sendMessage(text, undefined, undefined).catch((e: unknown) => {
-        mark(null);
-        setNotice(`Send failed — ${errorMessage(e)}`);
-      });
-    },
-    [sendMessage],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -2226,8 +2236,6 @@ export function App() {
             messages={messages}
             busy={busy}
             agentKind={agentKind}
-            questionAnswers={activeId ? questionAnswers[activeId] : undefined}
-            onQuestionAnswer={answerQuestion}
             showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
             expandShellTools={cfg?.ui.expandShellTools ?? false}
             expandEditTools={cfg?.ui.expandEditTools ?? false}

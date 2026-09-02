@@ -24,6 +24,49 @@ export interface QuestionToolState {
 }
 
 /**
+ * A question tool part parked awaiting the user: `type:"tool"` and still
+ * live (`running`/`streaming` — input may still stream when it parks).
+ * Returns the tool call id, or undefined. Single helper: the open-check and
+ * the interrupt effect must never disagree.
+ */
+export function isParkedQuestionPart(p: unknown): string | undefined {
+  if (typeof p !== "object" || p === null) return undefined;
+  const rec = p as {
+    type?: unknown;
+    name?: unknown;
+    id?: unknown;
+    state?: unknown;
+  };
+  if (rec.type !== "tool" || rec.name !== "question") return undefined;
+  const status = (rec.state as { status?: unknown } | null | undefined)
+    ?.status;
+  if (status !== "running" && status !== "streaming") return undefined;
+  return typeof rec.id === "string" && rec.id ? rec.id : undefined;
+}
+
+/**
+ * A question tool part in a terminal state (e.g. `error`/`aborted` — the
+ * agent-side call is gone, so no hand-back interrupt is needed, but a stale
+ * busy flag can wedge the session). Returns the tool call id, or undefined.
+ * Parts still arriving (no string status yet) are NOT terminal.
+ */
+export function isTerminalQuestionPart(p: unknown): string | undefined {
+  if (typeof p !== "object" || p === null) return undefined;
+  const rec = p as {
+    type?: unknown;
+    name?: unknown;
+    id?: unknown;
+    state?: unknown;
+  };
+  if (rec.type !== "tool" || rec.name !== "question") return undefined;
+  const status = (rec.state as { status?: unknown } | null | undefined)
+    ?.status;
+  if (typeof status !== "string") return undefined;
+  if (status === "running" || status === "streaming") return undefined;
+  return typeof rec.id === "string" && rec.id ? rec.id : undefined;
+}
+
+/**
  * Parse a question tool's `state.input`. The SDK emits a raw JSON string
  * while the tool call is still streaming and an object once running, so both
  * shapes must resolve to the question list (an unparseable string used to

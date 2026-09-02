@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseQuestionInput } from "../webview-src/lib/questions";
+import {
+  isParkedQuestionPart,
+  isTerminalQuestionPart,
+  parseQuestionInput,
+} from "../webview-src/lib/questions";
 
 describe("parseQuestionInput", () => {
   it("parses the object shape (running/completed state)", () => {
@@ -32,5 +36,72 @@ describe("parseQuestionInput", () => {
     const items = parseQuestionInput({ questions: [{ header: "ok" }, "junk", null, ["nested"]] });
     assert.equal(items.length, 1);
     assert.equal(items[0].header, "ok");
+  });
+});
+
+describe("isParkedQuestionPart", () => {
+  const part = (over: Record<string, unknown>) => ({
+    type: "tool",
+    name: "question",
+    id: "call_1",
+    state: { status: "running", input: {} },
+    ...over,
+  });
+
+  it("matches live running/streaming questions by tool call id", () => {
+    assert.equal(isParkedQuestionPart(part({})), "call_1");
+    assert.equal(
+      isParkedQuestionPart(part({ state: { status: "streaming" } })),
+      "call_1",
+    );
+  });
+
+  it("rejects terminal states, other tools and malformed parts", () => {
+    for (const bad of [
+      part({ state: { status: "completed" } }),
+      part({ state: { status: "error" } }),
+      part({ state: {} }),
+      part({ name: "shell" }),
+      part({ type: "text" }),
+      part({ id: undefined }),
+      null,
+      undefined,
+      "question",
+    ]) {
+      assert.equal(isParkedQuestionPart(bad), undefined, JSON.stringify(bad));
+    }
+  });
+});
+
+describe("isTerminalQuestionPart", () => {
+  const part = (over: Record<string, unknown>) => ({
+    type: "tool",
+    name: "question",
+    id: "call_9",
+    state: { status: "error", input: {} },
+    ...over,
+  });
+
+  it("matches dead questions (error/completed/any non-live status)", () => {
+    assert.equal(isTerminalQuestionPart(part({})), "call_9");
+    assert.equal(
+      isTerminalQuestionPart(part({ state: { status: "completed" } })),
+      "call_9",
+    );
+  });
+
+  it("rejects live, arriving and malformed parts", () => {
+    for (const bad of [
+      part({ state: { status: "running" } }),
+      part({ state: { status: "streaming" } }),
+      part({ state: {} }),
+      part({ name: "shell" }),
+      part({ type: "text" }),
+      part({ id: undefined }),
+      null,
+      undefined,
+    ]) {
+      assert.equal(isTerminalQuestionPart(bad), undefined, JSON.stringify(bad));
+    }
   });
 });
