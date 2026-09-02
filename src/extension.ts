@@ -166,9 +166,22 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("opencode2")) return;
-      const affectsListen = event.affectsConfiguration("opencode2.server.listen");
-      // server.listen* is the extension-owned companion server — it must not
-      // reconnect the daemon, only resync the listen server.
+      // server.listen* is the extension-owned companion server. Match its real
+      // keys explicitly — a prefix needle like "opencode2.server.listen" never
+      // matches (VS Code aligns sections at key-segment boundaries and the
+      // actual keys are server.listenEnabled etc.), which made both branches
+      // shipped in 0.6.44 dead: listen changes reconnected the daemon and
+      // Settings-UI toggles never started the server.
+      const affectsListen = [
+        "listenEnabled",
+        "listenHostname",
+        "listenPort",
+        "listenUsername",
+        "listenPassword",
+        "listenCors",
+      ].some((k) => event.affectsConfiguration(`opencode2.server.${k}`));
+      // Companion settings must not reconnect the daemon — only the listen
+      // server itself resyncs.
       if (
         (event.affectsConfiguration("opencode2.server") && !affectsListen) ||
         event.affectsConfiguration("opencode2.cliPath")

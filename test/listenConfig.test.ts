@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { expectedAuthHeader, isLoopback } from "../src/listenConfig";
+import { expectedAuthHeader, isLoopback, parseHostHeader } from "../src/listenConfig";
 
 describe("isLoopback", () => {
   it("accepts loopback hostnames", () => {
@@ -26,5 +26,25 @@ describe("expectedAuthHeader", () => {
     const header = expectedAuthHeader("u", "");
     assert.ok(header.startsWith("Basic "));
     assert.equal(Buffer.from(header.slice(6), "base64").toString("utf8"), "u:");
+  });
+});
+
+describe("parseHostHeader", () => {
+  it("splits host and port (IPv4, names, bracketed IPv6)", () => {
+    assert.equal(parseHostHeader("127.0.0.1:12421"), "127.0.0.1");
+    assert.equal(parseHostHeader("localhost:12421"), "localhost");
+    assert.equal(parseHostHeader("[::1]:12421"), "::1");
+    assert.equal(parseHostHeader("  evil.example.com:80  "), "evil.example.com");
+  });
+  it("passes bare hosts through (incl. bracketless IPv6)", () => {
+    assert.equal(parseHostHeader("localhost"), "localhost");
+    assert.equal(parseHostHeader("::1"), "::1");
+    assert.equal(parseHostHeader("attacker.example.com"), "attacker.example.com");
+  });
+  it("returns undefined for missing/empty/malformed headers", () => {
+    assert.equal(parseHostHeader(undefined), undefined);
+    assert.equal(parseHostHeader(""), undefined);
+    assert.equal(parseHostHeader("   "), undefined);
+    assert.equal(parseHostHeader("[::1"), undefined);
   });
 });

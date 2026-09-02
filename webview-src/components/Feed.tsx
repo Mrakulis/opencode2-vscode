@@ -19,6 +19,7 @@ import {
 } from "../lib/format";
 import { synthEditDiff, synthWriteDiff } from "../lib/difftext";
 import { rpc } from "../lib/rpc";
+import { parseQuestionInput, type QuestionToolState } from "../lib/questions";
 
 export function Feed({
   messages,
@@ -40,6 +41,8 @@ export function Feed({
   onRegenerate,
   onEditMessage,
   agentKind,
+  questionAnswers,
+  onQuestionAnswer,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -68,13 +71,16 @@ export function Feed({
   onQueuedOpen?: () => void;
   /** Removes one queued item. */
   onUnqueue?: (id: string) => void;
-  /** Delivers a chosen question-option label into the conversation. */
   /** Per-message actions. */
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
   /** Live agent kind — seeds trailing pending user when no following assistant yet */
   agentKind?: "plan" | "build" | "other";
+  /** Answered questions overlay: toolCallId -> per-question sent text (null = open). App-owned; survives refetches. */
+  questionAnswers?: Record<string, (string | null)[]>;
+  /** Sends one question's answer back as a chat message. */
+  onQuestionAnswer?: (toolCallId: string, qi: number, text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -291,6 +297,8 @@ export function Feed({
               onCopyMessage={onCopyMessage}
               onRegenerate={onRegenerate}
               onEditMessage={onEditMessage}
+              questionAnswers={questionAnswers}
+              onQuestionAnswer={onQuestionAnswer}
               userPlan={isUser(m) ? userPlanById.get((m as { id: string }).id) : undefined}
             />
           ));
@@ -390,6 +398,8 @@ function MessageGroup({
   onCopyMessage,
   onRegenerate,
   onEditMessage,
+  questionAnswers,
+  onQuestionAnswer,
   userPlan,
 }: {
   message: AnyMessage;
@@ -406,6 +416,8 @@ function MessageGroup({
   onCopyMessage?: (m: AnyMessage) => void;
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
+  questionAnswers?: Record<string, (string | null)[]>;
+  onQuestionAnswer?: (toolCallId: string, qi: number, text: string) => void;
   userPlan?: "plan" | "build";
 }) {
   if (isUser(message)) {
@@ -537,6 +549,8 @@ function MessageGroup({
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
           fullShellOutput={fullShellOutput}
+          questionAnswers={questionAnswers}
+          onQuestionAnswer={onQuestionAnswer}
         />
       ))}
       {(onCopyMessage || (isLast && onRegenerate)) && (
@@ -667,8 +681,10 @@ function Part(props: {
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  questionAnswers?: Record<string, (string | null)[]>;
+  onQuestionAnswer?: (toolCallId: string, qi: number, text: string) => void;
 }) {
-  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput } =
+  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, questionAnswers, onQuestionAnswer } =
     props as {
       part: MessagePartText | MessagePartReasoning | MessagePartTool;
       busy: boolean;
@@ -676,6 +692,8 @@ function Part(props: {
       expandShellTools: boolean;
       expandEditTools: boolean;
       fullShellOutput: boolean;
+      questionAnswers?: Record<string, (string | null)[]>;
+      onQuestionAnswer?: (toolCallId: string, qi: number, text: string) => void;
     };
   if (part.type === "text") {
     return (
@@ -703,6 +721,8 @@ function Part(props: {
         expandShellTools={expandShellTools}
         expandEditTools={expandEditTools}
         fullShellOutput={fullShellOutput}
+        questionAnswers={questionAnswers}
+        onQuestionAnswer={onQuestionAnswer}
       />
     );
   }
@@ -948,11 +968,15 @@ function ToolCard({
   expandShellTools,
   expandEditTools,
   fullShellOutput,
+  questionAnswers,
+  onQuestionAnswer,
   }: {
   part: ToolPart;
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  questionAnswers?: Record<string, (string | null)[]>;
+  onQuestionAnswer?: (toolCallId: string, qi: number, text: string) => void;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -1009,12 +1033,18 @@ function ToolCard({
     );
   }
 
-  // Agent-asked questions render inline as plain text in the feed, with the
-  // options lettered a/b/c… The OpenCode V2 server exposes no distributed
-  // question-reply route, so the user answers naturally in the chat — never a
-  // blocking interactive "question window" that can stall the conversation.
+  // Agent-asked questions: one interactive form per question (option buttons +
+  // free-text "Other…"). The V2 server has no question-reply endpoint, so the
+  // app hands the turn back to the user when the question arrives and every
+  // answer is sent back as a normal chat message.
   if (part.name === "question") {
-    return <QuestionAsText state={part.state as QuestionToolState} />;
+    return (
+      <QuestionCard
+        state={part.state as QuestionToolState}
+        answered={questionAnswers?.[part.id]}
+        onAnswer={(qi, text) => onQuestionAnswer?.(part.id, qi, text)}
+      />
+    );
   }
 
   let title = part.name;
@@ -1200,54 +1230,110 @@ function stringifyError(error: unknown): string {
   return stripVerboseHint(raw);
 }
 
-interface QuestionOption {
-  label?: string;
-  description?: string;
-}
-interface QuestionItem {
-  question?: string;
-  header?: string;
-  options?: QuestionOption[];
-}
-interface QuestionToolState {
-  status: string;
-  input?: { questions?: QuestionItem[] };
-  error?: { message?: string };
-}
-
-/** Plain-text fallback for agent questions when the server doesn't expose the
- *  question-reply routes (`!ui.questionsSupported`). Renders each question +
- *  its options as readable markdown so the user can simply answer in the chat
- *  — no interactive card, no dependency on the (currently missing) server
- *  question-reply routes. */
-function QuestionAsText({ state }: { state: QuestionToolState }) {
-  const qs = Array.isArray(state.input?.questions) ? state.input!.questions! : [];
-  const md =
-    qs.length === 0
-      ? "_(no question data)_"
-      : qs
-          .map((q, i) => {
-            const title = q.header ?? q.question ?? `Question ${i + 1}`;
-            const lines = [`**${title}**`];
-            if (q.question && q.header) lines.push(q.question);
-            const opts = Array.isArray(q.options) ? q.options : [];
-            opts.forEach((o, oi) => {
-              const letter = String.fromCharCode(97 + oi); // a, b, c…
-              lines.push(
-                `- **${letter})** ${o.label ?? "(unnamed option)"}${o.description ? ` — ${o.description}` : ""}`,
-              );
-            });
-            return lines.join("\n");
-          })
-          .join("\n\n");
+/** Agent-asked questions (`question` tool parts) — one interactive form per
+ *  question: clickable option buttons plus a free-text "Other…" row. The V2
+ *  server exposes no question-reply endpoint, so the app hands the turn back
+ *  to the user when the question arrives (auto-interrupt) and every answer is
+ *  sent back as a normal chat message. Clicked answers lock their form; the
+ *  record of what was sent lives in App's overlay, so server refetches (which
+ *  replace tool parts wholesale) cannot reopen a form. */
+function QuestionCard({
+  state,
+  answered,
+  onAnswer,
+}: {
+  state: QuestionToolState;
+  answered?: (string | null)[];
+  onAnswer?: (qi: number, text: string) => void;
+}) {
+  const qs = parseQuestionInput(state.input);
+  const submit = (qi: number, qTitle: string, text: string): void => {
+    if (!text || answered?.[qi] != null) return;
+    onAnswer?.(qi, qs.length > 1 ? `${qTitle}: ${text}` : text);
+  };
+  if (qs.length === 0) {
+    return (
+      <div className={`tool-card kind-question st-${state.status} static`}>
+        <div className="tool-head">❓ question</div>
+        <div className="tool-body">
+          <pre className="tool-error">{state.error?.message ?? "no question data"}</pre>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className={`tool-card kind-question st-${state.status} static`}>
+    <div className={`tool-card kind-question st-${state.status}`}>
       <div className="tool-head">
         ❓ question {qs.length > 1 ? `(${qs.length})` : ""}
       </div>
       <div className="tool-body">
-        <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(md) }} />
+        {qs.map((q, qi) => {
+          const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
+          const opts = Array.isArray(q.options) ? q.options : [];
+          const done = answered?.[qi] != null;
+          return (
+            <div key={qi} className={`q-item${done ? " done" : ""}`}>
+              <div className="q-title">
+                {done ? "✓ " : "❓ "}
+                {qTitle}
+              </div>
+              {q.header && q.question && <div className="q-desc">{q.question}</div>}
+              {done ? (
+                <div className="q-note">answered: {answered?.[qi]}</div>
+              ) : (
+                <>
+                  {opts.map((o, oi) => {
+                    const label = o.label ?? `Option ${oi + 1}`;
+                    return (
+                      <button
+                        key={oi}
+                        type="button"
+                        className="q-opt"
+                        title={o.description}
+                        onClick={() => submit(qi, qTitle, label)}
+                      >
+                        <span className="q-label">{label}</span>
+                        {o.description && <span className="q-desc">{o.description}</span>}
+                      </button>
+                    );
+                  })}
+                  <OtherRow onSubmit={(text) => submit(qi, qTitle, text)} />
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+/** Free-text alternative to the preset options ("Other…"). */
+function OtherRow({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const submit = (): void => {
+    const t = text.trim();
+    if (!t) return;
+    setText("");
+    onSubmit(t);
+  };
+  return (
+    <div className="q-other">
+      <input
+        className="q-other-input"
+        placeholder="Other… type your own answer"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
+      <button type="button" className="chip" disabled={!text.trim()} onClick={submit}>
+        Send
+      </button>
     </div>
   );
 }

@@ -130,6 +130,16 @@ export function App() {
   const deltaAccRef = useRef(new Map<string, string>());
   /** Sticky plan/build per user message — survives server refetches (which have no planAtSend). */
   const planOverlayRef = useRef<Map<string, Map<string, "plan" | "build">>>(new Map());
+  /** Answered questions: sessionId -> toolCallId -> per-question sent text (null = open).
+   *  App-owned overlay — server refetches replace tool parts wholesale, so the
+   *  "answered" record must not live in message state. */
+  const [questionAnswers, setQuestionAnswers] = useState<
+    Record<string, Record<string, (string | null)[]>>
+  >({});
+  /** Question tool calls already handed back to the user (auto-interrupt sent once). */
+  const [handedBackIds, setHandedBackIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [busySessions, setBusySessions] = useState<Record<string, boolean>>({});
   const busySessionsRef = useRef<Record<string, boolean>>({});
   useEffect(() => {
@@ -257,7 +267,81 @@ export function App() {
     () => sessions.find((s) => s.id === activeId),
     [sessions, activeId],
   );
-  const busy = activeId ? busySessions[activeId] === true : false;
+  /** A question tool is parked in the active session and the turn has not
+   *  been handed back yet — the UI un-busies immediately so the user can
+   *  answer while the auto-interrupt below lands. */
+  const hasOpenQuestion = useMemo(() => {
+    if (!activeId) return false;
+    for (const m of messages) {
+      if ((m as { type?: string }).type !== "assistant") continue;
+      const content = (m as { content?: Array<Record<string, unknown>> })
+        .content;
+      if (!Array.isArray(content)) continue;
+      for (const p of content) {
+        if (
+          (p as { type?: string }).type !== "tool" ||
+          (p as { name?: string }).name !== "question"
+        )
+          continue;
+        const toolId = (p as { id?: string }).id;
+        const st = (p as { state?: { status?: string } }).state;
+        if (
+          (st?.status === "running" || st?.status === "streaming") &&
+          (!toolId || !handedBackIds.has(toolId))
+        )
+          return true;
+      }
+    }
+    return false;
+  }, [messages, activeId, handedBackIds]);
+  const busy =
+    activeId ? busySessions[activeId] === true && !hasOpenQuestion : false;
+
+  // Hand the turn back when the agent asks a question: the V2 server has no
+  // question-reply endpoint, so a parked question tool never resolves on its
+  // own and chat replies would just wait as a steer/queue. Interrupt the run
+  // once per question tool call (same as ■ Stop) — the forms stay visible
+  // (parsed from state.input) and each answer goes out as a real message.
+  useEffect(() => {
+    if (!activeId || !busySessions[activeId]) return;
+    for (const m of messages) {
+      if ((m as { type?: string }).type !== "assistant") continue;
+      const content = (m as { content?: Array<Record<string, unknown>> })
+        .content;
+      if (!Array.isArray(content)) continue;
+      for (const p of content) {
+        if (
+          (p as { type?: string }).type !== "tool" ||
+          (p as { name?: string }).name !== "question"
+        )
+          continue;
+        const toolId = (p as { id?: string }).id;
+        const st = (p as { state?: { status?: string } }).state;
+        if (!toolId || handedBackIds.has(toolId)) continue;
+        if (st?.status !== "running") continue;
+        setHandedBackIds((prev) => {
+          const next = new Set(prev);
+          if (next.size >= 1000) {
+            const first = next.values().next().value;
+            if (first) next.delete(first);
+          }
+          next.add(toolId);
+          return next;
+        });
+        void rpc
+          .call("prompt.interrupt", { sessionID: activeId })
+          .catch(() => {
+            // Non-fatal: answers fall back to steer; ■ Stop still works.
+            setHandedBackIds((prev) => {
+              const next = new Set(prev);
+              next.delete(toolId);
+              return next;
+            });
+          });
+        return; // one interrupt per pass
+      }
+    }
+  }, [messages, activeId, busySessions, handedBackIds]);
   /** Directory that scopes `@` file search — active session first, workspace fallback. */
   const composerDirectory = active?.location?.directory ?? workspaceDir;
   const isPlan = useMemo(() => {
@@ -1369,7 +1453,14 @@ export function App() {
         };
         if (files && files.length)
           (params as Record<string, unknown>).files = files;
-        if (delivery) params.delivery = delivery;
+        // Sends into a session that is still running server-side must steer —
+        // an undelivered prompt is rejected. Answers to handed-back questions
+        // arrive here with no explicit delivery while the UI shows un-busy;
+        // the server truth in busySessionsRef decides.
+        const effectiveDelivery =
+          delivery ??
+          (busySessionsRef.current[targetId!] ? "steer" : undefined);
+        if (effectiveDelivery) params.delivery = effectiveDelivery;
         await rpc.call("prompt.send", params);
         setRetryPending(false);
         // Track the last-used model (client-side; server defaults are static).
@@ -1387,7 +1478,7 @@ export function App() {
         // server's persistence of the user message — re-sync shortly after.
         window.setTimeout(() => void refreshMessages(targetId!), 400);
         // Queued sends land in the inbox, not the transcript — show them.
-        if (delivery === "queue") void refreshQueued();
+        if (effectiveDelivery === "queue") void refreshQueued();
       } catch (error) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setBusySessions((b) => ({ ...b, [targetId!]: false }));
@@ -1406,6 +1497,39 @@ export function App() {
       refreshQueued,
       agentKind,
     ],
+  );
+
+  /** One question's answer → chat message. Marks the form answered
+   *  optimistically (App-owned overlay survives refetches), reverts on send
+   *  failure. Delivery is decided inside sendMessage: plain when the run was
+   *  handed back, steer when a new run is already active. */
+  const answerQuestion = useCallback(
+    (toolCallId: string, qi: number, text: string) => {
+      const sessionId = activeIdRef.current;
+      if (!sessionId) return;
+      const mark = (value: string | null): void => {
+        setQuestionAnswers((prev) => {
+          const forSession = { ...(prev[sessionId] ?? {}) };
+          const rec = [...(forSession[toolCallId] ?? [])];
+          while (rec.length <= qi) rec.push(null);
+          rec[qi] = value;
+          forSession[toolCallId] = rec;
+          // Cap recorded tool calls per session (like RespondedTracker 1k)
+          const keys = Object.keys(forSession);
+          if (keys.length > 1000) {
+            for (const k of keys.slice(0, keys.length - 1000))
+              delete forSession[k];
+          }
+          return { ...prev, [sessionId]: forSession };
+        });
+      };
+      mark(text);
+      void sendMessage(text, undefined, undefined).catch((e: unknown) => {
+        mark(null);
+        setNotice(`Send failed — ${errorMessage(e)}`);
+      });
+    },
+    [sendMessage],
   );
 
   /** Resend the failed prompt — prefers the exact retained payload from the
@@ -2102,6 +2226,8 @@ export function App() {
             messages={messages}
             busy={busy}
             agentKind={agentKind}
+            questionAnswers={activeId ? questionAnswers[activeId] : undefined}
+            onQuestionAnswer={answerQuestion}
             showReasoning={cfg?.ui.showReasoning ?? "collapsed"}
             expandShellTools={cfg?.ui.expandShellTools ?? false}
             expandEditTools={cfg?.ui.expandEditTools ?? false}

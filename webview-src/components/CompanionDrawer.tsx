@@ -123,7 +123,9 @@ export function CompanionDrawer({ onClose }: Props) {
     if (!status?.url) return;
     try {
       await navigator.clipboard.writeText(status.url);
-    } catch {}
+    } catch {
+      setError("Could not copy — select the URL manually.");
+    }
   };
 
   return (

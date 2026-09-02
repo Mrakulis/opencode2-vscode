@@ -51,8 +51,8 @@ export type CliResolver = () => Promise<ResolvedCli | undefined>;
  * Connection order:
  *  1. explicit `opencode2.server.baseUrl` (remote / already-running server)
  *  2. discovery of a healthy registered local service (`Service.discover`)
- *  3. start one when allowed (`opencode2.server.autoStart` → `Service.ensure`,
- *     which runs `<cli> serve --service` and registers it)
+ *  3. start one when allowed (`opencode2.server.autoStart` → hidden spawn of
+ *     `<cli> serve --service`, which registers it)
  *
  * The controller is the only place that talks to the server; the webview goes
  * through RPC (M2+).

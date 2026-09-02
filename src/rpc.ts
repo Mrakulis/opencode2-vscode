@@ -645,6 +645,35 @@ export function createRpcDispatcher(
     },
     "companion.update": async (p) => {
       const cfg = vscode.workspace.getConfiguration("opencode2");
+      // Validate & coerce EVERY field before writing any — a late failure
+      // must not leave settings half-updated while the running server kept
+      // the previous bind config.
+      const writes: Array<[string, unknown]> = [];
+      if (p.enabled !== undefined) {
+        if (typeof p.enabled !== "boolean") throw new Error("enabled must be boolean");
+        writes.push(["server.listenEnabled", p.enabled]);
+      }
+      if (p.hostname !== undefined) {
+        if (typeof p.hostname !== "string" || !p.hostname.trim()) throw new Error("hostname must be non-empty string");
+        writes.push(["server.listenHostname", p.hostname.trim()]);
+      }
+      if (p.port !== undefined) {
+        const n = typeof p.port === "number" ? p.port : Number(p.port);
+        if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error("port must be 1-65535");
+        writes.push(["server.listenPort", n]);
+      }
+      if (p.username !== undefined) {
+        if (typeof p.username !== "string") throw new Error("username must be string");
+        writes.push(["server.listenUsername", p.username]);
+      }
+      if (p.password !== undefined) {
+        if (typeof p.password !== "string") throw new Error("password must be string");
+        writes.push(["server.listenPassword", p.password]);
+      }
+      if (p.cors !== undefined) {
+        if (!Array.isArray(p.cors) || !p.cors.every((x) => typeof x === "string")) throw new Error("cors must be string[]");
+        writes.push(["server.listenCors", p.cors]);
+      }
       const tryUpdate = async (key: string, value: unknown): Promise<void> => {
         try {
           await cfg.update(key, value, vscode.ConfigurationTarget.Global);
@@ -656,31 +685,7 @@ export function createRpcDispatcher(
           throw e;
         }
       };
-      if (p.enabled !== undefined) {
-        if (typeof p.enabled !== "boolean") throw new Error("enabled must be boolean");
-        await tryUpdate("server.listenEnabled", p.enabled);
-      }
-      if (p.hostname !== undefined) {
-        if (typeof p.hostname !== "string" || !p.hostname.trim()) throw new Error("hostname must be non-empty string");
-        await tryUpdate("server.listenHostname", p.hostname.trim());
-      }
-      if (p.port !== undefined) {
-        const n = typeof p.port === "number" ? p.port : Number(p.port);
-        if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error("port must be 1-65535");
-        await tryUpdate("server.listenPort", n);
-      }
-      if (p.username !== undefined) {
-        if (typeof p.username !== "string") throw new Error("username must be string");
-        await tryUpdate("server.listenUsername", p.username);
-      }
-      if (p.password !== undefined) {
-        if (typeof p.password !== "string") throw new Error("password must be string");
-        await tryUpdate("server.listenPassword", p.password);
-      }
-      if (p.cors !== undefined) {
-        if (!Array.isArray(p.cors) || !p.cors.every((x) => typeof x === "string")) throw new Error("cors must be string[]");
-        await tryUpdate("server.listenCors", p.cors);
-      }
+      for (const [key, value] of writes) await tryUpdate(key, value);
       // trigger restart is handled by onDidChangeConfiguration, but ensure immediate sync if provided
       if (companion) await companion.start();
       const updated = readListenConfig();

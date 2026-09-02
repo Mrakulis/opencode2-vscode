@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCost, formatTokens } from "../lib/format";
 import { rpc, type SessionStats, type SessionSummary } from "../lib/rpc";
 import {
@@ -210,6 +210,8 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
   const [estimated, setEstimated] = useState(false);
   // cache per scope+period so switching is instant after first load
   const [cache, setCache] = useState<Map<string, SessionStats>>(new Map());
+  /** Monotonic load sequence — a slow response must never win over a newer scope switch. */
+  const loadSeqRef = useRef(0);
 
   const range = useMemo(() => periodToRange(period, customRange), [period, customRange]);
   const timezone = useMemo(() => getLocalTimezone(), []);
@@ -228,6 +230,7 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
   }, [scope, period, range.from, range.to, workspaceDir, activeId]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setError(undefined);
     setEstimated(false);
     // serve from cache if present
@@ -301,6 +304,7 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
         }
       } else if (scope === "session") {
         if (!activeId) {
+          if (loadSeqRef.current !== seq) return;
           setError("No active session — select a session first.");
           setStats(undefined);
           setLoading(false);
@@ -310,6 +314,7 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
         const all = await rpc
           .call<SessionSummary[]>("session.list", { allProjects: true })
           .catch(() => [] as SessionSummary[]);
+        if (loadSeqRef.current !== seq) return;
         const found = all.find((s) => s.id === activeId);
         if (!found) {
           setError("Active session not found.");
@@ -345,20 +350,24 @@ export function UsageDrawer({ onClose, workspaceDir, activeId }: Props) {
         }
       }
       if (next) {
-        if (hasRange && !next.range) next = { ...next, range };
-        setStats(next);
+        if (loadSeqRef.current !== seq) return;
+        // Hoisted narrowed copy: `next` is a `let`, so TS cannot narrow it
+        // inside the setCache closure below (non-null assertions are banned).
+        const result: SessionStats = hasRange && !next.range ? { ...next, range } : next;
+        setStats(result);
         setEstimated(usedFallback);
         setCache((prev) => {
           const m = new Map(prev);
-          m.set(cacheKey, next!);
+          m.set(cacheKey, result);
           return m;
         });
       }
     } catch (e) {
+      if (loadSeqRef.current !== seq) return;
       setError(e instanceof Error ? e.message : String(e));
       setStats(undefined);
     } finally {
-      setLoading(false);
+      if (loadSeqRef.current === seq) setLoading(false);
     }
   }, [scope, workspaceDir, activeId, cache, cacheKey, range, timezone]);
 

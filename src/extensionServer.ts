@@ -5,10 +5,15 @@ import * as vscode from "vscode";
 import { Service, type Endpoint } from "@opencode-ai/client/service";
 import { registrationFiles } from "./flatpak";
 import { Log } from "./log";
-import { expectedAuthHeader, isLoopback, type ListenConfig } from "./listenConfig";
+import {
+  expectedAuthHeader,
+  isLoopback,
+  parseHostHeader,
+  type ListenConfig,
+} from "./listenConfig";
 
 // Pure pieces live vscode-free in ./listenConfig so node tests can import them.
-export { expectedAuthHeader, isLoopback } from "./listenConfig";
+export { expectedAuthHeader, isLoopback, parseHostHeader } from "./listenConfig";
 export type { ListenConfig } from "./listenConfig";
 
 export function readListenConfig(): ListenConfig {
@@ -113,20 +118,37 @@ export class ExtensionServer implements vscode.Disposable {
       void this.handleRequest(req, res, cfg);
     });
 
-    server.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
+    // Single notification path: there is no permanent handler during listen,
+    // so a failed bind is logged + shown exactly once here before the
+    // rejection surfaces to the caller (command progress / drawer).
+    await new Promise<void>((resolve, reject) => {
+      const onListenError = (err: Error): void => reject(err);
+      server.once("error", onListenError);
+      server.listen(cfg.port, cfg.hostname, () => {
+        server.off("error", onListenError);
+        resolve();
+      });
+    }).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "EADDRINUSE") {
         const msg = `Extension server port ${cfg.port} already in use — another VS Code window may already host it. Remote clients should use that window's URL.`;
         this.log.warn(msg);
         void vscode.window.showWarningMessage(msg);
       } else {
-        this.log.error(`Extension server error: ${err.message}`, err);
-        void vscode.window.showErrorMessage(`Extension server error: ${err.message}`);
+        this.log.error(
+          `Extension server error: ${err?.message ?? String(err)}`,
+          err,
+        );
+        void vscode.window.showErrorMessage(
+          `Extension server error: ${err?.message ?? String(err)}`,
+        );
       }
+      throw err;
     });
 
-    await new Promise<void>((resolve, reject) => {
-      server.listen(cfg.port, cfg.hostname, () => resolve());
-      server.once("error", reject);
+    // Runtime errors after a successful listen.
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      this.log.error(`Extension server error: ${err.message}`, err);
+      void vscode.window.showErrorMessage(`Extension server error: ${err.message}`);
     });
 
     this.server = server;
@@ -182,6 +204,24 @@ export class ExtensionServer implements vscode.Disposable {
   }
 
   private async handleRequestInner(req: http.IncomingMessage, res: http.ServerResponse, cfg: ListenConfig): Promise<void> {
+    // Host header validation first: a DNS-rebinding request resolves to this
+    // port but arrives with a foreign Host and NO Origin header, which the
+    // Origin gate below cannot catch. HTTP/1.1 requires Host; loopback binds
+    // must see a loopback host. Non-loopback binds (password mandatory)
+    // accept any Host — LAN/Tailscale names are legitimate there and the
+    // Basic auth gates them.
+    const hostHeader = parseHostHeader(req.headers.host);
+    if (!hostHeader) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Missing Host header");
+      return;
+    }
+    if (isLoopback(cfg.hostname) && !isLoopback(hostHeader)) {
+      res.writeHead(403, { "Content-Type": "text/plain" });
+      res.end("Suspicious Host header (possible DNS rebinding)");
+      return;
+    }
+
     // CORS preflight handling
     const origin = req.headers.origin as string | undefined;
     const corsAllowed = origin && (cfg.cors.includes(origin) || cfg.cors.includes("*"));
