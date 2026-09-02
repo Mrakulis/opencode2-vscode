@@ -25,3 +25,4 @@ Thumbs.db
 
 debug.log
 *.log
+.zcode/
