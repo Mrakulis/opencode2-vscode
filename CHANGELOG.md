@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ## [Unreleased]
 
+- _No unreleased changes yet._
+
+---
+
+## [0.6.47] - 2026-09-03
+
 ### Removed
 - **Dead code sweep** — question-capability plumbing with zero callers (`controller.detectQuestionSupport`, `questionsSupported` state/getter, capability emitter, `getServiceTarget`, `questionList`/`questionReply` adapter methods, both RPC handlers, `protocol.ts` method + UI field); dead `Api`/`WireEvent`/`toWireEvent`, `setDaemonStarter`, stale re-exports (`extensionServer`, `diffDocs`, `Composer.SlashEntry`), dead `ModelOption`/`AgentOption` interfaces, and two unused model imports in `App.tsx`. No test removals — nothing under test covered the deleted code.
 
