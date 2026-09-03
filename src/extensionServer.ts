@@ -13,9 +13,6 @@ import {
 } from "./listenConfig";
 
 // Pure pieces live vscode-free in ./listenConfig so node tests can import them.
-export { expectedAuthHeader, isLoopback, parseHostHeader } from "./listenConfig";
-export type { ListenConfig } from "./listenConfig";
-
 export function readListenConfig(): ListenConfig {
   const cfg = vscode.workspace.getConfiguration("opencode2");
   return {
@@ -57,10 +54,6 @@ export class ExtensionServer implements vscode.Disposable {
     daemonStarter?: () => Promise<void>,
   ) {
     this.daemonStarter = daemonStarter;
-  }
-
-  setDaemonStarter(fn: () => Promise<void>): void {
-    this.daemonStarter = fn;
   }
 
   get url(): string | undefined {

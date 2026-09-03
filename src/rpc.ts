@@ -252,7 +252,12 @@ export function createRpcDispatcher(
     "plan.save": async (p) => {
       const filePath = str(p, "path");
       const content = str(p, "content");
-      await fs.promises.writeFile(filePath, content, "utf8");
+      const base = preferredDirectory() ?? process.cwd();
+      const resolved = path.resolve(base, filePath);
+      const baseNorm = path.resolve(base);
+      if (resolved !== baseNorm && !resolved.startsWith(baseNorm + path.sep))
+        throw new Error("rpc: plan.save path escapes workspace");
+      await fs.promises.writeFile(resolved, content, "utf8");
       return true;
     },
     "file.read": (p) => api.fileRead(str(p, "path")),
@@ -291,18 +296,6 @@ export function createRpcDispatcher(
       return api.formReply(str(p, "sessionID"), str(p, "formID"), clean);
     },
     "form.cancel": (p) => api.formCancel(str(p, "sessionID"), str(p, "formID")),
-    "question.list": (p) => api.questionList(str(p, "sessionID")),
-    "question.reply": (p) => {
-      const answers = p.answers as unknown;
-      if (!Array.isArray(answers))
-        throw new Error("rpc: answers must be string[][]");
-      return api.questionReply(
-        str(p, "sessionID"),
-        str(p, "requestID"),
-        answers as string[][],
-      );
-    },
-
     // -- session parity ---------------------------------------------------------
     "session.export": (p) => api.exportSession(str(p, "sessionID")),
     "session.import": (p) => {
@@ -378,11 +371,15 @@ export function createRpcDispatcher(
     },
     "vcs.diff": (p) => {
       const mode = p.mode === "branch" ? "branch" : "working";
-      return api.vcsDiff(mode, optStr(p, "directory"));
+      const dir = optStr(p, "directory");
+      return api.vcsDiff(
+        mode,
+        dir ? canonicalizeDirectory(dir) : undefined,
+      );
     },
     "worktree.list": (p) => api.worktreeList(str(p, "projectID")),
     "worktree.create": (p) => {
-      const directory = str(p, "directory");
+      const directory = canonicalizeDirectory(str(p, "directory"));
       const name = optStr(p, "name");
       const from = optStr(p, "from");
       return api.worktreeCreate(str(p, "projectID"), {
@@ -394,7 +391,7 @@ export function createRpcDispatcher(
     "worktree.remove": (p) =>
       api.worktreeRemove(
         str(p, "projectID"),
-        str(p, "directory"),
+        canonicalizeDirectory(str(p, "directory")),
         p.force === true,
       ),
     "worktree.refresh": (p) => api.worktreeRefresh(str(p, "projectID")),
@@ -507,10 +504,17 @@ export function createRpcDispatcher(
             ?.replace(/\.exe$/i, "") ?? "opencode2")
         : "opencode2";
       const name = optStr(p, "name");
+      // Never interpolate the webview-supplied provider name into shell text:
+      // it can carry spaces/quotes/metacharacters (`a; rm -rf ~`). Validate
+      // against the safe CLI-arg alphabet and pass via argv array instead.
+      if (name !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name))
+        throw new Error("rpc: invalid provider name");
       const terminal = vscode.window.createTerminal({
         name: "OpenCode 2 — connect provider",
       });
       terminal.show();
+      // sendText takes a raw string (no argv form) — with the name validated
+      // above, interpolation is safe; unvalidated input never reaches here.
       terminal.sendText(`${bin} auth login${name ? ` ${name}` : ""}`, true);
       log.info(
         `provider auth handoff: ${bin} auth login${name ? ` ${name}` : ""}`,
@@ -526,7 +530,18 @@ export function createRpcDispatcher(
       return true;
     },
     "url.open": async (p) => {
-      const uri = vscode.Uri.parse(str(p, "url"), true);
+      const raw = str(p, "url");
+      // The webview is a trust boundary: only http(s) leaves the machine.
+      // Anything else (file:, vscode:, command:, data:, javascript:) is refused.
+      let parsed: URL;
+      try {
+        parsed = new URL(raw);
+      } catch {
+        throw new Error("rpc: invalid url");
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+        throw new Error(`rpc: refusing to open non-http(s) url`);
+      const uri = vscode.Uri.parse(raw, true);
       await vscode.env.openExternal(uri);
       return true;
     },
@@ -628,6 +643,10 @@ export function createRpcDispatcher(
     },
     "image.save": async (p) => {
       const data = str(p, "data");
+      // Bound the decode: base64 inflates ~4/3, so 15M chars ≈ 11MB — the
+      // webview must never OOM the extension host with one paste.
+      if (data.length > 15_000_000)
+        throw new Error("rpc: image too large (max ~11MB)");
       const name = optStr(p, "name") ?? `pasted-${Date.now()}.png`;
       // mime not strictly needed, keep for future
       const dir = path.join(os.tmpdir(), "opencode-images");

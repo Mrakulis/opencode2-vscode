@@ -12,8 +12,6 @@ import {
 } from "../lib/slash";
 import type { PermissionMode } from "../../src/protocol";
 
-export type { SlashEntry };
-
 interface FileHit {
   path?: string;
   name?: string;
@@ -216,7 +214,13 @@ export function Composer(props: Props) {
       void rpc
         .call<string>("file.read", { path })
         .then((text) => {
-          if (!cancelled) setAtPreview({ path, text });
+          // Cap the preview: a huge file must not freeze the webview in <pre>.
+          if (!cancelled)
+            setAtPreview({
+              path,
+              text:
+                text.length > 2000 ? text.slice(0, 2000) + "\n…(truncated)" : text,
+            });
         })
         .catch(() => {
           if (!cancelled) setAtPreview(undefined);
@@ -238,10 +242,12 @@ export function Composer(props: Props) {
         return;
       }
       // Everything after the command token is its argument payload.
-      const m = new RegExp(
-        `^\\s*/${entry.name}\\s*([\\s\\S]*)$`,
-        "i",
-      ).exec(text.trim());
+      // entry.name is server-catalog data — escape it so metacharacters
+      // (dots, dashes, regex syntax) can't break routing or ReDoS the match.
+      const safe = entry.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const m = new RegExp(`^\\s*/${safe}\\s*([\\s\\S]*)$`, "i").exec(
+        text.trim(),
+      );
       const rest = (m?.[1] ?? "").trim();
       setText("");
       setSlashOpen(false);
@@ -334,6 +340,13 @@ export function Composer(props: Props) {
     const list = Array.from(files as unknown as File[]);
     for (const file of list) {
       if (!file.type.startsWith("image/")) continue;
+      // Bound the upload: 10MB per image, and revoke the preview URL on
+      // every path that doesn't keep the attachment (no host OOM, no leak).
+      if (file.size > 10_000_000) {
+        setError(`Image too large (max 10MB): ${file.name || "pasted image"}`);
+        setTimeout(() => setError(undefined), 4000);
+        continue;
+      }
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const preview = URL.createObjectURL(file);
       setAttachments((a) => [
@@ -344,8 +357,9 @@ export function Composer(props: Props) {
         const buf = await file.arrayBuffer();
         const bytes = new Uint8Array(buf);
         let binary = "";
-        for (let i = 0; i < bytes.length; i++)
-          binary += String.fromCharCode(bytes[i]!);
+        // Chunked conversion avoids megastring thrash on multi-MB images.
+        for (let i = 0; i < bytes.length; i += 0x8000)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         const b64 = btoa(binary);
         const res = await rpc.call<{ uri: string }>("image.save", {
           data: b64,
@@ -356,6 +370,7 @@ export function Composer(props: Props) {
           a.map((x) => (x.id === id ? { ...x, uri: res.uri } : x)),
         );
       } catch (e) {
+        URL.revokeObjectURL(preview);
         setAttachments((a) => a.filter((x) => x.id !== id));
         setError(errorMessage(e));
         setTimeout(() => setError(undefined), 4000);

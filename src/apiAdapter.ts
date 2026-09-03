@@ -109,7 +109,7 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       const root = directory
         ? path.normalize(directory).toLowerCase()
         : undefined;
-      let data = res.data;
+      let data = asRows<SessionInfo>(res);
       if (root) {
         const sep = path.sep.toLowerCase();
         data = data.filter((s) => {
@@ -418,87 +418,6 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     },
     formCancel: async (sessionID: string, formID: string): Promise<void> => {
       await getClient().form.cancel({ sessionID, formID });
-    },
-
-    // -- questions (V2 experimental) ------------------------------------------
-    questionList: async (
-      sessionID: string,
-    ): Promise<Array<Record<string, unknown>>> => {
-      // Pending questions are Location-owned in-memory state; the session-
-      // scoped list can come back EMPTY while `/api/question/request` holds
-      // the row (per the V2 schema changelog). Merge both and dedupe.
-      const { Service } = await import("@opencode-ai/client/service");
-      const endpoint = await Service.discover().catch(() => undefined);
-      if (!endpoint) return [];
-      const headers = Service.headers(endpoint) as unknown as Record<
-        string,
-        string
-      >;
-      const fetchList = async (
-        url: string,
-      ): Promise<Array<Record<string, unknown>>> => {
-        try {
-          const res = await fetch(url, { headers });
-          if (!res.ok) return [];
-          const data = (await res.json()) as unknown;
-          const rows = Array.isArray(data)
-            ? data
-            : ((data as { data?: unknown[] }).data ?? []);
-          return (Array.isArray(rows) ? rows : []) as Array<
-            Record<string, unknown>
-          >;
-        } catch {
-          return [];
-        }
-      };
-      try {
-        const [sessionRows, locationRows] = await Promise.all([
-          fetchList(`${endpoint.url}/api/session/${sessionID}/question`),
-          fetchList(`${endpoint.url}/api/question/request`),
-        ]);
-        const byId = new Map<string, Record<string, unknown>>();
-        for (const row of [...locationRows, ...sessionRows]) {
-          const id = typeof row.id === "string" ? row.id : "";
-          byId.set(id || `_x${byId.size}`, row);
-        }
-        return [...byId.values()];
-      } catch {
-        return [];
-      }
-    },
-    questionReply: async (
-      sessionID: string,
-      requestID: string,
-      answers: string[][],
-    ): Promise<void> => {
-      const { Service } = await import("@opencode-ai/client/service");
-      const endpoint = await Service.discover().catch(() => undefined);
-      if (!endpoint)
-        throw new Error("No service discovered for question reply");
-      const url = `${endpoint.url}/api/session/${sessionID}/question/${requestID}/reply`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          ...(Service.headers(endpoint) as unknown as Record<string, string>),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ answers }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        // Verified live: the experimental question HTTP surface is ABSENT on
-        // current betas (all question* routes 404, absent from live
-        // openapi.json). Distinguish that from a bad request so the UI can
-        // fall back to a steered prompt instead of showing a scary error.
-        if (res.status === 404) {
-          const e = new Error(text || "Question reply failed: 404") as Error & {
-            code?: string;
-          };
-          e.code = "QuestionHTTPUnavailable";
-          throw e;
-        }
-        throw new Error(text || `Question reply failed: ${res.status}`);
-      }
     },
 
     // -- misc ----------------------------------------------------------------
@@ -874,23 +793,5 @@ export function createApi({ getClient }: ApiAdapterDeps) {
         : await getClient().project.current();
       return res as unknown as Record<string, unknown> | undefined;
     },
-  };
-}
-
-export type Api = ReturnType<typeof createApi>;
-
-/** Narrow an unknown event pushed over RPC into its `type` + payload. */
-export interface WireEvent {
-  type: string;
-  sessionID?: string;
-  raw: OpenCodeEvent;
-}
-
-export function toWireEvent(raw: OpenCodeEvent): WireEvent {
-  const data = (raw as { data?: { sessionID?: string } }).data;
-  return {
-    type: (raw as { type?: string }).type ?? "unknown",
-    sessionID: data?.sessionID,
-    raw,
   };
 }

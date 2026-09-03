@@ -6,7 +6,6 @@ import {
   type WireFileDiff,
 } from "./diffPatch";
 
-export { applyUnifiedPatch, parseHunks } from "./diffPatch";
 export type { WireFileDiff } from "./diffPatch";
 
 /**

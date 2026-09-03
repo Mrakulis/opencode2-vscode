@@ -6,14 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ## [Unreleased]
 
-- _No unreleased changes yet._
+### Removed
+- **Dead code sweep** — question-capability plumbing with zero callers (`controller.detectQuestionSupport`, `questionsSupported` state/getter, capability emitter, `getServiceTarget`, `questionList`/`questionReply` adapter methods, both RPC handlers, `protocol.ts` method + UI field); dead `Api`/`WireEvent`/`toWireEvent`, `setDaemonStarter`, stale re-exports (`extensionServer`, `diffDocs`, `Composer.SlashEntry`), dead `ModelOption`/`AgentOption` interfaces, and two unused model imports in `App.tsx`. No test removals — nothing under test covered the deleted code.
 
 ---
 
 ## [0.6.46] - 2026-09-02
 
 ### Changed
-- **Questions are plain text again — interactive forms removed** — the agent `question` tool renders as static text with options lettered a)/b)/c) (no buttons, no "Other…" row). Every stuck state lived in machinery promising an interactive round-trip the backend can't complete (wedged busy, inbox-trapped or voided answers); text in/out cannot wedge. Removed: `QuestionCard`/`OtherRow`, `answerQuestion`, the answered overlay, the hand-back set, and the `hasOpenQuestion` busy carve-out, plus dead `.q-*` CSS. Kept: park→interrupt unpark (real servers hang on parked tools), send-time `sessions.active` delivery truth in `sendMessage` (steer when running, plain when idle), and the stale-busy watchdog (`isParked`/`isTerminal` + `parseQuestionInput` helpers, tested).
+- **Questions are plain text again — interactive forms removed** — the agent `question` tool renders as static text with options lettered a)/b)/c) (no buttons, no "Other…" row). Every stuck state lived in machinery promising an interactive round-trip the backend can't complete (wedged busy, inbox-trapped or voided answers); text in/out cannot wedge. Removed: `QuestionCard`/`OtherRow`, `answerQuestion`, the answered overlay, and the `hasOpenQuestion` busy carve-out (the interrupt-once `handedBackIds` guard stays), plus dead `.q-*` CSS. Kept: park→interrupt unpark (real servers hang on parked tools), send-time `sessions.active` delivery truth in `sendMessage` (steer when running, plain when idle), and the stale-busy watchdog (`isParked`/`isTerminal` + `parseQuestionInput` helpers, tested).
 
 ### Fixed
 - **Plain prompt into a live run queued behind it** — `sendMessage` now decides steer-vs-plain from fresh server truth instead of the lossy local busy flag; a stale-false flag no longer files replies into the inbox (visible queue, only delivered after pressing Stop).

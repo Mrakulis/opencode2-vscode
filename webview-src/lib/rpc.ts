@@ -86,19 +86,6 @@ export const rpc = new RpcClient();
 
 // ---- typed helpers ---------------------------------------------------------
 
-export interface ModelOption {
-  id: string;
-  providerID: string;
-  name: string;
-  context?: number;
-  variants?: Array<{ id: string }>;
-}
-
-export interface AgentOption {
-  id: string;
-  name: string;
-}
-
 export interface SessionSummary {
   id: string;
   title?: string;

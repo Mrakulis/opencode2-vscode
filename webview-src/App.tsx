@@ -17,9 +17,7 @@ import {
 } from "./lib/format";
 import {
   modelKey,
-  parseModelKey,
   pickNewSessionModel,
-  resolveDefault,
   toggleInList,
 } from "./lib/models";
 import { chime } from "./lib/sound";

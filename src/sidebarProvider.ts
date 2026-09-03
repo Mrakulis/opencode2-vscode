@@ -160,14 +160,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.disposables,
     );
 
-    // Re-push resolved config whenever question-route support is (re)detected,
-    // so the UI flips between the interactive card and plain-text fallback.
-    this.controller.onCapabilitiesChanged(
-      () => pushState(),
-      null,
-      this.disposables,
-    );
-
     // Re-sync state whenever the panel becomes visible — covers the case where
     // a connection resolved while the view was still hidden/not yet mounted.
     view.onDidChangeVisibility(
@@ -279,7 +271,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         expandEditTools: cfg.get<boolean>("ui.expandEditTools", false),
         fullShellOutput: cfg.get<boolean>("ui.fullShellOutput", false),
         messageStats: cfg.get<boolean>("ui.messageStats", true),
-        questionsSupported: this.controller.questionsSupported,
         sendKey: cfg.get<"enter" | "ctrlEnter">("composer.sendKey", "enter"),
       },
       models: {
