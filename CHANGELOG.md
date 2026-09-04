@@ -10,6 +10,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.51] - 2026-09-04
+
+### Changed
+- **"↻ retrying…" indicators clear once the retried run streams again** — previously `retryInfo` was only cleared on terminal events, so the retry note/feed row stayed visible for the entire retried turn (a server retry extends the same assistant message, so newest-message gating could never hide it). Now the indicators drop the moment fresh step/text/reasoning/tool output flows (the session's "reconnected" point), for the active session only.
+
+---
+
+## [0.6.50] - 2026-09-04
+
+### Changed
+- **Interrupted-turn pill hides once history moves on** — the `↷ turn interrupted` status note now only shows while the interrupted message is still the newest in the transcript (question still awaiting your answer, or a fresh Stop). Once you answer or the next turn lands, the note disappears from the earlier turn instead of lingering as stale clutter. Real failures are unaffected.
+
+---
+
+## [0.6.49] - 2026-09-04
+
+### Changed
+- **Interrupted turns no longer render as errors** — an assistant message aborted by the question hand-back auto-interrupt or ■ Stop (`{type:"aborted",message:"Step interrupted"}` / `"Tool execution interrupted"`) now shows a muted `↷ turn interrupted` status pill instead of the red `tool-error` block, and no longer offers a misleading Retry chip. Real failures are unchanged (`isExpectedInterruption` in `lib/failure.ts`, + tests).
+
+---
+
+## [0.6.48] - 2026-09-04
+
+### Added
+- **Safe question buttons** — the agent `question` tool renders clickable option buttons that send the answer as a normal chat message (`onAnswer` → `sendMessage`, steer/plain from live `sessions.active` truth); never a `question.reply`/`form.reply` route (none exists on any published server). One click disables the buttons (`✓` on the chosen option).
+- **Question input survives the interrupt** — the webview snapshots the parsed questions (keyed by toolCallId, capped 1k) before the hand-back interrupt and re-injects them on refetch. The server wipes `state.input` to `{}` when a question tool is aborted (verified live), which would otherwise show the aborted-tool error instead of the buttons.
+- `scripts/question-probe.mjs` — live verification of the full question pipeline (park → interrupt → wait → answer).
+
+### Changed
+- Park detection now waits for parseable input (`isParkedQuestionWithData`): a half-streamed/empty question shows "waiting for question…" and is never interrupted, so no empty "no question data" card.
+- `prompt.interrupt` now also `session.wait`s after interrupting, so the follow-up answer starts a clean turn instead of inheriting the interrupted step and erroring "Step interrupted".
+- Question card styling — accent-tinted option buttons with bold labels + descriptions (no more lettered mono lines that read as "thinking text").
+
+---
+
 ## [0.6.47] - 2026-09-03
 
 ### Removed

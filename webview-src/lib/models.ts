@@ -29,8 +29,10 @@ export function filterVisibleModels<T extends PickerModel>(
 
 function providerRank(id: string): number {
   const lower = id.toLowerCase();
-  // "opencode" is the Zen free tier (7 models); treat any zen variant as top priority
-  if (lower === "opencode" || lower === "opencode-zen" || lower.includes("zen")) return 0;
+  // "opencode" is the Zen free tier — match exact known Zen ids only, so
+  // unrelated providers merely containing "zen" (frozen, citizen) don't
+  // steal top priority.
+  if (lower === "opencode" || lower === "opencode-zen") return 0;
   if (lower === "opencode-go") return 1;
   return 2;
 }
@@ -129,10 +131,10 @@ export function isFreeCatalogModel(
   m: Pick<DefaultCandidate, "id" | "providerID"> & { cost?: unknown },
 ): boolean {
   const zero = (v: unknown): boolean =>
-    typeof v === "number" ? v === 0 : false;
+    v === 0 || v === "0";
   const c = m.cost as
     | { input?: unknown; output?: unknown }
-    | Array<{ input?: unknown; output?: unknown }>
+    | Array<{ input?: unknown; output?: unknown } | null | undefined>
     | undefined;
   if (!c) return false;
   const rows = Array.isArray(c) ? c : [c];

@@ -30,7 +30,13 @@ import {
   lostReplyIds,
 } from "./lib/permissions";
 import { errorMessage, PROVIDERISH_RE } from "./lib/failure";
-import { isParkedQuestionPart, isTerminalQuestionPart } from "./lib/questions";
+import {
+  isParkedQuestionPart,
+  isParkedQuestionWithData,
+  isTerminalQuestionPart,
+  parseQuestionInput,
+  type QuestionItem,
+} from "./lib/questions";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionsDrawer } from "./components/SessionsDrawer";
 import { ModelManager } from "./components/ModelManager";
@@ -132,6 +138,15 @@ export function App() {
   /** Question tool calls already handed back to the user (auto-interrupt sent once). */
   const [handedBackIds, setHandedBackIds] = useState<ReadonlySet<string>>(
     new Set(),
+  );
+  /**
+   * Captured question payloads keyed by tool call id. The server WIPES a
+   * question tool's `state.input` to `{}` when the tool is interrupted
+   * (verified live) — this snapshot, taken before the hand-back interrupt,
+   * is re-injected on refetch so the option buttons survive the interrupt.
+   */
+  const questionInputsRef = useRef<Map<string, { questions: QuestionItem[] }>>(
+    new Map(),
   );
   /** Interrupt attempts per question tool call — caps the retry loop so a
    *  persistently failing interrupt surfaces a notice instead of storming. */
@@ -274,6 +289,10 @@ export function App() {
   // own and chat replies would just wait as a steer/queue. Interrupt the run
   // once per question tool call (same as ■ Stop) — the question stays visible
   // as plain text and the user answers in chat like any other message.
+  // Only a question whose input is fully parsed interrupts: while the tool is
+  // still streaming its input (raw JSON string), there is nothing to answer,
+  // so interrupting then would park an empty card. The watchdog below still
+  // reconciles a parked-but-empty question that never completes.
   useEffect(() => {
     if (!activeId || !busySessions[activeId]) return;
     for (const m of messages) {
@@ -282,8 +301,24 @@ export function App() {
         .content;
       if (!Array.isArray(content)) continue;
       for (const p of content) {
-        const toolId = isParkedQuestionPart(p);
+        const toolId = isParkedQuestionWithData(p);
         if (!toolId || handedBackIds.has(toolId)) continue;
+        // Snapshot the question payload BEFORE interrupting: the server wipes
+        // the tool's input to `{}` on abort, so the buttons render from this
+        // capture (re-injected in refreshMessages). Capped like RespondedTracker.
+        {
+          const parsed = parseQuestionInput(
+            (p as { state?: { input?: unknown } }).state?.input,
+          );
+          if (parsed.length > 0) {
+            const map = questionInputsRef.current;
+            map.set(toolId, { questions: parsed });
+            if (map.size > 1000) {
+              const first = map.keys().next().value;
+              if (first !== undefined) map.delete(first);
+            }
+          }
+        }
         // Cap retries: a persistently failing interrupt must surface a
         // notice, not storm the server (un-marking re-ran this effect).
         const attempts = interruptAttemptsRef.current.get(toolId) ?? 0;
@@ -583,6 +618,30 @@ export function App() {
                       (lp as { id?: unknown }).id === toolId,
                   )
                 : undefined;
+            // Interrupting a parked question wipes the server-side tool input
+            // to `{}` — restore the questions captured before the hand-back
+            // interrupt so the option buttons survive the refetch.
+            if (
+              toolId &&
+              (p as { name?: string }).name === "question" &&
+              parseQuestionInput(
+                (p as { state?: { input?: unknown } }).state?.input,
+              ).length === 0
+            ) {
+              const cached = questionInputsRef.current.get(toolId) as
+                | { questions?: unknown }
+                | undefined;
+              if (cached && Array.isArray(cached.questions)) {
+                changed = true;
+                return {
+                  ...p,
+                  state: {
+                    ...((p as { state?: Record<string, unknown> }).state ?? {}),
+                    input: cached,
+                  },
+                };
+              }
+            }
             const len = (c?: unknown): number => {
               const st = (c as { state?: { content?: unknown[] } } | undefined)
                 ?.state;
@@ -1204,6 +1263,21 @@ export function App() {
               } else if (st?.type === "idle") {
                 setRetryInfo(undefined);
               }
+            }
+            // A retried run that is streaming again is a LIVE turn, not a
+            // pending retry — drop the "↻ retrying…" indicators the moment
+            // fresh output flows. Previously retryInfo cleared only on
+            // terminal events, so the note lingered for the whole retried
+            // turn (server retry extends the SAME assistant message, so
+            // `isLast`-style gating can never hide it).
+            if (
+              sid === activeIdRef.current &&
+              (evt.type === "session.step.started" ||
+                evt.type === "session.text.started" ||
+                evt.type === "session.reasoning.started" ||
+                evt.type === "session.tool.input.started")
+            ) {
+              setRetryInfo(undefined);
             }
             if (
               evt.type === "session.execution.succeeded" ||
@@ -2276,6 +2350,15 @@ export function App() {
             }}
             onRegenerate={() => void retryLast()}
             onEditMessage={(text) => setComposerPrefill(text)}
+            onAnswer={(text) =>
+              void sendMessage(text).catch((e: unknown) =>
+                setNotice(
+                  `Couldn't send answer — ${
+                    e instanceof Error ? e.message : String(e)
+                  }`,
+                ),
+              )
+            }
             retryNote={
               busy && retryInfo && !retryInfo.action
                 ? `↻ retrying${

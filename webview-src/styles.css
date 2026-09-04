@@ -1036,17 +1036,60 @@ button:focus-visible {
   margin-top: var(--oc2-space-3);
 }
 .q-title {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--oc2-accent);
   margin: var(--oc2-space-1) 0 var(--oc2-space-2);
 }
 .q-desc {
   font-size: calc(var(--oc2-font-size) - 1px);
-  color: var(--oc2-fg-muted);
+  color: var(--oc2-fg);
+  margin-bottom: var(--oc2-space-1);
 }
 .q-note {
   color: var(--oc2-fg-muted);
   font-size: calc(var(--oc2-font-size) - 1px);
   margin-top: var(--oc2-space-2);
+}
+.q-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--oc2-space-2);
+  margin-top: var(--oc2-space-2);
+}
+.q-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: color-mix(in srgb, var(--oc2-accent) 5%, var(--oc2-bg-surface));
+  color: var(--oc2-fg);
+  border: 1px solid
+    color-mix(in srgb, var(--oc2-accent) 30%, var(--oc2-border));
+  border-radius: var(--oc2-radius);
+  padding: var(--oc2-space-2) var(--oc2-space-3);
+  font-family: inherit;
+  font-size: calc(var(--oc2-font-size) - 1px);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.q-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--oc2-accent) 14%, var(--oc2-bg-surface));
+  border-color: var(--oc2-accent);
+}
+.q-option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.q-option-label {
+  font-weight: 600;
+  display: block;
+}
+.q-option-desc {
+  color: var(--oc2-fg-muted);
+  font-size: calc(var(--oc2-font-size) - 2px);
+  display: block;
 }
 .tool-head {
   width: 100%;

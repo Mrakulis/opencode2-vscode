@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import {
   nextTask,
@@ -24,6 +24,12 @@ export function PlansDrawer({ onClose, canRun, onRunPrompt }: Props) {
   const [path, setPath] = useState<string | undefined>(undefined);
   const [content, setContent] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  // Ref mirror + serialized saves: rapid toggles must build on the LATEST
+  // content (not a stale render closure), and the 3s poll must not clobber
+  // an optimistic toggle while its save is in flight.
+  const contentRef = useRef<string | undefined>(undefined);
+  const savingRef = useRef(0);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const refresh = useCallback(async () => {
     try {
@@ -31,7 +37,14 @@ export function PlansDrawer({ onClose, canRun, onRunPrompt }: Props) {
         "plan.read",
       );
       setPath(res.path);
-      setContent(res.content);
+      // Don't overwrite an optimistic toggle mid-save; the chain re-reads
+      // after the last save lands.
+      if (savingRef.current === 0) {
+        contentRef.current = res.content;
+        setContent(res.content);
+      } else {
+        setPath(res.path);
+      }
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -48,17 +61,35 @@ export function PlansDrawer({ onClose, canRun, onRunPrompt }: Props) {
   const tasks: PlanTask[] = content ? parsePlanTasks(content) : [];
 
   const toggle = async (t: PlanTask): Promise<void> => {
-    if (!path || !content) return;
+    if (!path) return;
+    const base = contentRef.current;
+    if (!base) return;
     const next =
       t.status === "done" ? "open" : ("done" as PlanTask["status"]);
-    const updated = setTaskStatus(content, t.line, next);
+    const updated = setTaskStatus(base, t.line, next);
+    contentRef.current = updated;
     setContent(updated); // optimistic
-    try {
-      await rpc.call("plan.save", { path, content: updated });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      void refresh();
-    }
+    savingRef.current++;
+    // Serialize saves so rapid toggles land in order; only the LAST save
+    // re-reads, and a failure re-reads to discard just the failed write.
+    const run = saveChainRef.current.then(async () => {
+      try {
+        await rpc.call("plan.save", { path, content: updated });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        const res = await rpc
+          .call<{ path?: string; content?: string }>("plan.read")
+          .catch(() => undefined);
+        if (res) {
+          contentRef.current = res.content;
+          setContent(res.content);
+        }
+      } finally {
+        savingRef.current--;
+      }
+    });
+    saveChainRef.current = run.catch(() => undefined);
+    await run;
   };
 
   const runNext = (): void => {

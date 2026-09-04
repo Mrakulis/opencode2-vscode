@@ -7,7 +7,7 @@ import {
   type MessagePartReasoning,
   type MessagePartTool,
 } from "../lib/rpc";
-import { assistantFailed } from "../lib/failure";
+import { assistantFailed, isExpectedInterruption } from "../lib/failure";
 import { renderMarkdown } from "../lib/markdown";
 import {
   diffLines,
@@ -41,6 +41,7 @@ export function Feed({
   onRegenerate,
   onEditMessage,
   agentKind,
+  onAnswer,
 }: {
   messages: AnyMessage[];
   busy: boolean;
@@ -75,6 +76,8 @@ export function Feed({
   onEditMessage?: (text: string) => void;
   /** Live agent kind — seeds trailing pending user when no following assistant yet */
   agentKind?: "plan" | "build" | "other";
+  /** Click a question option → send the answer as a normal chat message. */
+  onAnswer?: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -292,6 +295,7 @@ export function Feed({
               onRegenerate={onRegenerate}
               onEditMessage={onEditMessage}
               userPlan={isUser(m) ? userPlanById.get((m as { id: string }).id) : undefined}
+              onAnswer={onAnswer}
             />
           ));
         })()}
@@ -391,6 +395,7 @@ function MessageGroup({
   onRegenerate,
   onEditMessage,
   userPlan,
+  onAnswer,
 }: {
   message: AnyMessage;
   busy: boolean;
@@ -407,6 +412,7 @@ function MessageGroup({
   onRegenerate?: () => void;
   onEditMessage?: (text: string) => void;
   userPlan?: "plan" | "build";
+  onAnswer?: (text: string) => void;
 }) {
   if (isUser(message)) {
     return (
@@ -537,6 +543,7 @@ function MessageGroup({
           expandShellTools={expandShellTools}
           expandEditTools={expandEditTools}
           fullShellOutput={fullShellOutput}
+          onAnswer={onAnswer}
         />
       ))}
       {(onCopyMessage || (isLast && onRegenerate)) && (
@@ -582,9 +589,19 @@ function MessageGroup({
             )}
           </footer>
         )}
-      {message.error != null && !isTransientNetworkError(message.error) && (
-        <pre className="tool-error">{stringifyError(message.error)}</pre>
-      )}
+      {message.error != null && !isTransientNetworkError(message.error) &&
+        (isExpectedInterruption(message) ? (
+          // Only a live hand-back/Stop deserves the "interrupted" status note:
+          // the moment a newer message exists (the answer, or the next turn)
+          // the note is stale history and disappears. Real failures below.
+          isLast ? (
+            <div className="sys-row" role="status">
+              <span className="retry-pill">↷ turn interrupted</span>
+            </div>
+          ) : null
+        ) : (
+          <pre className="tool-error">{stringifyError(message.error)}</pre>
+        ))}
       {isTransientNetworkError(message.error) && (
         <pre className="tool-error" style={{ opacity: 0.7 }}>
           Connection briefly dropped — retrying automatically. {stripVerboseHint(String((message.error as { message?: string })?.message ?? ""))}
@@ -594,7 +611,10 @@ function MessageGroup({
         // In-chat retry affordance attached to THIS message: shows only while
         // it is the newest one, then scrolls away as history grows.
         // Transient network errors (ECONNRESET) are non-retryable via manual chip — server auto-retry handles them.
-        const failed = assistantFailed(message) && !isTransientNetworkError(message.error);
+        const failed =
+          assistantFailed(message) &&
+          !isTransientNetworkError(message.error) &&
+          !isExpectedInterruption(message);
         const showButton =
           !busy && isLast && (failed || (!!retryPendingLast && !!onRetry && !isTransientNetworkError(message.error)));
         const showNote = busy && isLast && !!retryNote;
@@ -667,8 +687,9 @@ function Part(props: {
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  onAnswer?: (text: string) => void;
 }) {
-  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput } =
+  const { part, busy, showReasoning, expandShellTools, expandEditTools, fullShellOutput, onAnswer } =
     props as {
       part: MessagePartText | MessagePartReasoning | MessagePartTool;
       busy: boolean;
@@ -676,6 +697,7 @@ function Part(props: {
       expandShellTools: boolean;
       expandEditTools: boolean;
       fullShellOutput: boolean;
+      onAnswer?: (text: string) => void;
     };
   if (part.type === "text") {
     return (
@@ -703,6 +725,7 @@ function Part(props: {
         expandShellTools={expandShellTools}
         expandEditTools={expandEditTools}
         fullShellOutput={fullShellOutput}
+        onAnswer={onAnswer}
       />
     );
   }
@@ -948,11 +971,13 @@ function ToolCard({
   expandShellTools,
   expandEditTools,
   fullShellOutput,
+  onAnswer,
   }: {
   part: ToolPart;
   expandShellTools: boolean;
   expandEditTools: boolean;
   fullShellOutput: boolean;
+  onAnswer?: (text: string) => void;
 }) {
   const [expanded, setExpanded] = useState(() =>
     initiallyExpanded(part.name, expandShellTools, expandEditTools),
@@ -1009,15 +1034,17 @@ function ToolCard({
     );
   }
 
-  // Agent-asked questions: one interactive form per question (option buttons +
-  // free-text "Other…"). The V2 server has no question-reply endpoint, so the
-  // app hands the turn back to the user when the question arrives and every
-  // answer is sent back as a normal chat message.
-  // Agent-asked questions render as plain text: the question tool has no
-  // server reply channel, so there is no interactive round-trip — the user
-  // answers in chat like any other message.
+  // Agent-asked questions render as clickable option buttons (safe: clicking
+  // sends a normal chat message via `onAnswer`, never a question-reply route).
+  // The V2 server has no question-reply endpoint, so there is no tool-channel
+  // round-trip — the answer travels through the same send path as the composer.
   if (part.name === "question") {
-    return <QuestionAsText state={part.state as QuestionToolState} />;
+    return (
+      <QuestionAsText
+        state={part.state as QuestionToolState}
+        onAnswer={onAnswer}
+      />
+    );
   }
 
   let title = part.name;
@@ -1203,18 +1230,35 @@ function stringifyError(error: unknown): string {
   return stripVerboseHint(raw);
 }
 
-/** Agent-asked questions (`question` tool parts) rendered as plain text —
- *  options lettered a)/b)/c) inline. Deliberately no interactive form: the
- *  question tool has no server reply channel, so answers always travel as
- *  normal chat messages (steer/plain via the send path). */
-function QuestionAsText({ state }: { state: QuestionToolState }) {
+/** Agent-asked questions (`question` tool parts) rendered with safe option
+ *  buttons: clicking sends a normal chat message via `onAnswer`. There is no
+ *  question-reply endpoint, so the answer travels through the same send path
+ *  as the composer (steer/plain decided from server truth) — never a
+ *  `question.reply` / `form.reply` route. */
+function QuestionAsText({
+  state,
+  onAnswer,
+}: {
+  state: QuestionToolState;
+  onAnswer?: (text: string) => void;
+}) {
+  const [sent, setSent] = useState<string | undefined>(undefined);
   const qs = parseQuestionInput(state.input);
   if (qs.length === 0) {
+    // A question tool can park (status flips to running) before its input has
+    // finished streaming — `state.input` is a raw JSON string that only parses
+    // once complete. Render a neutral "waiting" placeholder then; only a
+    // terminal (errored/aborted) question with no input is a real problem.
+    const live = state.status === "running" || state.status === "streaming";
     return (
       <div className="tool-card kind-question static">
         <div className="tool-head">❓ question</div>
         <div className="tool-body">
-          <pre className="tool-error">{state.error?.message ?? "no question data"}</pre>
+          <pre className={live ? "tool-out" : "tool-error"}>
+            {live
+              ? "waiting for question…"
+              : (state.error?.message ?? "no question data")}
+          </pre>
         </div>
       </div>
     );
@@ -1228,20 +1272,54 @@ function QuestionAsText({ state }: { state: QuestionToolState }) {
         {qs.map((q, qi) => {
           const qTitle = q.header ?? q.question ?? `Question ${qi + 1}`;
           const opts = Array.isArray(q.options) ? q.options : [];
+          const hasButtons = onAnswer !== undefined && opts.length > 0;
           return (
             <div key={qi} className="q-item">
               <div className="q-title">❓ {qTitle}</div>
               {q.header && q.question && <div className="q-desc">{q.question}</div>}
-              {opts.map((o, oi) => (
-                <div key={oi} className="q-note">
-                  {String.fromCharCode(97 + oi)}) {o.label ?? `Option ${oi + 1}`}
-                  {o.description ? ` — ${o.description}` : ""}
+              {hasButtons ? (
+                <div className="q-options">
+                  {opts.map((o, oi) => {
+                    const label = o.label ?? `Option ${oi + 1}`;
+                    const chosen = sent === label;
+                    return (
+                      <button
+                        key={oi}
+                        type="button"
+                        className="q-option"
+                        disabled={sent !== undefined}
+                        title={o.description}
+                        onClick={() => {
+                          const answer = q.header
+                            ? `${q.header}: ${label}`
+                            : label;
+                          setSent(label);
+                          onAnswer(answer);
+                        }}
+                      >
+                        <span className="q-option-label">
+                          {chosen ? "✓ " : "▸ "}
+                          {label}
+                        </span>
+                        {o.description ? (
+                          <span className="q-option-desc">{o.description}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              ) : (
+                opts.map((o, oi) => (
+                  <div key={oi} className="q-note">
+                    {String.fromCharCode(97 + oi)}) {o.label ?? `Option ${oi + 1}`}
+                    {o.description ? ` — ${o.description}` : ""}
+                  </div>
+                ))
+              )}
             </div>
           );
         })}
-        <div className="q-note">Reply in chat to answer.</div>
+        <div className="q-note">Reply in chat to answer with something else.</div>
       </div>
     </div>
   );

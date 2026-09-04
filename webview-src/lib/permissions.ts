@@ -19,11 +19,17 @@ export function autoReplyFor(
   action: string,
   sessionAutoAccepting = false,
 ): "once" | "reject" | undefined {
-  if (action.toLowerCase() === "question") return undefined;
+  // Normalize: servers have sent padded / hyphenated variants; compare the
+  // canonical snake_case form so guards can't be bypassed by spelling.
+  const act = action.trim().toLowerCase().replace(/-/g, "_");
+  if (act === "question") return undefined;
   // Anything outside the project folder must always surface, even in
   // auto-allow mode (matches OpenCode's own external_directory policy).
   // An explicit per-session auto-accept still bypasses the prompt.
-  if (action.toLowerCase() === "external_directory" && !sessionAutoAccepting)
+  if (
+    (act === "external_directory" || act.endsWith("_directory")) &&
+    !sessionAutoAccepting
+  )
     return undefined;
   if (mode === "autoAllow") return "once";
   if (mode === "deny") return "reject";

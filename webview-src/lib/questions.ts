@@ -45,6 +45,21 @@ export function isParkedQuestionPart(p: unknown): string | undefined {
 }
 
 /**
+ * A question tool part parked awaiting the user AND already carrying a
+ * parseable question list. The run must not be interrupted while the question
+ * input is still streaming — `state.input` is a raw JSON string that only
+ * becomes parseable once complete, and interrupting too early hands the turn
+ * back before the question exists (empty "no question data" card). Returns the
+ * tool call id only when a real question is present, else undefined.
+ */
+export function isParkedQuestionWithData(p: unknown): string | undefined {
+  const id = isParkedQuestionPart(p);
+  if (!id) return undefined;
+  const state = (p as { state?: { input?: unknown } }).state;
+  return parseQuestionInput(state?.input).length > 0 ? id : undefined;
+}
+
+/**
  * A question tool part in a terminal state (e.g. `error`/`aborted` — the
  * agent-side call is gone, so no hand-back interrupt is needed, but a stale
  * busy flag can wedge the session). Returns the tool call id, or undefined.

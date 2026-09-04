@@ -239,6 +239,18 @@ export async function resolveCli(log: Log): Promise<ResolvedCli | undefined> {
     ? [configured]
     : [...new Set<string>([...CANDIDATE_NAMES, "opencode"])];
 
+  // Explicit absolute/relative path: try it directly before PATH lookup.
+  if (configured) {
+    const direct = describe(expandHome(configured));
+    if (direct) {
+      const version = await queryVersion(direct);
+      if (version !== undefined) {
+        log.debug(`cli resolved (explicit): ${direct.program} (${version})`);
+        return { ...direct, version };
+      }
+    }
+  }
+
   for (const name of names) {
     const found = await whereAll(name);
     // prefer real exes over shims within PATH hits

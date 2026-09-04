@@ -13,11 +13,13 @@ export interface ListenConfig {
 }
 
 export function isLoopback(host: string): boolean {
+  const h = host.toLowerCase();
   return (
-    host === "127.0.0.1" ||
-    host === "localhost" ||
-    host === "::1" ||
-    host === "::ffff:127.0.0.1"
+    h === "127.0.0.1" ||
+    h === "localhost" ||
+    h === "::1" ||
+    h === "0:0:0:0:0:0:0:1" ||
+    h === "::ffff:127.0.0.1"
   );
 }
 
@@ -40,8 +42,9 @@ export function parseHostHeader(host: string | undefined): string | undefined {
   if (colon === -1) return value;
   const port = value.slice(colon + 1);
   const head = value.slice(0, colon);
-  // Only strip a numeric port, and only when the remainder is not itself
-  // bare IPv6 ("::1" — bracketless with multiple colons, no port).
-  if (port !== "" && /^\d+$/.test(port) && !head.includes(":")) return head;
+  // Only strip a port when the remainder is not itself bare IPv6 ("::1" —
+  // bracketless with multiple colons, no port). An empty port ("host:")
+  // also strips to the bare host instead of failing closed downstream.
+  if (!head.includes(":") && (port === "" || /^\d+$/.test(port))) return head;
   return value;
 }

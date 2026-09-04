@@ -28,7 +28,11 @@ export function wellKnownCliLocations(
     // both the real binaries and the shim fallback. Prefer real exes — the
     // shim path via cmd.exe can still flash a conhost window despite
     // windowsHide (see src/controller.ts startHiddenService).
-    const npmRoot = path.join(process.env.APPDATA ?? "", "npm");
+    // When APPDATA is unset there is no npm root — probe nothing rather
+    // than resolving a bogus relative "npm" dir.
+    const appData = process.env.APPDATA;
+    const npmRoot = appData ? path.join(appData, "npm") : undefined;
+    if (npmRoot === undefined) return [];
     out.push(
       // Direct npm bin (real exe when npm creates it, or shim-adjacent)
       path.join(npmRoot, `${name}.exe`),

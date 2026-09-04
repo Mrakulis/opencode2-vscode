@@ -49,3 +49,25 @@ function isAssistantMessage(
 ): m is Extract<AnyMessage, { type: "assistant" }> {
   return m.type === "assistant";
 }
+
+/**
+ * True when an assistant message ended because its run was INTERRUPTED — the
+ * question hand-back auto-interrupt, or the user pressing ■ Stop. These are
+ * expected aborts (live shapes `{type:"aborted",message:"Step interrupted"}`
+ * and `{type:"aborted",message:"Tool execution interrupted"}`) and must render
+ * as a neutral status note, not a red failure — even though the server marks
+ * them `finish: "error"`.
+ */
+export function isExpectedInterruption(m: AnyMessage): boolean {
+  if (!isAssistantMessage(m)) return false;
+  const err = m.error;
+  if (!err || typeof err !== "object") return false;
+  const e = err as { type?: unknown; message?: unknown };
+  const type = String(e.type ?? "").toLowerCase();
+  const msg = String(e.message ?? "").toLowerCase();
+  return (
+    type === "aborted" ||
+    /interrupted|abort/i.test(type) ||
+    /interrupted|abort/i.test(msg)
+  );
+}

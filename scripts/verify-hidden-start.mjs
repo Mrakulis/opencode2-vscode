@@ -4,6 +4,7 @@ import { OpenCode } from "@opencode-ai/client";
 import { Service } from "@opencode-ai/client/service";
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -44,7 +45,7 @@ async function resolveCli() {
         path.join(npmRoot, "node_modules", "opencode-ai", "bin", "opencode.exe"),
       ].find((p) => {
         try {
-          return require("fs").statSync(p).isFile();
+          return fs.statSync(p).isFile();
         } catch {
           return false;
         }
@@ -76,7 +77,7 @@ let spawnOpts = { detached: true, stdio: "ignore", windowsHide: true, shell: fal
 if (/\.cmd$/i.test(cli.program)) {
   const siblingExe = cli.program.replace(/\.cmd$/i, ".exe");
   try {
-    if (require("fs").statSync(siblingExe).isFile()) {
+    if (fs.statSync(siblingExe).isFile()) {
       console.log(`step 2: shim ${cli.program} has sibling exe → spawning hidden: ${siblingExe} serve --service`);
       cmd = [siblingExe, "serve", "--service"];
     } else throw new Error("no sibling");
@@ -84,15 +85,15 @@ if (/\.cmd$/i.test(cli.program)) {
     // try parsing shim for direct node target (same logic as src/cli.ts describe)
     let direct = null;
     try {
-      const content = require("fs").readFileSync(cli.program, "utf8");
+      const content = fs.readFileSync(cli.program, "utf8");
       const m = content.match(/"%~dp0\\([^"]+)"/);
       if (m?.[1]) {
         const target = path.join(path.dirname(cli.program), m[1].replace(/\//g, path.sep));
-        if (require("fs").statSync(target).isFile()) {
+        if (fs.statSync(target).isFile()) {
           direct = target;
           const nodeExe = path.join(path.dirname(cli.program), "node.exe");
           let nodeProg = "node";
-          try { if (require("fs").statSync(nodeExe).isFile()) nodeProg = nodeExe; } catch {}
+          try { if (fs.statSync(nodeExe).isFile()) nodeProg = nodeExe; } catch {}
           if (/\.js$/i.test(target) || !/\.exe$/i.test(target)) {
             console.log(`step 2: shim ${cli.program} → parsed direct node target → spawning hidden: ${nodeProg} ${target} serve --service`);
             cmd = [nodeProg, target, "serve", "--service"];

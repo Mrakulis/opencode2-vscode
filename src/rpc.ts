@@ -173,7 +173,15 @@ export function createRpcDispatcher(
             : undefined,
       });
     },
-    "prompt.interrupt": (p) => api.interrupt(str(p, "sessionID")),
+    "prompt.interrupt": async (p) => {
+      const sessionID = str(p, "sessionID");
+      await api.interrupt(sessionID);
+      // Wait for the run to fully settle so the answer the user sends next
+      // starts a clean new turn instead of inheriting the interrupted step.
+      // `session.wait` throws when there is nothing left to wait for — that's
+      // fine; the interrupt already did its job.
+      await api.sessionWait(sessionID).catch(() => {});
+    },
     "session.compact": (p) => api.compact(str(p, "sessionID")),
     "models.list": () => api.models(),
     "agents.list": () => api.agents(),

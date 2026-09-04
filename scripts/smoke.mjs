@@ -7,6 +7,14 @@
  */
 import { OpenCode } from "@opencode-ai/client";
 import { Service } from "@opencode-ai/client/service";
+import path from "node:path";
+
+// Mirror src/directory.ts (mjs cannot import TS): uppercase win32 drive letter
+// so the canary never creates a poisoned session on lowercase-drive checkouts.
+function canonicalizeDirectory(dir) {
+  if (process.platform !== "win32") return dir;
+  return path.normalize(dir).replace(/^[a-z](?=:)/, (c) => c.toUpperCase());
+}
 
 let client;
 if (process.env.OPENCODE_BASE_URL) {
@@ -77,7 +85,7 @@ console.log(`pending form requests: ${(forms.data ?? []).length} — OK`);
   const preferred =
     zen.find((m) => m.id === "big-pickle") ?? zen[0] ?? undefined;
   const created = await client.session.create({
-    location: { directory: process.cwd() },
+    location: { directory: canonicalizeDirectory(process.cwd()) },
     ...(preferred
       ? { model: { id: preferred.id, providerID: preferred.providerID } }
       : {}),

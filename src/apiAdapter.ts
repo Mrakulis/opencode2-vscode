@@ -166,6 +166,14 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       }),
     interrupt: (sessionID: string): Promise<unknown> =>
       getClient().session.interrupt({ sessionID }),
+    /**
+     * Block until the session's current execution fully settles. Used after
+     * `interrupt` so the turn's teardown completes before a follow-up answer
+     * is sent — without it the next prompt inherits the interrupted step and
+     * errors "Step interrupted" (verified live 2026-09-04).
+     */
+    sessionWait: (sessionID: string): Promise<void> =>
+      getClient().session.wait({ sessionID }),
     compact: (sessionID: string): Promise<unknown> =>
       getClient().session.compact({ sessionID }),
     fork: (sessionID: string): Promise<SessionInfo> =>

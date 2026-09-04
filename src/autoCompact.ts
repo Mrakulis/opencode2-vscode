@@ -13,6 +13,7 @@ import { Log } from "./log";
  */
 export class AutoCompactWatcher implements vscode.Disposable {
   private readonly armed = new Map<string, boolean>();
+  private readonly inflight = new Set<string>();
   private readonly contextLimits = new Map<string, number>(); // `${providerID}/${id}` -> tokens
   private readonly subscription: vscode.Disposable;
   private readonly disposables: vscode.Disposable[] = [];
@@ -59,15 +60,30 @@ export class AutoCompactWatcher implements vscode.Disposable {
     if (!sessionID) return;
     const threshold = this.threshold();
     if (!threshold) return; // disabled (0)
+    // Burst guard: session.usage.updated can fire several times per run —
+    // without this, duplicate compacts race before armed=false lands.
+    if (this.inflight.has(sessionID)) return;
+    this.inflight.add(sessionID);
 
     try {
       const client = this.controller.getClient();
       const session = await client.session.get({ sessionID });
-      const modelRef = session.model;
-      if (!modelRef) return;
-      const limit = this.contextLimits.get(
-        `${modelRef.providerID}/${modelRef.id}`,
-      );
+      // Beta drift: session.model may be undefined OR a bare string on some
+      // builds — only object refs with string fields are usable here.
+      const modelRef = session.model as unknown;
+      if (
+        !modelRef ||
+        typeof modelRef !== "object" ||
+        typeof (modelRef as { providerID?: unknown }).providerID !==
+          "string" ||
+        typeof (modelRef as { id?: unknown }).id !== "string"
+      )
+        return;
+      const { providerID, id } = modelRef as {
+        providerID: string;
+        id: string;
+      };
+      const limit = this.contextLimits.get(`${providerID}/${id}`);
       if (!limit) return;
 
       // Session-level tokens are CUMULATIVE lifetime usage and survive
@@ -90,6 +106,8 @@ export class AutoCompactWatcher implements vscode.Disposable {
       );
     } catch (error) {
       this.log.debug("auto-compact check skipped", error);
+    } finally {
+      this.inflight.delete(sessionID);
     }
   }
 

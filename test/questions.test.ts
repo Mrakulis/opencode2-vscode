@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   isParkedQuestionPart,
+  isParkedQuestionWithData,
   isTerminalQuestionPart,
   parseQuestionInput,
 } from "../webview-src/lib/questions";
@@ -69,6 +70,69 @@ describe("isParkedQuestionPart", () => {
       "question",
     ]) {
       assert.equal(isParkedQuestionPart(bad), undefined, JSON.stringify(bad));
+    }
+  });
+});
+
+describe("isParkedQuestionWithData", () => {
+  const part = (over: Record<string, unknown>) => ({
+    type: "tool",
+    name: "question",
+    id: "call_2",
+    state: { status: "running", input: { questions: [{ question: "hi" }] } },
+    ...over,
+  });
+
+  it("matches a parked question only when its input parses to a question list", () => {
+    assert.equal(isParkedQuestionWithData(part({})), "call_2");
+    assert.equal(
+      isParkedQuestionWithData(
+        part({ state: { status: "streaming", input: { questions: [{ question: "hi" }] } } }),
+      ),
+      "call_2",
+    );
+    // Raw JSON string emitted while streaming still counts once complete.
+    assert.equal(
+      isParkedQuestionWithData(
+        part({ state: { status: "streaming", input: JSON.stringify({ questions: [{ question: "hi" }] }) } }),
+      ),
+      "call_2",
+    );
+  });
+
+  it("does not match while input is empty, unparseable or absent", () => {
+    for (const bad of [
+      part({ state: { status: "running", input: {} } }),
+      part({ state: { status: "running", input: undefined } }),
+      part({ state: { status: "running", input: { questions: [] } } }),
+      part({ state: { status: "streaming", input: "{ incomplete" } }),
+      part({ state: { status: "streaming", input: "not json" } }),
+      part({ state: { status: "streaming" } }),
+    ]) {
+      assert.equal(
+        isParkedQuestionWithData(bad),
+        undefined,
+        JSON.stringify(bad),
+      );
+    }
+  });
+
+  it("rejects terminal states, other tools and malformed parts", () => {
+    for (const bad of [
+      part({ state: { status: "completed", input: { questions: [{ question: "hi" }] } } }),
+      part({ state: { status: "error", input: { questions: [{ question: "hi" }] } } }),
+      part({ name: "shell" }),
+      part({ type: "text" }),
+      part({ id: undefined }),
+      null,
+      undefined,
+      "question",
+    ]) {
+      assert.equal(
+        isParkedQuestionWithData(bad),
+        undefined,
+        JSON.stringify(bad),
+      );
     }
   });
 });

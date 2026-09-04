@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PROVIDERISH_RE, assistantFailed, errorMessage } from "../webview-src/lib/failure";
+import { PROVIDERISH_RE, assistantFailed, errorMessage, isExpectedInterruption } from "../webview-src/lib/failure";
 
 describe("PROVIDERISH_RE", () => {
   it("matches upstream provider rejects incl. Console Go invalid params", () => {
@@ -26,6 +26,35 @@ describe("assistantFailed", () => {
     assert.equal(assistantFailed(m as never), true);
     const ok = { type: "assistant", id: "y", finish: "stop" };
     assert.equal(assistantFailed(ok as never), false);
+  });
+});
+
+describe("isExpectedInterruption", () => {
+  const asst = (error: unknown) =>
+    ({ type: "assistant", id: "x", finish: "error", error }) as never;
+
+  it("classifies aborted question hand-backs / Stop as expected interruptions", () => {
+    assert.equal(
+      isExpectedInterruption(asst({ type: "aborted", message: "Step interrupted" })),
+      true,
+    );
+    assert.equal(
+      isExpectedInterruption(asst({ type: "aborted", message: "Tool execution interrupted" })),
+      true,
+    );
+    assert.equal(
+      isExpectedInterruption(asst({ message: "The run was interrupted by the user" })),
+      true,
+    );
+  });
+
+  it("does not classify real failures as interruptions", () => {
+    assert.equal(isExpectedInterruption(asst({ type: "provider", message: "invalid request" })), false);
+    assert.equal(isExpectedInterruption(asst(null)), false);
+    assert.equal(isExpectedInterruption(asst(undefined)), false);
+    const plain = { type: "assistant", id: "y", finish: "stop" } as never;
+    assert.equal(isExpectedInterruption(plain), false);
+    assert.equal(isExpectedInterruption({ type: "user", id: "z", text: "hi" } as never), false);
   });
 });
 

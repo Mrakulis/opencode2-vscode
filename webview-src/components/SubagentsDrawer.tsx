@@ -72,7 +72,10 @@ export function SubagentsDrawer({ subagents, initialId, onClose }: Props) {
       setTail(shaped);
       const assistants = shaped.filter((m) => m.type === "assistant");
       const last = assistants[assistants.length - 1];
-      setBusy(last == null || last.finish === undefined);
+      // Busy only when an assistant turn is actually open. An empty tail
+      // (or text-only steps with no assistant message yet) is NOT busy —
+      // otherwise ■ Terminate shows with nothing to interrupt.
+      setBusy(last != null && last.finish === undefined);
     } catch {
       /* transient */
     }
