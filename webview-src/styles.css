@@ -1635,7 +1635,32 @@ button:focus-visible {
   align-items: center;
   gap: var(--oc2-space-1);
   flex: none;
-  padding-bottom: 2px;
+  /* center the 28px buttons on the textarea's first text line:
+     bottom padding + 1px border + half of the 1.45 line-height − half button */
+  padding-bottom: calc(var(--oc2-space-2) + 1px + 0.725em - 14px);
+}
+/* + and / read as real buttons here (the shared .iconbtn is borderless text
+   elsewhere) — rounded squares sized to match the 28px send button */
+.composer-input-actions .iconbtn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--oc2-bg-input);
+  border: 1px solid var(--oc2-border);
+  border-radius: var(--oc2-radius);
+  font-size: 15px;
+  line-height: 1;
+}
+.composer-input-actions .iconbtn:hover {
+  background: var(--oc2-bg-hover);
+  border-color: var(--oc2-border-strong);
+}
+.composer-input-actions .iconbtn.active {
+  background: var(--oc2-bg-hover);
+  border-color: var(--oc2-accent);
 }
 .attachments {
   display: flex;
