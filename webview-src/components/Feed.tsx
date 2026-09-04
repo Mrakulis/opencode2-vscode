@@ -221,6 +221,25 @@ export function Feed({
     }
   }, [sortedMessages, busy]);
 
+  // Land at the bottom when the transcript first arrives or is swapped
+  // wholesale — reload / session switch / compaction. Streaming appends never
+  // change the oldest message id, so this fires once per load, not per token.
+  const oldestId = sortedMessages[0]?.id;
+  const landedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (sortedMessages.length === 0 || !oldestId) return;
+    if (landedRef.current === oldestId) return;
+    landedRef.current = oldestId;
+    pinnedRef.current = true;
+    setShowJump(false);
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+      lastScrollTopRef.current = el.scrollTop;
+    });
+  }, [oldestId, sortedMessages.length]);
+
   /**
    * Exact, guarded scroll-to-bottom.
    *

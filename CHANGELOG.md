@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.53] - 2026-09-04
+
+### Fixed
+- **Chat lands at the newest message after a reload** — the feed only auto-scrolled while the agent was busy or when the newest message was your own prompt, so reloading with an idle session opened the transcript at the top. The feed now pins to the bottom whenever the transcript first arrives or is swapped wholesale (reload, session switch, compaction), detected by the oldest message id changing so streaming appends never re-trigger it.
+
+---
+
 ## [0.6.52] - 2026-09-04
 
 ### Added
