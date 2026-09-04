@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.52] - 2026-09-04
+
+### Added
+- **Companion SSE keep-alive** — idle `/api/event` proxy streams no longer die to NAT/mobile-radio idle kills: the companion server detects SSE (path or `Accept`, plus upstream content-type), disables idle timeouts + enables TCP keep-alive/`noDelay` on those sockets, forces the correct stream headers, strips stale `content-length`, and injects a spec no-op `: ping` comment every 15s while the daemon is quiet (skipped when real bytes flow). SSE open/close logged with duration/bytes/reason.
+- **`GET /opencode2/health`** — auth'd reconnect probe returning `{ok, companion, daemonUp, daemon}` so the phone can distinguish companion-down vs daemon-down vs idle-SSE-drop; unknown `/opencode2/*` paths 404 locally instead of proxying a confusing daemon 404; preflight responses gain `Access-Control-Max-Age: 600`.
+- **IPv6-safe listen URLs** — `::1`/`fe80::1` binds now advertise bracketed, parsable URLs (`http://[::1]:12421`).
+
+### Changed
+- **Composer input bar** — the + and / buttons are now real 28×28 rounded-square buttons (bordered, hover + active states) matching the send button, the `＋` glyph is a crisp SVG icon, and the button cluster is token-aligned to the textarea's first text line at both font densities.
+
+---
+
 ## [0.6.51] - 2026-09-04
 
 ### Changed
