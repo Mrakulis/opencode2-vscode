@@ -68,6 +68,7 @@ Gate = typecheck + tests (+ `npm run audit` for UI/theme changes).
 **P0 — NEVER (no bypass)**
 - Commit API keys or tokens (the graphify LLM key lives in `.env`, gitignored).
 - Write to files outside this project folder.
+- `E:\_Code\OpenCode2 Mobile Companion Android` is the phone client for our companion server — IS READ ONLY as reference only: never write, edit, rename, or delete anything there.
 - Edit generated outputs (`dist/`, `media/webview/`) directly.
 - Use `Service.ensure()` — use `Service.discover()` + hidden spawn with `windowsHide`.
 - Mix V1 CLI/TUI concepts into the client: the catalog comes from V2 endpoints, and TUI-only events (`tui.*`) are ignored.

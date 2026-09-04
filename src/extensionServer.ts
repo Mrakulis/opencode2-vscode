@@ -7,8 +7,13 @@ import { registrationFiles } from "./flatpak";
 import { Log } from "./log";
 import {
   expectedAuthHeader,
+  formatListenUrl,
   isLoopback,
+  isSseRequest,
+  isSseResponse,
   parseHostHeader,
+  SSE_HEARTBEAT_MS,
+  SSE_PING,
   type ListenConfig,
 } from "./listenConfig";
 
@@ -111,6 +116,21 @@ export class ExtensionServer implements vscode.Disposable {
       void this.handleRequest(req, res, cfg);
     });
 
+    // Long-lived SSE streams (phone notifications) die on idle TCP without
+    // real bytes — timeouts alone can't hold them. Disable the idle request
+    // timeout globally (REST responses are short anyway) and rely on the
+    // per-SSE `: ping` heartbeat below for keep-alive.
+    server.requestTimeout = 0;
+    server.headersTimeout = 60_000;
+    server.keepAliveTimeout = 30_000;
+    server.timeout = 0;
+    server.on("connection", (socket) => {
+      try {
+        socket.setKeepAlive(true, 15_000);
+        socket.setNoDelay(true);
+      } catch {}
+    });
+
     // Single notification path: there is no permanent handler during listen,
     // so a failed bind is logged + shown exactly once here before the
     // rejection surfaces to the caller (command progress / drawer).
@@ -146,7 +166,7 @@ export class ExtensionServer implements vscode.Disposable {
 
     this.server = server;
     this.activeConfig = cfg;
-    const url = `http://${cfg.hostname}:${cfg.port}`;
+    const url = formatListenUrl(cfg.hostname, cfg.port);
     this.activeUrl = url;
     this.log.info(`Extension server listening at ${url} (auth: ${cfg.password ? "password" : "none"})`);
   }
@@ -235,6 +255,8 @@ export class ExtensionServer implements vscode.Disposable {
         const reqHeaders = req.headers["access-control-request-headers"];
         if (typeof reqHeaders === "string") res.setHeader("Access-Control-Allow-Headers", reqHeaders);
         else res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        // Cache preflight so browser clients stop re-preflighting every request.
+        res.setHeader("Access-Control-Max-Age", "600");
       }
       res.writeHead(204);
       res.end();
@@ -269,6 +291,22 @@ export class ExtensionServer implements vscode.Disposable {
     // Extension-owned control routes (handled locally, not proxied)
     // Lets the phone start the daemon the same way the Start button does.
     const pathname = (req.url ?? "/").split("?")[0];
+    // Phone reconnect probe: auth'd, never 502s. Lets the companion app
+    // distinguish "companion down" (TCP refuse) from "daemon down"
+    // (`daemonUp:false`) from "idle SSE drop" (health ok, just resubscribe).
+    if (pathname === "/opencode2/health") {
+      if (req.method !== "GET") {
+        setCorsHeaders();
+        res.writeHead(405, { "Content-Type": "text/plain", Allow: "GET" });
+        res.end("Method Not Allowed — GET /opencode2/health");
+        return;
+      }
+      const ep = await discoverLocalEndpoint(this.log);
+      setCorsHeaders();
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ ok: true, companion: true, daemonUp: !!ep, daemon: ep?.url ?? null }));
+      return;
+    }
     if (pathname === "/opencode2/extension/start" || pathname === "/opencode2/start") {
       if (req.method !== "POST") {
         setCorsHeaders();
@@ -292,7 +330,7 @@ export class ExtensionServer implements vscode.Disposable {
         res.end(
           JSON.stringify({
             ok: true,
-            url: this.activeUrl ?? `http://${cfg.hostname}:${cfg.port}`,
+            url: this.activeUrl ?? formatListenUrl(cfg.hostname, cfg.port),
             daemon: ep?.url ?? null,
           }),
         );
@@ -306,7 +344,30 @@ export class ExtensionServer implements vscode.Disposable {
       return;
     }
 
+    // Unknown /opencode2/* paths are extension-owned namespace: fail locally
+    // with a clear 404 instead of forwarding the typo to the daemon (which
+    // would surface an unrelated daemon 404 and misdirect debugging).
+    if (pathname === "/opencode2" || pathname?.startsWith("/opencode2/")) {
+      setCorsHeaders();
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found — unknown /opencode2/ route (extension-owned namespace)");
+      return;
+    }
+
     // Discover local daemon (SSE streaming is chunked pipe, no polling — reliable route)
+    const sseDownstream = isSseRequest(req.method, req.url, req.headers.accept);
+    if (sseDownstream) {
+      // Idle SSE sockets must never hit a server idle timeout, and TCP
+      // keep-alive + Nagle-off keeps wakeups prompt for notifications.
+      try {
+        req.socket.setKeepAlive(true, 15_000);
+        req.socket.setNoDelay(true);
+      } catch {}
+      try {
+        req.setTimeout(0);
+        res.setTimeout(0);
+      } catch {}
+    }
     const endpoint = await discoverLocalEndpoint(this.log);
     if (!endpoint) {
       setCorsHeaders();
@@ -346,12 +407,22 @@ export class ExtensionServer implements vscode.Disposable {
       },
       (proxyRes) => {
         setCorsHeaders();
+        const sse = sseDownstream || isSseResponse(proxyRes.headers["content-type"]);
         // Filter hop-by-hop response headers
         const outHeaders: Record<string, string | string[] | number | undefined> = {};
         for (const [k, v] of Object.entries(proxyRes.headers)) {
           const lk = k.toLowerCase();
           if (lk === "connection" || lk === "keep-alive" || lk === "proxy-authenticate" || lk === "proxy-authorization" || lk === "te" || lk === "trailer" || lk === "transfer-encoding" || lk === "upgrade") continue;
+          // SSE streams are endless — a stale upstream content-length would
+          // pin the phone at "waiting for N bytes" forever.
+          if (sse && lk === "content-length") continue;
           outHeaders[k] = v as string | string[] | undefined;
+        }
+        if (sse) {
+          outHeaders["content-type"] = "text/event-stream";
+          outHeaders["cache-control"] = "no-cache";
+          outHeaders["connection"] = "keep-alive";
+          outHeaders["x-accel-buffering"] = "no";
         }
         if (corsAllowed && origin) {
           outHeaders["access-control-allow-origin"] = origin;
@@ -359,9 +430,99 @@ export class ExtensionServer implements vscode.Disposable {
           outHeaders["vary"] = "Origin";
         }
         res.writeHead(proxyRes.statusCode ?? 502, outHeaders as Record<string, string | string[]>);
+        if (!sse) {
+          proxyRes.pipe(res);
+          return;
+        }
+        // SSE keep-alive: while the daemon is quiet, middleboxes (NAT, mobile
+        // radio, Tailscale) kill the idle socket. Inject a spec no-op comment
+        // every SSE_HEARTBEAT_MS so the same socket that carries notifications
+        // stays open. Skipped whenever upstream recently sent real bytes.
+        try {
+          res.flushHeaders?.();
+        } catch {}
+        const startedAt = Date.now();
+        let bytes = 0;
+        let lastUpstreamAt = Date.now();
+        let ended = false;
+        const clientIp = req.socket.remoteAddress ?? "?";
+        this.log.info(`extensionServer SSE open (${clientIp} ${targetPath})`);
+        const onData = (chunk: Buffer): void => {
+          bytes += chunk.length;
+          lastUpstreamAt = Date.now();
+        };
+        proxyRes.on("data", onData);
+        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        const done = (reason: string): void => {
+          if (ended) return;
+          ended = true;
+          if (heartbeat) {
+            try {
+              clearInterval(heartbeat);
+            } catch {}
+            heartbeat = undefined;
+          }
+          try {
+            proxyRes.off("data", onData);
+          } catch {}
+          this.log.info(
+            `extensionServer SSE close (${clientIp} ${targetPath} after ${Math.round((Date.now() - startedAt) / 1000)}s, ${bytes}B, ${reason})`,
+          );
+        };
+        heartbeat = setInterval(() => {
+          if (ended || res.writableEnded || res.destroyed) {
+            done("client-gone");
+            return;
+          }
+          if (Date.now() - lastUpstreamAt < SSE_HEARTBEAT_MS) return;
+          // Backpressure: a full buffer means a slow/gone client — skip this
+          // tick and retry next interval rather than piling up pings.
+          try {
+            res.write(SSE_PING);
+          } catch {
+            done("heartbeat-write-failed");
+            try {
+              proxyReq.destroy();
+            } catch {}
+          }
+        }, SSE_HEARTBEAT_MS);
+        try {
+          heartbeat.unref?.();
+        } catch {}
+        proxyRes.on("end", () => {
+          done("upstream-end");
+          try {
+            res.end();
+          } catch {}
+        });
+        proxyRes.on("error", () => {
+          done("upstream-error");
+          try {
+            res.end();
+          } catch {}
+        });
+        res.on("close", () => {
+          done(res.writableEnded ? "completed" : "client-abort");
+          if (!res.writableEnded) {
+            try {
+              proxyReq.destroy();
+            } catch {}
+          }
+        });
         proxyRes.pipe(res);
       },
     );
+
+    try {
+      proxyReq.setTimeout(0);
+      proxyReq.setNoDelay?.(true);
+    } catch {}
+    proxyReq.on("socket", (socket) => {
+      try {
+        socket.setKeepAlive(true, 15_000);
+        socket.setNoDelay(true);
+      } catch {}
+    });
 
     proxyReq.on("error", (err) => {
       this.log.debug(`extensionServer proxy error: ${err.message}`, err);
@@ -376,12 +537,17 @@ export class ExtensionServer implements vscode.Disposable {
 
     // Client disconnects must tear down the upstream socket — an aborted SSE
     // subscription would otherwise keep the daemon streaming into a dead res.
+    // (SSE streams register their own close handler with logging above.)
     const abortUpstream = (): void => {
-      proxyReq.destroy();
+      try {
+        proxyReq.destroy();
+      } catch {}
     };
-    res.on("close", () => {
-      if (!res.writableEnded) abortUpstream();
-    });
+    if (!sseDownstream) {
+      res.on("close", () => {
+        if (!res.writableEnded) abortUpstream();
+      });
+    }
     req.on("error", abortUpstream);
 
     // Stream request body

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { expectedAuthHeader, isLoopback, parseHostHeader } from "../src/listenConfig";
+import { expectedAuthHeader, formatListenUrl, isLoopback, isSseRequest, isSseResponse, parseHostHeader, SSE_HEARTBEAT_MS, SSE_PING } from "../src/listenConfig";
 
 describe("isLoopback", () => {
   it("accepts loopback hostnames", () => {
@@ -46,5 +46,49 @@ describe("parseHostHeader", () => {
     assert.equal(parseHostHeader(""), undefined);
     assert.equal(parseHostHeader("   "), undefined);
     assert.equal(parseHostHeader("[::1"), undefined);
+  });
+});
+
+describe("formatListenUrl", () => {
+  it("brackets IPv6 literals so the advertised URL is parsable", () => {
+    assert.equal(formatListenUrl("::1", 12421), "http://[::1]:12421");
+    assert.equal(formatListenUrl("fe80::1", 12421), "http://[fe80::1]:12421");
+    assert.equal(formatListenUrl("::ffff:127.0.0.1", 12421), "http://[::ffff:127.0.0.1]:12421");
+  });
+  it("passes IPv4, names, and pre-bracketed hosts through verbatim", () => {
+    assert.equal(formatListenUrl("127.0.0.1", 12421), "http://127.0.0.1:12421");
+    assert.equal(formatListenUrl("0.0.0.0", 12421), "http://0.0.0.0:12421");
+    assert.equal(formatListenUrl("myhost.tailnet", 12421), "http://myhost.tailnet:12421");
+    assert.equal(formatListenUrl("[::1]", 12421), "http://[::1]:12421");
+  });
+});
+
+describe("SSE keep-alive", () => {
+  it("detects SSE subscriptions by path", () => {
+    assert.equal(isSseRequest("GET", "/api/event", undefined), true);
+    assert.equal(isSseRequest("GET", "/api/event?x=1", undefined), true);
+    assert.equal(isSseRequest("GET", "/event", undefined), true);
+  });
+  it("detects SSE subscriptions by Accept header", () => {
+    assert.equal(isSseRequest("GET", "/api/foo", "text/event-stream"), true);
+    assert.equal(isSseRequest("GET", "/api/foo", ["text/html", "text/event-stream"]), true);
+  });
+  it("rejects non-SSE traffic", () => {
+    assert.equal(isSseRequest("POST", "/api/event", undefined), false);
+    assert.equal(isSseRequest("GET", "/api/session", "application/json"), false);
+    assert.equal(isSseRequest("GET", undefined, undefined), false);
+    assert.equal(isSseRequest(undefined, "/api/event", undefined), false);
+  });
+  it("detects SSE responses by content-type", () => {
+    assert.equal(isSseResponse("text/event-stream"), true);
+    assert.equal(isSseResponse("text/event-stream; charset=utf-8"), true);
+    assert.equal(isSseResponse(["text/html", "text/event-stream"]), true);
+    assert.equal(isSseResponse("application/json"), false);
+    assert.equal(isSseResponse(undefined), false);
+  });
+  it("heartbeat is a spec no-op comment on a sub-NAT interval", () => {
+    assert.equal(SSE_PING, ": ping\n\n");
+    assert.ok(SSE_PING.startsWith(":"));
+    assert.ok(SSE_HEARTBEAT_MS < 30_000);
   });
 });
