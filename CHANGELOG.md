@@ -10,6 +10,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## [0.6.54] - 2026-09-05
+
+### Changed
+- **Marketplace visibility (OpenCode 2 targeting)** — `categories` fixed to valid `["Other", "Machine Learning"]` (`AI`/`Chat` are not allowed values and were ignored for grouping), description now carries `AI coding agent chat` search stems, keywords swapped from internal terms (`lockfile`, `server.lock.json`, `auto-discovery`) to user-intent terms (`opencode-ai`, `ai-assistant`, `code-assistant`, `sidebar-chat`, `slash-commands`, `worktrees`, `llm`, `v2`); added `sponsor`, `pricing: Free`, `qna: marketplace`.
+- **Floating OpenCode client** — `@opencode-ai/client` unpinned (`0.0.0-beta-18314` → `beta` dist-tag, now `0.0.0-beta-19151`); the extension tracks the floating beta and relies on the `apiAdapter.ts` normalization layer for shape drift. CLI resolution already prefers `opencode2` with `opencode` fallback.
+- **Worktree API migration (beta-19151)** — `worktree.*` is now location-scoped (`{location:{directory}}`); the `projectID` field is gone. Adapter, RPC (`scope` param, host falls back to workspace directory), and drawer reworked accordingly. `Worktree.List` entries are now `{directory, strategy?}` (no `name`/`branch`); the drawer shows the strategy in the meta line. Removed dead `plugin.added` event route (dropped upstream).
+
+---
+
 ## [0.6.53] - 2026-09-04
 
 ### Fixed

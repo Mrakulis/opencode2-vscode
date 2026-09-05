@@ -385,24 +385,38 @@ export function createRpcDispatcher(
         dir ? canonicalizeDirectory(dir) : undefined,
       );
     },
-    "worktree.list": (p) => api.worktreeList(str(p, "projectID")),
+    "worktree.list": (p) => {
+      const scope = optStr(p, "scope") ?? preferredDirectory();
+      return api.worktreeList(scope ? canonicalizeDirectory(scope) : undefined);
+    },
     "worktree.create": (p) => {
       const directory = canonicalizeDirectory(str(p, "directory"));
       const name = optStr(p, "name");
       const from = optStr(p, "from");
-      return api.worktreeCreate(str(p, "projectID"), {
-        directory,
-        ...(name ? { name } : {}),
-        ...(from ? { from } : {}),
-      });
+      const scope = optStr(p, "scope") ?? preferredDirectory();
+      return api.worktreeCreate(
+        scope ? canonicalizeDirectory(scope) : undefined,
+        {
+          directory,
+          ...(name ? { name } : {}),
+          ...(from ? { from } : {}),
+        },
+      );
     },
-    "worktree.remove": (p) =>
-      api.worktreeRemove(
-        str(p, "projectID"),
+    "worktree.remove": (p) => {
+      const scope = optStr(p, "scope") ?? preferredDirectory();
+      return api.worktreeRemove(
+        scope ? canonicalizeDirectory(scope) : undefined,
         canonicalizeDirectory(str(p, "directory")),
         p.force === true,
-      ),
-    "worktree.refresh": (p) => api.worktreeRefresh(str(p, "projectID")),
+      );
+    },
+    "worktree.refresh": (p) => {
+      const scope = optStr(p, "scope") ?? preferredDirectory();
+      return api.worktreeRefresh(
+        scope ? canonicalizeDirectory(scope) : undefined,
+      );
+    },
     "workspace.directory": async () => preferredDirectory(),
     "pick.folder": async () => {
       const pick = await vscode.window.showWorkspaceFolderPick({

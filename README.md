@@ -43,17 +43,16 @@ A VS Code sidebar GUI client for [OpenCode](https://opencode.ai) — designed GU
 ## Requirements
 
 - VS Code 1.96+
-- An OpenCode V2 CLI installed locally (`opencode2`, or `opencode` from npm). The extension can install it via the command palette (`OpenCode 2: Install CLI`).
+- An OpenCode CLI installed locally — `opencode2` preferred, `opencode` (from `opencode-ai@beta`) also works. The extension can install it via the command palette (`OpenCode 2: Install CLI`).
 
 > **Flatpak (Linux)** — VS Code installed as a Flatpak runs the extension host in a sandbox where host binaries and PATH are invisible. The extension detects the sandbox and escapes it automatically with `flatpak-spawn --host`, so make sure the CLI is installed **on the host system** (e.g. `sudo npm install -g opencode-ai@beta`), not inside the sandbox. The `OpenCode 2: Restart Background Service` command will surface a message pointing at host install if the CLI cannot be found. If the service starts but never connects, grant home/filesystem access to the Flatpak: `flatpak override --user --filesystem=home com.visualstudio.code`.
 
 ### Version compatibility
 
-The extension is developed and tested against a specific client pin (`@opencode-ai/client` in `package.json`) — currently aligned with server **beta-18314**. Because OpenCode itself moves fast on the beta channel:
+The extension tracks the floating `@opencode-ai/client@beta` (no version pin in `package.json`) and targets the `opencode2` CLI first (`opencode` as fallback). Because OpenCode itself moves fast on the beta channel:
 
 - Newer/older server betas generally work — all API access goes through a defensive adapter layer that normalizes known shape drift, and missing optional features degrade quietly.
 - Explicit server `deny` rules are always enforced by the server regardless of extension version.
-- CI includes a non-blocking **beta-drift canary** that runs the gates against the floating `@beta` client; when it goes red we re-pin and adapt.
 - If something breaks after a CLI update: check the `OpenCode 2` output channel, and try `OpenCode 2: Restart Background Service` first.
 
 ## Getting started

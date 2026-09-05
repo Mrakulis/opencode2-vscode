@@ -15,32 +15,23 @@ export function WorktreesDrawer({
   onClose(): void;
   refreshTick?: number;
 }) {
-  const [projectID, setProjectID] = useState<string | undefined>(undefined);
+  const [scope, setScope] = useState<string | undefined>(undefined);
   const [rows, setRows] = useState<WorktreeRow[]>([]);
   const [error, setError] = useState<string | undefined>(undefined);
   const [name, setName] = useState("");
 
   const load = useCallback(async () => {
     try {
-      let pid = projectID;
-      if (!pid) {
-        const cur = await rpc.call<Record<string, unknown> | undefined>(
-          "project.current",
-        );
-        const loc = cur?.location as Record<string, unknown> | undefined;
-        const project = loc?.project as Record<string, unknown> | undefined;
-        pid =
-          (typeof cur?.projectID === "string" ? cur.projectID : undefined) ??
-          (typeof project?.id === "string" ? project.id : undefined);
-        setProjectID(pid);
-      }
-      if (!pid) {
-        setError("No project context available for worktrees.");
-        return;
+      let dir = scope;
+      if (!dir) {
+        dir =
+          (await rpc.call<string | undefined>("workspace.directory")) ??
+          undefined;
+        setScope(dir);
       }
       const list = await rpc.call<Array<Record<string, unknown>>>(
         "worktree.list",
-        { projectID: pid },
+        dir ? { scope: dir } : {},
       );
       setRows(
         list.map((r) => ({
@@ -51,13 +42,18 @@ export function WorktreesDrawer({
               : typeof r.path === "string"
                 ? r.path
                 : undefined,
-          branch: typeof r.branch === "string" ? r.branch : undefined,
+          branch:
+            typeof r.branch === "string"
+              ? r.branch
+              : typeof r.strategy === "string"
+                ? r.strategy
+                : undefined,
         })),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [projectID]);
+  }, [scope]);
 
   useEffect(() => {
     void load();
@@ -68,13 +64,12 @@ export function WorktreesDrawer({
     if (refreshTick > 0) void refreshAfterUpdate();
   }, [refreshTick]);
 
-  // Re-read without re-resolving an already-known project id.
+  // Re-read without re-resolving an already-known scope.
   async function refreshAfterUpdate(): Promise<void> {
-    if (!projectID) return;
     try {
       const list = await rpc.call<Array<Record<string, unknown>>>(
         "worktree.list",
-        { projectID },
+        scope ? { scope } : {},
       );
       setRows(
         list.map((r) => ({
@@ -85,7 +80,12 @@ export function WorktreesDrawer({
               : typeof r.path === "string"
                 ? r.path
                 : undefined,
-          branch: typeof r.branch === "string" ? r.branch : undefined,
+          branch:
+            typeof r.branch === "string"
+              ? r.branch
+              : typeof r.strategy === "string"
+                ? r.strategy
+                : undefined,
         })),
       );
     } catch (e) {
@@ -94,10 +94,9 @@ export function WorktreesDrawer({
   }
 
   const create = async (): Promise<void> => {
-    if (!projectID) return;
     try {
       await rpc.call("worktree.create", {
-        projectID,
+        ...(scope ? { scope } : {}),
         directory: ".",
         ...(name.trim() ? { name: name.trim() } : {}),
       });
@@ -108,17 +107,21 @@ export function WorktreesDrawer({
     }
   };
 
-  /** Re-resolve project context and reload (manual refresh affordance). */
+  /** Re-resolve workspace scope and reload (manual refresh affordance). */
   const refreshNow = async (): Promise<void> => {
-    setProjectID(undefined);
+    setScope(undefined);
     setError(undefined);
     await load();
   };
 
   const remove = async (directory: string | undefined): Promise<void> => {
-    if (!projectID || !directory) return;
+    if (!directory) return;
     try {
-      await rpc.call("worktree.remove", { projectID, directory, force: false });
+      await rpc.call("worktree.remove", {
+        ...(scope ? { scope } : {}),
+        directory,
+        force: false,
+      });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -159,7 +162,6 @@ export function WorktreesDrawer({
             <button
               type="button"
               className="primary"
-              disabled={!projectID}
               onClick={() => void create()}
             >
               Add

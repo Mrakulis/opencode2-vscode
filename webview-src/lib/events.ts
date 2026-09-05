@@ -107,7 +107,6 @@ const TABLE: Record<string, UiAction[]> = {
   "config.updated": [],
   "command.updated": ["commands"],
   "skill.updated": ["commands"],
-  "plugin.added": [],
   "plugin.updated": [],
   "reference.updated": [],
   "websearch.updated": [],

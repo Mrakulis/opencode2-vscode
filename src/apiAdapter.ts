@@ -740,10 +740,14 @@ export function createApi({ getClient }: ApiAdapterDeps) {
     },
 
     // -- worktrees --------------------------------------------------------------
+    // beta-19151: worktree.* is location-scoped ({location:{directory}}) —
+    // the old `projectID` field is gone. Scope = workspace directory.
     worktreeList: async (
-      projectID: string,
+      directory?: string,
     ): Promise<Array<Record<string, unknown>>> => {
-      const res = (await getClient().worktree.list({ projectID })) as unknown;
+      const res = (await (directory
+        ? getClient().worktree.list({ location: { directory } })
+        : getClient().worktree.list())) as unknown;
       return Array.isArray(res)
         ? (res as Array<Record<string, unknown>>)
         : (((res as { data?: unknown[] }).data ?? []) as Array<
@@ -751,15 +755,13 @@ export function createApi({ getClient }: ApiAdapterDeps) {
           >);
     },
     worktreeCreate: (
-      projectID: string,
+      scope: string | undefined,
       opts: { from?: string; directory: string; name?: string },
     ): Promise<unknown> => {
-      // Schema (verified vs OpenAPI): {strategy:string, directory:string,
-      // from?, branch?, name?} — strategy is a flat REQUIRED string, not an
-      // object; the old nested shape could never validate.
+      // New shape: flat {location?, strategy, from?, branch?, directory?, name?}.
       const strategy = opts.from ? "from" : "directory";
       return getClient().worktree.create({
-        projectID,
+        ...(scope ? { location: { directory: scope } } : {}),
         strategy,
         directory: opts.directory,
         ...(opts.from ? { from: opts.from } : {}),
@@ -767,13 +769,19 @@ export function createApi({ getClient }: ApiAdapterDeps) {
       } as never);
     },
     worktreeRemove: (
-      projectID: string,
+      scope: string | undefined,
       directory: string,
       force: boolean,
     ): Promise<void> =>
-      getClient().worktree.remove({ projectID, directory, force } as never),
-    worktreeRefresh: (projectID: string): Promise<void> =>
-      getClient().worktree.refresh({ projectID }),
+      getClient().worktree.remove({
+        ...(scope ? { location: { directory: scope } } : {}),
+        directory,
+        force,
+      } as never),
+    worktreeRefresh: (directory?: string): Promise<void> =>
+      directory
+        ? getClient().worktree.refresh({ location: { directory } })
+        : getClient().worktree.refresh(),
     providers: async () => {
       const [integrations, providers] = await Promise.all([
         getClient()
